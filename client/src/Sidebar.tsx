@@ -9,83 +9,98 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarProvider,
-  SidebarTrigger,
+  useSidebar,
 } from "@/components/ui/sidebar";
-import { Home, Settings, User } from "lucide-react";
+import { Home } from "lucide-react";
 import type { ReactNode } from "react";
 import { menus } from "./utils/menu";
 
 interface AppSidebarProps {
   children: ReactNode;
   selectedMenu: string;
-  setSelectedMenu: React.Dispatch<React.SetStateAction<string>>;
+  onSelectMenu: (value: string) => void;
 }
 
+const SidebarNav = (props: { selectedMenu: string; onSelectMenu: (value: string) => void }) => {
+  const { selectedMenu, onSelectMenu } = props;
+  const { setOpenMobile } = useSidebar();
+
+  const handleSelect = (value: string) => {
+    setOpenMobile(false);
+    onSelectMenu(value);
+  };
+
+  return (
+    <>
+      <SidebarHeader>
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton size="lg">
+              <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
+                <Home className="size-4" />
+              </div>
+              <div className="grid flex-1 text-left text-sm leading-tight">
+                <span className="truncate font-semibold">Finly</span>
+              </div>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </SidebarHeader>
+
+      <SidebarContent>
+        <SidebarGroup>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {menus
+                .filter((menu) => menu.value !== "settings")
+                .map((menu) => (
+                  <SidebarMenuItem key={menu.value}>
+                    <SidebarMenuButton
+                      isActive={selectedMenu === menu.value}
+                      onClick={() => handleSelect(menu.value)}
+                    >
+                      <menu.icon />
+                      <span>{menu.label}</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+      </SidebarContent>
+
+      <SidebarFooter>
+        <SidebarMenu>
+          {menus
+            .filter((menu) => menu.value === "settings")
+            .map((menu) => (
+              <SidebarMenuItem key={menu.value}>
+                <SidebarMenuButton
+                  isActive={selectedMenu === menu.value}
+                  onClick={() => handleSelect(menu.value)}
+                >
+                  <menu.icon />
+                  <span>{menu.label}</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            ))}
+        </SidebarMenu>
+      </SidebarFooter>
+    </>
+  );
+};
+
 const AppSidebar = (props: AppSidebarProps) => {
-
-  const { selectedMenu, setSelectedMenu } = props
-
-
-  const menuItems = () => {
-    return menus.map((menu) =>
-      <SidebarMenuItem key={menu.value}>
-        <SidebarMenuButton isActive={selectedMenu === menu.value}>
-          <menu.icon />
-          <span onClick={() => setSelectedMenu(menu.value)}>{menu.label}</span>
-        </SidebarMenuButton>
-      </SidebarMenuItem>
-    )
-  }
-
-
+  const { children, selectedMenu, onSelectMenu } = props;
 
   return (
     <SidebarProvider>
       <Sidebar>
-        {/* Sidebar Header */}
-        <SidebarHeader>
-          <SidebarMenu>
-            <SidebarMenuItem>
-              <SidebarMenuButton size="lg">
-                <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
-                  <Home className="size-4" />
-                </div>
-                <div className="grid flex-1 text-left text-sm leading-tight">
-                  <span className="truncate font-semibold">Finly</span>
-                </div>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          </SidebarMenu>
-        </SidebarHeader>
-
-        {/* Sidebar Content */}
-        <SidebarContent>
-          <SidebarGroup>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {menuItems()}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        </SidebarContent>
-
-        {/* Sidebar Footer */}
-        <SidebarFooter>
-          <SidebarMenu>
-            <SidebarMenuItem>
-              <SidebarMenuButton>
-                <Settings />
-                <span>Settings</span>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          </SidebarMenu>
-        </SidebarFooter>
+        <SidebarNav selectedMenu={selectedMenu} onSelectMenu={onSelectMenu} />
       </Sidebar>
 
-      {/* Main Content */}
-      <main className="flex-1">
-        <SidebarTrigger />
-        <div className="p-4">{props.children}</div>
+      <main className="flex min-w-0 flex-1 flex-col">
+        {children}
       </main>
     </SidebarProvider>
   );
