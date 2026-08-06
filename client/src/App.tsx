@@ -15,6 +15,7 @@ import DocumentsPage from "./pages/DocumentsPage";
 
 interface PageProps {
   addEntrySignal?: number;
+  onNavigate?: (value: string) => void;
 }
 
 const pages: Record<string, React.ComponentType<PageProps>> = {
@@ -55,7 +56,7 @@ function App() {
           onAddEntry={() => setAddEntrySignal((signal) => signal + 1)}
         />
         <div className="p-4 pb-24 md:p-6 md:pb-6">
-          <Page addEntrySignal={addEntrySignal} />
+          <Page addEntrySignal={addEntrySignal} onNavigate={handleSelectMenu} />
         </div>
       </AppSidebar>
       <MobileBottomNav
