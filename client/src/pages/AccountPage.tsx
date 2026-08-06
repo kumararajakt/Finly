@@ -20,12 +20,6 @@ type Account = {
   description: string
 }
 
-const defaultAccounts: Account[] = [
-  { name: "Checking", type: "checking", balance: 5420.00, description: "Main checking account for daily expenses" },
-  { name: "Savings", type: "savings", balance: 12750.00, description: "Emergency fund and long-term savings" },
-  { name: "Credit Card", type: "credit", balance: -450.00, description: "Visa Platinum - rewards card" },
-]
-
 const typeConfig: Record<string, { icon: typeof Wallet; color: string }> = {
   checking: { icon: Wallet, color: "text-blue-600 bg-blue-100" },
   savings: { icon: PiggyBank, color: "text-emerald-600 bg-emerald-100" },
@@ -34,7 +28,7 @@ const typeConfig: Record<string, { icon: typeof Wallet; color: string }> = {
 }
 
 export default function AccountPage() {
-  const [accounts, setAccounts] = useState(defaultAccounts)
+  const [accounts, setAccounts] = useState<Account[]>([])
   const [open, setOpen] = useState(false)
   const [form, setForm] = useState<Account>({ name: "", type: "checking", balance: 0, description: "" })
 
@@ -96,7 +90,12 @@ export default function AccountPage() {
         </Sheet>
       </div>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {accounts.map((account, i) => {
+        {accounts.length === 0 ? (
+          <p className="rounded-lg border p-8 text-center text-sm text-muted-foreground sm:col-span-2 lg:col-span-3">
+            No accounts yet. Add one to get started.
+          </p>
+        ) : (
+          accounts.map((account, i) => {
           const config = typeConfig[account.type] ?? { icon: Wallet, color: "text-gray-600 bg-gray-100" }
           const Icon = config.icon
           return (
@@ -121,7 +120,8 @@ export default function AccountPage() {
               )}
             </div>
           )
-        })}
+        })
+        )}
       </div>
     </div>
   )

@@ -2,6 +2,7 @@ import { useCallback, useState } from "react";
 import AppSidebar from "./Sidebar";
 import TopBar from "./components/TopBar";
 import MobileBottomNav from "./components/MobileBottomNav";
+import { SettingsProvider } from "./contexts/SettingsContext";
 import DashboardPage from "./pages/DashboardPage";
 import TransactionPage from "./pages/TransactionPage";
 import RecurringPage from "./pages/RecurringPage";
@@ -43,7 +44,7 @@ function App() {
   const Page = pages[selectedMenu] ?? DashboardPage;
 
   return (
-    <>
+    <SettingsProvider>
       <AppSidebar
         selectedMenu={selectedMenu}
         onSelectMenu={handleSelectMenu}
@@ -61,7 +62,7 @@ function App() {
         selectedMenu={selectedMenu}
         onSelectMenu={handleSelectMenu}
       />
-    </>
+    </SettingsProvider>
   );
 }
 

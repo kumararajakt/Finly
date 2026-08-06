@@ -23,16 +23,8 @@ type Transaction = {
   account: string
 }
 
-const defaultTransactions: Transaction[] = [
-  { date: "2026-07-30", type: "debit", detail: "Grocery Store", amount: 85.50, category: "Food", notes: "Weekly groceries", account: "Checking" },
-  { date: "2026-07-29", type: "credit", detail: "Salary Deposit", amount: 3500.00, category: "Income", notes: "Monthly salary", account: "Checking" },
-  { date: "2026-07-28", type: "debit", detail: "Electric Bill", amount: 120.00, category: "Utilities", notes: "July bill", account: "Checking" },
-  { date: "2026-07-27", type: "debit", detail: "Amazon Purchase", amount: 45.99, category: "Shopping", notes: "Books", account: "Credit Card" },
-  { date: "2026-07-26", type: "credit", detail: "Freelance Payment", amount: 750.00, category: "Income", notes: "Web dev project", account: "Savings" },
-]
-
 export default function TransactionPage({ addEntrySignal }: { addEntrySignal?: number }) {
-  const [transactions, setTransactions] = useState(defaultTransactions)
+  const [transactions, setTransactions] = useState<Transaction[]>([])
   const [open, setOpen] = useState(false)
   const [form, setForm] = useState<Transaction>({
     date: "", type: "debit", detail: "", amount: 0, category: "", notes: "", account: "",
@@ -125,21 +117,29 @@ export default function TransactionPage({ addEntrySignal }: { addEntrySignal?: n
             </TableRow>
           </TableHeader>
           <TableBody>
-            {transactions.map((tx, i) => (
-              <TableRow key={i}>
-                <TableCell>{tx.date}</TableCell>
-                <TableCell>
-                  <span className={tx.type === "credit" ? "text-emerald-600 font-medium" : "text-red-600 font-medium"}>
-                    {tx.type.charAt(0).toUpperCase() + tx.type.slice(1)}
-                  </span>
+            {transactions.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={7} className="h-24 text-center text-sm text-muted-foreground">
+                  No transactions yet. Add or import one to get started.
                 </TableCell>
-                <TableCell>{tx.detail}</TableCell>
-                <TableCell className="font-mono">{tx.type === "credit" ? "+" : "-"}${tx.amount.toFixed(2)}</TableCell>
-                <TableCell>{tx.category}</TableCell>
-                <TableCell className="text-muted-foreground">{tx.notes}</TableCell>
-                <TableCell>{tx.account}</TableCell>
               </TableRow>
-            ))}
+            ) : (
+              transactions.map((tx, i) => (
+                <TableRow key={i}>
+                  <TableCell>{tx.date}</TableCell>
+                  <TableCell>
+                    <span className={tx.type === "credit" ? "text-emerald-600 font-medium" : "text-red-600 font-medium"}>
+                      {tx.type.charAt(0).toUpperCase() + tx.type.slice(1)}
+                    </span>
+                  </TableCell>
+                  <TableCell>{tx.detail}</TableCell>
+                  <TableCell className="font-mono">{tx.type === "credit" ? "+" : "-"}${tx.amount.toFixed(2)}</TableCell>
+                  <TableCell>{tx.category}</TableCell>
+                  <TableCell className="text-muted-foreground">{tx.notes}</TableCell>
+                  <TableCell>{tx.account}</TableCell>
+                </TableRow>
+              ))
+            )}
           </TableBody>
         </Table>
       </div>
