@@ -1,9 +1,23 @@
 {
-  "moduleFileExtensions": ["js", "json", "ts"],
+  "moduleFileExtensions": ["js", "json", "ts", "mjs"],
   "rootDir": ".",
   "testEnvironment": "node",
   "testRegex": ".e2e-spec.ts$",
   "transform": {
-    "^.+\\.(t|j)s$": "ts-jest"
-  }
+    "^.+\\.(t|j)s$": "ts-jest",
+    "^.+\\.mjs$": [
+      "ts-jest",
+      {
+        "tsconfig": {
+          "module": "commonjs",
+          "moduleResolution": "node10",
+          "target": "es2022",
+          "esModuleInterop": true,
+          "allowJs": true,
+          "skipLibCheck": true
+        }
+      }
+    ]
+  },
+  "transformIgnorePatterns": ["/node_modules/(?!better-auth|@better-auth)/"]
 }

@@ -5,6 +5,7 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
+import { Public } from '../auth/public.decorator';
 import { DRIZZLE } from '../database/database.constants';
 import type { Database } from '../database/database.module';
 
@@ -12,6 +13,7 @@ import type { Database } from '../database/database.module';
 export class HealthController {
   constructor(@Inject(DRIZZLE) private readonly db: Database) {}
 
+  @Public()
   @Get()
   async check(): Promise<{ status: string; db: string }> {
     try {
