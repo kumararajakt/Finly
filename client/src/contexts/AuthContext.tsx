@@ -1,0 +1,93 @@
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { api } from "@/lib/api";
+import type { AuthMe, AuthUser } from "@/lib/types";
+
+type AuthStatus = "loading" | "authenticated" | "unauthenticated";
+
+interface AuthContextValue {
+  status: AuthStatus;
+  user: AuthUser | null;
+  login: (email: string, password: string) => Promise<void>;
+  register: (email: string, password: string) => Promise<void>;
+  logout: () => Promise<void>;
+}
+
+const UNAUTHORIZED_EVENT = "finly:unauthorized";
+
+const AuthContext = createContext<AuthContextValue | null>(null);
+
+function applySession(user: AuthUser | null, setUser: (user: AuthUser | null) => void, setStatus: (status: AuthStatus) => void): void {
+  if (user) {
+    setUser(user);
+    setStatus("authenticated");
+  } else {
+    setUser(null);
+    setStatus("unauthenticated");
+  }
+}
+
+export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const [status, setStatus] = useState<AuthStatus>("loading");
+  const [user, setUser] = useState<AuthUser | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    api.auth
+      .me()
+      .then((me: AuthMe) => {
+        if (!cancelled) applySession(me.user, setUser, setStatus);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setUser(null);
+          setStatus("unauthenticated");
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    const handleUnauthorized = (): void => {
+      setUser(null);
+      setStatus("unauthenticated");
+    };
+    window.addEventListener(UNAUTHORIZED_EVENT, handleUnauthorized);
+    return () => window.removeEventListener(UNAUTHORIZED_EVENT, handleUnauthorized);
+  }, []);
+
+  const login = useCallback(async (email: string, password: string) => {
+    const result = await api.auth.login(email, password);
+    applySession(result.user ?? null, setUser, setStatus);
+  }, []);
+
+  const register = useCallback(async (email: string, password: string) => {
+    const result = await api.auth.register(email, password);
+    applySession(result.user ?? null, setUser, setStatus);
+  }, []);
+
+  const logout = useCallback(async () => {
+    try {
+      await api.auth.logout();
+    } finally {
+      setUser(null);
+      setStatus("unauthenticated");
+    }
+  }, []);
+
+  const value = useMemo<AuthContextValue>(
+    () => ({ status, user, login, register, logout }),
+    [status, user, login, register, logout]
+  );
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+}
+
+export function useAuth(): AuthContextValue {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error("useAuth must be used within an AuthProvider.");
+  }
+  return context;
+}

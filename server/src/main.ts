@@ -5,9 +5,7 @@ import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { requestLogging } from './common/middleware/request-logging';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, {
-    bodyParser: false, // Required for Better Auth
-  });
+  const app = await NestFactory.create(AppModule);
   app.setGlobalPrefix('api');
   app.useGlobalFilters(new AllExceptionsFilter());
   app.useGlobalPipes(

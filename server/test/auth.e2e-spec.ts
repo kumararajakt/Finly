@@ -45,6 +45,7 @@ describe('Auth (e2e)', () => {
   let db: Database;
 
   const validPassword = 'super-secret-password';
+  const validEmail = 'owner@finly.local';
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -101,7 +102,15 @@ describe('Auth (e2e)', () => {
   it('rejects a too-short password on register', async () => {
     const res = await request(app.getHttpServer())
       .post('/api/auth/register')
-      .send({ password: 'short' });
+      .send({ email: validEmail, password: 'short' });
+    expect(res.status).toBe(422);
+    expect((res.body as AuthErrorBody).error.code).toBe('VALIDATION_FAILED');
+  });
+
+  it('rejects an invalid email on register', async () => {
+    const res = await request(app.getHttpServer())
+      .post('/api/auth/register')
+      .send({ email: 'not-an-email', password: validPassword });
     expect(res.status).toBe(422);
     expect((res.body as AuthErrorBody).error.code).toBe('VALIDATION_FAILED');
   });
@@ -109,7 +118,7 @@ describe('Auth (e2e)', () => {
   it('registers the first account and sets a session cookie', async () => {
     const res = await request(app.getHttpServer())
       .post('/api/auth/register')
-      .send({ password: validPassword });
+      .send({ email: validEmail, password: validPassword });
     expect(res.status).toBe(201);
     expect((res.body as AuthMeBody).user).toMatchObject({
       email: 'owner@finly.local',
@@ -120,7 +129,7 @@ describe('Auth (e2e)', () => {
   it('blocks a second registration', async () => {
     const res = await request(app.getHttpServer())
       .post('/api/auth/register')
-      .send({ password: validPassword });
+      .send({ email: 'another@finly.local', password: validPassword });
     expect(res.status).toBe(409);
     expect((res.body as AuthErrorBody).error.code).toBe('ALREADY_REGISTERED');
   });
@@ -129,7 +138,7 @@ describe('Auth (e2e)', () => {
     const agent = request.agent(app.getHttpServer());
     await agent
       .post('/api/auth/login')
-      .send({ password: validPassword })
+      .send({ email: validEmail, password: validPassword })
       .expect(200);
 
     const res = await agent.get('/api/auth/me');
@@ -146,7 +155,7 @@ describe('Auth (e2e)', () => {
   it('rejects login with the wrong password', async () => {
     const res = await request(app.getHttpServer())
       .post('/api/auth/login')
-      .send({ password: 'wrong-password' });
+      .send({ email: validEmail, password: 'wrong-password' });
     expect(res.status).toBe(401);
     expect((res.body as AuthErrorBody).error.code).toBe('INVALID_CREDENTIALS');
   });
@@ -155,7 +164,7 @@ describe('Auth (e2e)', () => {
     const agent = request.agent(app.getHttpServer());
     await agent
       .post('/api/auth/login')
-      .send({ password: validPassword })
+      .send({ email: validEmail, password: validPassword })
       .expect(200);
 
     const logout = await agent.post('/api/auth/logout');

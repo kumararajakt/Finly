@@ -221,5 +221,12 @@ export interface DriveStatus {
 
 export interface AuthUser {
   id: string;
+  name: string;
+  email: string;
   createdAt: string;
+}
+
+export interface AuthMe {
+  session: { id: string; expiresAt: string } | null;
+  user: AuthUser | null;
 }

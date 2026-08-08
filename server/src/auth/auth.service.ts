@@ -16,7 +16,6 @@ import type { Database } from '../database/database.module';
 import { users } from '../database/schema';
 import {
   createAuthInstance,
-  OWNER_EMAIL,
   OWNER_NAME,
   type AuthInstance,
 } from './auth.config';
@@ -41,6 +40,7 @@ export class AuthService {
   }
 
   async register(
+    email: string,
     password: string,
     response: Response,
   ): Promise<{ user: unknown }> {
@@ -57,7 +57,7 @@ export class AuthService {
 
     try {
       const result = (await this.auth.api.signUpEmail({
-        body: { email: OWNER_EMAIL, password, name: OWNER_NAME },
+        body: { email: email.trim().toLowerCase(), password, name: OWNER_NAME },
         returnHeaders: true,
       })) as AuthCallResult;
       this.applyCookies(response, result.headers);
@@ -68,12 +68,13 @@ export class AuthService {
   }
 
   async login(
+    email: string,
     password: string,
     response: Response,
   ): Promise<{ user: unknown }> {
     try {
       const result = (await this.auth.api.signInEmail({
-        body: { email: OWNER_EMAIL, password },
+        body: { email: email.trim().toLowerCase(), password },
         returnHeaders: true,
       })) as AuthCallResult;
       this.applyCookies(response, result.headers);

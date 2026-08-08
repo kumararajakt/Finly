@@ -11,7 +11,8 @@ import {
   SidebarProvider,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { Home } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
+import { Home, LogOut } from "lucide-react";
 import type { ReactNode } from "react";
 import { menus } from "./utils/menu";
 
@@ -24,6 +25,7 @@ interface AppSidebarProps {
 const SidebarNav = (props: { selectedMenu: string; onSelectMenu: (value: string) => void }) => {
   const { selectedMenu, onSelectMenu } = props;
   const { setOpenMobile } = useSidebar();
+  const { logout } = useAuth();
 
   const handleSelect = (value: string) => {
     setOpenMobile(false);
@@ -84,6 +86,12 @@ const SidebarNav = (props: { selectedMenu: string; onSelectMenu: (value: string)
                 </SidebarMenuButton>
               </SidebarMenuItem>
             ))}
+          <SidebarMenuItem>
+            <SidebarMenuButton onClick={() => void logout()}>
+              <LogOut />
+              <span>Log out</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
         </SidebarMenu>
       </SidebarFooter>
     </>

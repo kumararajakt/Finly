@@ -1,5 +1,6 @@
 import type {
   Account,
+  AuthMe,
   AuthUser,
   Budget,
   Category,
@@ -50,6 +51,9 @@ async function apiFetch<T>(
   });
 
   if (!response.ok) {
+    if (response.status === 401) {
+      window.dispatchEvent(new Event("finly:unauthorized"));
+    }
     let message = `Request failed with status ${response.status}`;
     let code: string | undefined;
     try {
@@ -80,10 +84,18 @@ function buildQuery(params: Record<string, string | number | boolean | undefined
 
 export const api = {
   auth: {
-    me: () => apiFetch<AuthUser>("/auth/me"),
-    login: (password: string) =>
-      apiFetch<{ ok: true }>("/auth/login", { method: "POST", body: { password } }),
-    logout: () => apiFetch<{ ok: true }>("/auth/logout", { method: "POST" }),
+    me: () => apiFetch<AuthMe>("/auth/me"),
+    register: (email: string, password: string) =>
+      apiFetch<{ user: AuthUser }>("/auth/register", {
+        method: "POST",
+        body: { email, password },
+      }),
+    login: (email: string, password: string) =>
+      apiFetch<{ user: AuthUser }>("/auth/login", {
+        method: "POST",
+        body: { email, password },
+      }),
+    logout: () => apiFetch<{ success: true }>("/auth/logout", { method: "POST" }),
   },
 
   settings: {

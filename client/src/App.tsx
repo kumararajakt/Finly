@@ -2,7 +2,10 @@ import { useCallback, useState } from "react";
 import AppSidebar from "./Sidebar";
 import TopBar from "./components/TopBar";
 import MobileBottomNav from "./components/MobileBottomNav";
+import LoadingState from "./components/ui/loading-state";
+import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import { SettingsProvider } from "./contexts/SettingsContext";
+import AuthPage from "./pages/AuthPage";
 import DashboardPage from "./pages/DashboardPage";
 import TransactionPage from "./pages/TransactionPage";
 import RecurringPage from "./pages/RecurringPage";
@@ -30,7 +33,8 @@ const pages: Record<string, React.ComponentType<PageProps>> = {
   documents: DocumentsPage,
 };
 
-function App() {
+function FinlyApp() {
+  const { status } = useAuth();
   const [selectedMenu, setSelectedMenu] = useState("dashboard");
   const [addEntrySignal, setAddEntrySignal] = useState(0);
 
@@ -41,6 +45,18 @@ function App() {
   const handleImport = useCallback(() => {
     setSelectedMenu("documents");
   }, []);
+
+  if (status === "loading") {
+    return (
+      <div className="flex min-h-dvh items-center justify-center bg-background p-4">
+        <LoadingState className="w-full max-w-sm" label="Checking session…" />
+      </div>
+    );
+  }
+
+  if (status === "unauthenticated") {
+    return <AuthPage />;
+  }
 
   const Page = pages[selectedMenu] ?? DashboardPage;
 
@@ -64,6 +80,14 @@ function App() {
         onSelectMenu={handleSelectMenu}
       />
     </SettingsProvider>
+  );
+}
+
+function App() {
+  return (
+    <AuthProvider>
+      <FinlyApp />
+    </AuthProvider>
   );
 }
 

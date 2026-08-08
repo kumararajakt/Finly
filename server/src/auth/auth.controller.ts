@@ -23,7 +23,7 @@ export class AuthController {
     @Body() body: RegisterDto,
     @Res({ passthrough: true }) response: Response,
   ): Promise<{ user: unknown }> {
-    return this.authService.register(body.password, response);
+    return this.authService.register(body.email, body.password, response);
   }
 
   @Public()
@@ -33,7 +33,7 @@ export class AuthController {
     @Body() body: LoginDto,
     @Res({ passthrough: true }) response: Response,
   ): Promise<{ user: unknown }> {
-    return this.authService.login(body.password, response);
+    return this.authService.login(body.email, body.password, response);
   }
 
   @Public()
