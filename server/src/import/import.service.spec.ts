@@ -10,6 +10,7 @@ interface DbOptions {
   accounts?: string[];
   existingFingerprints?: string[];
   insertReturnsAll?: boolean;
+  failInsertAtCall?: number;
 }
 
 function makeDb(options: DbOptions = {}) {
@@ -40,23 +41,30 @@ function makeDb(options: DbOptions = {}) {
 
   const select = jest.fn(() => ({ from }));
 
-  const insert = jest.fn(() => ({
-    values: jest.fn((rows: InsertValues[]) => {
-      valuesCalls.push(rows);
-      return {
-        onConflictDoNothing: jest.fn(() => ({
-          returning: jest.fn(() => {
-            if (!insertReturnsAll) {
-              return Promise.resolve([]);
-            }
-            return Promise.resolve(
-              rows.map((row) => ({ id: String(row.fingerprint) })),
-            );
-          }),
-        })),
-      };
-    }),
-  }));
+  let insertCalls = 0;
+  const insert = jest.fn(() => {
+    insertCalls += 1;
+    return {
+      values: jest.fn((rows: InsertValues[]) => {
+        valuesCalls.push(rows);
+        return {
+          onConflictDoNothing: jest.fn(() => ({
+            returning: jest.fn(() => {
+              if (options.failInsertAtCall === insertCalls) {
+                return Promise.reject(new Error('connection terminated'));
+              }
+              if (!insertReturnsAll) {
+                return Promise.resolve([]);
+              }
+              return Promise.resolve(
+                rows.map((row) => ({ id: String(row.fingerprint) })),
+              );
+            }),
+          })),
+        };
+      }),
+    };
+  });
 
   return {
     db: {
@@ -278,6 +286,33 @@ describe('ImportService', () => {
       ]);
     });
 
+    it('counts rows duplicated within the file once and inserts them once', async () => {
+      const { db, valuesCalls } = makeDb();
+      service = new ImportService(db);
+
+      const result = await service.importCsv({
+        csv: [
+          'Date,Description,Amount',
+          '2024-01-05,Coffee,5.50',
+          '2024-01-05,Coffee,5.50',
+          '2024-01-06,Rent,1200.00',
+        ].join('\n'),
+        mapping: { date: 0, merchant: 1, amount: 2 },
+      });
+
+      expect(result).toEqual({
+        inserted: 2,
+        duplicates: 1,
+        skipped: 0,
+        needsReview: 2,
+        totalRows: 3,
+      });
+      expect(valuesCalls.flat().map((value) => value.merchant)).toEqual([
+        'Coffee',
+        'Rent',
+      ]);
+    });
+
     it('does not require a header row', async () => {
       const { db, valuesCalls } = makeDb();
       service = new ImportService(db);
@@ -327,6 +362,33 @@ describe('ImportService', () => {
 
       const values = valuesCalls.flat();
       expect(values[0].account).toBe('Checking');
+    });
+
+    it('reports partial status when the batch fails mid-insert', async () => {
+      const { db, valuesCalls } = makeDb({ failInsertAtCall: 2 });
+      service = new ImportService(db);
+
+      const rows = Array.from(
+        { length: 600 },
+        (_, i) => `2024-01-05,Merchant ${i},${(i + 1).toFixed(2)}`,
+      );
+      const csv = ['Date,Description,Amount', ...rows].join('\n');
+
+      let caught:
+        { response?: { message?: string; code?: string } } | undefined;
+      try {
+        await service.importCsv({
+          csv,
+          mapping: { date: 0, merchant: 1, amount: 2 },
+        });
+      } catch (error) {
+        caught = error as { response?: { message?: string; code?: string } };
+      }
+      expect(caught?.response?.code).toBe('PARTIAL_IMPORT');
+      expect(caught?.response?.message).toContain('500 of 600');
+      expect(valuesCalls).toHaveLength(2);
+      expect(valuesCalls[0]).toHaveLength(500);
+      expect(valuesCalls[1]).toHaveLength(100);
     });
   });
 });

@@ -1,4 +1,9 @@
-import { BadRequestException, Inject, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  Inject,
+  Injectable,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { inArray } from 'drizzle-orm';
 import { DRIZZLE } from '../database/database.constants';
 import type { Database } from '../database/database.module';
@@ -167,7 +172,16 @@ export class ImportService {
     const plannedFingerprints = values.map((value) => value.fingerprint);
     const existingSet =
       await this.findExistingFingerprints(plannedFingerprints);
-    const fresh = values.filter((value) => !existingSet.has(value.fingerprint));
+    const unique = new Map<string, NewTransaction>();
+    for (const value of values) {
+      if (
+        !existingSet.has(value.fingerprint) &&
+        !unique.has(value.fingerprint)
+      ) {
+        unique.set(value.fingerprint, value);
+      }
+    }
+    const fresh = [...unique.values()];
     const duplicateCount = values.length - fresh.length;
     let needsReview = 0;
     for (const value of fresh) {
@@ -177,14 +191,24 @@ export class ImportService {
     }
 
     let inserted = 0;
-    for (let start = 0; start < fresh.length; start += INSERT_CHUNK) {
-      const chunk = fresh.slice(start, start + INSERT_CHUNK);
-      const returned = await this.db
-        .insert(transactions)
-        .values(chunk)
-        .onConflictDoNothing({ target: transactions.fingerprint })
-        .returning({ id: transactions.id });
-      inserted += returned.length;
+    try {
+      for (let start = 0; start < fresh.length; start += INSERT_CHUNK) {
+        const chunk = fresh.slice(start, start + INSERT_CHUNK);
+        const returned = await this.db
+          .insert(transactions)
+          .values(chunk)
+          .onConflictDoNothing({ target: transactions.fingerprint })
+          .returning({ id: transactions.id });
+        inserted += returned.length;
+      }
+    } catch (error) {
+      throw new ServiceUnavailableException(
+        {
+          message: `Import interrupted mid-batch: ${inserted} of ${fresh.length} rows were inserted before the failure. The inserted rows are kept; re-run the import to retry the remaining rows.`,
+          code: 'PARTIAL_IMPORT',
+        },
+        { cause: error },
+      );
     }
     const raceDuplicates = fresh.length - inserted;
     needsReview -=

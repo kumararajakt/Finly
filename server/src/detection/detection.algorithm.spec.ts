@@ -141,9 +141,7 @@ describe('detection.algorithm', () => {
   ): Transaction {
     return {
       id: '00000000-0000-4000-8000-000000000000',
-      merchant: partial.merchant,
-      date: partial.date,
-      amount: partial.amount,
+      ...partial,
       type: 'expense',
       category: partial.category ?? 'Needs review',
       account: partial.account ?? 'Checking',
@@ -152,7 +150,6 @@ describe('detection.algorithm', () => {
       source: 'manual',
       fingerprint: 'test',
       createdAt: new Date(),
-      ...partial,
     };
   }
 
