@@ -194,6 +194,16 @@ export const api = {
 
   detection: {
     suggestions: () => apiFetch<DetectionSuggestion[]>("/detection/suggestions"),
+    keep: (key: string) =>
+      apiFetch<{ kind: string; id: string; name: string }>("/detection/keep", {
+        method: "POST",
+        body: { key },
+      }),
+    ignore: (key: string) =>
+      apiFetch<{ success: true }>("/detection/ignore", {
+        method: "POST",
+        body: { key },
+      }),
   },
 
   documents: {

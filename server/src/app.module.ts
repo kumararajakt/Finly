@@ -1,10 +1,15 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { AuthModule } from './auth/auth.module';
+import { BudgetsModule } from './budgets/budgets.module';
 import { DatabaseModule } from './database/database.module';
+import { DetectionModule } from './detection/detection.module';
+import { GoalsModule } from './goals/goals.module';
 import { HealthModule } from './health/health.module';
 import { ManagedModule } from './managed/managed.module';
+import { RecurringModule } from './recurring/recurring.module';
 import { SettingsModule } from './settings/settings.module';
+import { SubscriptionsModule } from './subscriptions/subscriptions.module';
 import { SummaryModule } from './summary/summary.module';
 import { TransactionsModule } from './transactions/transactions.module';
 
@@ -18,6 +23,11 @@ import { TransactionsModule } from './transactions/transactions.module';
     SettingsModule,
     SummaryModule,
     TransactionsModule,
+    RecurringModule,
+    SubscriptionsModule,
+    BudgetsModule,
+    GoalsModule,
+    DetectionModule,
   ],
 })
 export class AppModule {}

@@ -3,6 +3,7 @@ import { and, asc, desc, eq, gte, lte, type SQL } from 'drizzle-orm';
 import { DRIZZLE } from '../database/database.constants';
 import type { Database } from '../database/database.module';
 import { recurring, subscriptions, transactions } from '../database/schema';
+import { DetectionService } from '../detection/detection.service';
 import type { Period } from '../settings/settings.types';
 import { SettingsService } from '../settings/settings.service';
 import { buildBuckets, periodRange, localDateISO } from './period';
@@ -58,6 +59,7 @@ export class SummaryService {
   constructor(
     @Inject(DRIZZLE) private readonly db: Database,
     private readonly settingsService: SettingsService,
+    private readonly detectionService: DetectionService,
   ) {}
 
   async getSummary(period?: Period): Promise<Summary> {
@@ -190,6 +192,9 @@ export class SummaryService {
 
     const lastImport = null;
 
+    const pendingSuggestions = (await this.detectionService.getSuggestions())
+      .length;
+
     return {
       period: activePeriod,
       netWorth,
@@ -201,7 +206,7 @@ export class SummaryService {
       recentActivity,
       comingUp,
       needsReviewCount,
-      pendingSuggestions: 0,
+      pendingSuggestions,
       lastImport,
     };
   }
