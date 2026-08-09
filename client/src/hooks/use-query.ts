@@ -8,6 +8,7 @@ type QueryState<T> =
 
 type QueryResult<T> = QueryState<T> & {
   refetch: () => void;
+  setData: (updater: (previous: T | undefined) => T) => void;
 };
 
 export function useQuery<T>(fetcher: () => Promise<T>, deps: readonly unknown[] = []): QueryResult<T> {
@@ -53,5 +54,13 @@ export function useQuery<T>(fetcher: () => Promise<T>, deps: readonly unknown[] 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps);
 
-  return { ...state, refetch: load };
+  const setData = useCallback((updater: (previous: T | undefined) => T) => {
+    setState((previous) => ({
+      status: "success",
+      data: updater(previous.status === "success" ? previous.data : undefined),
+      error: undefined,
+    }));
+  }, []);
+
+  return { ...state, refetch: load, setData };
 }
