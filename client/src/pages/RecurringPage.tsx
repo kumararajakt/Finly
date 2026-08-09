@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { CalendarClock, Pencil, Plus, Repeat, ShieldCheck, Sparkles, Trash2 } from "lucide-react";
+import ConfidenceBadge from "@/components/ConfidenceBadge";
 import SummaryCard from "@/components/SummaryCard";
 import { Button } from "@/components/ui/button";
 import EmptyState from "@/components/ui/empty-state";
@@ -17,61 +18,15 @@ import {
 import { useSettings } from "@/contexts/SettingsContext";
 import { useQuery } from "@/hooks/use-query";
 import { ApiError, api } from "@/lib/api";
+import { CADENCES, cadenceLabel, monthlyEquivalent } from "@/lib/cadence";
 import { formatCurrency, formatDate, todayISO } from "@/lib/format";
 import type { Account, Cadence, Category, DetectionSuggestion, Recurring } from "@/lib/types";
 import { cn } from "@/lib/utils";
-
-const CADENCES: Cadence[] = ["weekly", "biweekly", "monthly", "quarterly", "annual"];
 
 function message(error: unknown): string {
   if (error instanceof ApiError) return error.message;
   if (error instanceof Error) return error.message;
   return "Something went wrong.";
-}
-
-function cadenceLabel(cadence: Cadence): string {
-  switch (cadence) {
-    case "weekly":
-      return "Weekly";
-    case "biweekly":
-      return "Every 2 weeks";
-    case "monthly":
-      return "Monthly";
-    case "quarterly":
-      return "Quarterly";
-    case "annual":
-      return "Annual";
-  }
-}
-
-function monthlyEquivalent(amount: number, cadence: Cadence): number {
-  switch (cadence) {
-    case "weekly":
-      return (amount * 52) / 12;
-    case "biweekly":
-      return (amount * 26) / 12;
-    case "quarterly":
-      return amount / 3;
-    case "annual":
-      return amount / 12;
-    case "monthly":
-      return amount;
-  }
-}
-
-function ConfidenceBadge({ confidence }: { confidence: DetectionSuggestion["confidence"] }) {
-  return (
-    <span
-      className={cn(
-        "rounded-full px-2 py-0.5 text-xs font-medium",
-        confidence === "high"
-          ? "bg-emerald-500/10 text-emerald-600"
-          : "bg-amber-500/10 text-amber-600"
-      )}
-    >
-      {confidence === "high" ? "High" : "Likely"}
-    </span>
-  );
 }
 
 interface SuggestionRowProps {
