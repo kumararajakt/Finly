@@ -1,4 +1,5 @@
-export type DateOrder = 'mdY' | 'dmY' | 'Ymd';
+import { parse } from 'csv/sync';
+
 export type SignConvention = 'negative-expense' | 'negative-income';
 
 export interface ColumnMapping {
@@ -113,59 +114,12 @@ function matchesKeywords(header: string, role: Role): boolean {
 }
 
 export function parseCsv(text: string): string[][] {
-  const source = text.replace(/^\uFEFF/, '');
-  const rows: string[][] = [];
-  let row: string[] = [];
-  let field = '';
-  let inQuotes = false;
-  let i = 0;
-  while (i < source.length) {
-    const char = source[i];
-    if (inQuotes) {
-      if (char === '"') {
-        if (source[i + 1] === '"') {
-          field += '"';
-          i += 2;
-          continue;
-        }
-        inQuotes = false;
-        i += 1;
-        continue;
-      }
-      field += char;
-      i += 1;
-      continue;
-    }
-    if (char === '"') {
-      inQuotes = true;
-      i += 1;
-      continue;
-    }
-    if (char === ',') {
-      row.push(field.trim());
-      field = '';
-      i += 1;
-      continue;
-    }
-    if (char === '\n' || char === '\r') {
-      if (char === '\r' && source[i + 1] === '\n') {
-        i += 1;
-      }
-      row.push(field.trim());
-      field = '';
-      rows.push(row);
-      row = [];
-      i += 1;
-      continue;
-    }
-    field += char;
-    i += 1;
-  }
-  row.push(field.trim());
-  if (row.some((cell) => cell.length > 0)) {
-    rows.push(row);
-  }
-  return rows.filter((r) => r.some((cell) => cell.length > 0));
+  const rawRecords = parse(text, {
+    bom: true,
+    skip_empty_lines: true,
+    relax_column_count: true,
+  });
+  return rawRecords.filter((r) => r.some((cell) => cell.length > 0));
 }
 
 export function detectHeaderRow(rows: string[][]): boolean {
@@ -233,85 +187,11 @@ export function detectColumns(headers: string[]): ColumnDetection {
   return { mapping, ambiguous: ambiguity };
 }
 
-export function detectDateOrder(
-  rows: string[][],
-  dateColumn: number,
-): DateOrder {
-  let mdY = 0;
-  let dmY = 0;
-  const pattern = /^\s*(\d{1,2})[/.-](\d{1,2})[/.-](\d{2,4})\s*$/;
-  for (const row of rows) {
-    const value = row[dateColumn];
-    if (value === undefined) {
-      continue;
-    }
-    const match = pattern.exec(value);
-    if (!match) {
-      continue;
-    }
-    const first = Number(match[1]);
-    const second = Number(match[2]);
-    if (first > 12) {
-      dmY += 1;
-    } else if (second > 12) {
-      mdY += 1;
-    }
-  }
-  if (dmY > mdY) {
-    return 'dmY';
-  }
-  return 'mdY';
-}
+export function normalizeDate(value: string): string | null {
+  const date = new Date(value);
 
-export function normalizeDate(value: string, order: DateOrder): string | null {
-  const raw = value.trim();
-  if (raw.length === 0) {
-    return null;
-  }
-
-  let month: number | undefined;
-  let day: number | undefined;
-  let year: number | undefined;
-
-  const iso = /^(\d{4})[/.-](\d{1,2})[/.-](\d{1,2})/.exec(raw);
-  if (iso) {
-    return validDate(Number(iso[1]), Number(iso[2]), Number(iso[3]));
-  }
-
-  const slashed = /^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2,4})$/.exec(raw);
-  if (slashed) {
-    const first = Number(slashed[1]);
-    const second = Number(slashed[2]);
-    year = expandYear(Number(slashed[3]));
-    if (order === 'Ymd') {
-      month = first;
-      day = second;
-    } else if (order === 'dmY') {
-      day = first;
-      month = second;
-    } else {
-      month = first;
-      day = second;
-    }
-    return validDate(year, month, day);
-  }
-
-  const monthName = /^(\d{1,2})\s+([A-Za-z]{3,9})\s+(\d{2,4})$/.exec(raw);
-  if (monthName) {
-    day = Number(monthName[1]);
-    month = MONTHS[monthName[2].toLowerCase()];
-    year = expandYear(Number(monthName[3]));
-    return validDate(year, month, day);
-  }
-
-  const monthNameLeading = /^([A-Za-z]{3,9})\s+(\d{1,2}),?\s+(\d{2,4})$/.exec(
-    raw,
-  );
-  if (monthNameLeading) {
-    month = MONTHS[monthNameLeading[1].toLowerCase()];
-    day = Number(monthNameLeading[2]);
-    year = expandYear(Number(monthNameLeading[3]));
-    return validDate(year, month, day);
+  if (date) {
+    return date.toISOString()
   }
 
   return null;

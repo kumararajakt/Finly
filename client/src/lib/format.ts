@@ -46,7 +46,7 @@ export function todayISO(): string {
 }
 
 export function formatDate(date: string): string {
-  const parsed = new Date(`${date}T00:00:00`);
+  const parsed = new Date(`${date}`);  
   if (Number.isNaN(parsed.getTime())) return date;
   return new Intl.DateTimeFormat(undefined, {
     month: "short",

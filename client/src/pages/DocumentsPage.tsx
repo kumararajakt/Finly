@@ -13,7 +13,6 @@ import { ApiError, api } from "@/lib/api";
 import type {
   CsvColumnMapping,
   CsvPreview,
-  DateOrder,
   ImportResult,
   SignConvention,
 } from "@/lib/types";
@@ -32,12 +31,6 @@ const ROLE_LABELS: Record<string, string> = {
 };
 
 const REQUIRED_ROLES = ["date", "merchant"] as const;
-
-const DATE_ORDER_OPTIONS: { value: DateOrder; label: string }[] = [
-  { value: "mdY", label: "MM/DD/YYYY" },
-  { value: "dmY", label: "DD/MM/YYYY" },
-  { value: "Ymd", label: "YYYY/MM/DD" },
-];
 
 function message(error: unknown): string {
   if (error instanceof ApiError) return error.message;
@@ -127,7 +120,6 @@ function CsvImportCard({ onNavigate }: CsvImportCardProps) {
   const [preview, setPreview] = useState<CsvPreview | null>(null);
   const [mapping, setMapping] = useState<CsvColumnMapping | null>(null);
   const [hasHeader, setHasHeader] = useState(true);
-  const [dateOrder, setDateOrder] = useState<DateOrder>("mdY");
   const [signConvention, setSignConvention] =
     useState<SignConvention>("negative-expense");
   const [amountMode, setAmountMode] = useState<"amount" | "split">("amount");
@@ -150,7 +142,6 @@ function CsvImportCard({ onNavigate }: CsvImportCardProps) {
       setPreview(detected);
       setMapping(detected.mapping);
       setHasHeader(detected.hasHeader);
-      setDateOrder(detected.dateOrder);
       setAmountMode(
         detected.mapping.amount !== null ? "amount" : "split"
       );
@@ -226,7 +217,6 @@ function CsvImportCard({ onNavigate }: CsvImportCardProps) {
       category: mapping.category ?? undefined,
       account: mapping.account ?? undefined,
       hasHeader,
-      dateOrder,
     };
 
     setBusy(true);
@@ -370,7 +360,7 @@ function CsvImportCard({ onNavigate }: CsvImportCardProps) {
           />
         </div>
 
-        <div className="mt-5 grid gap-4 border-t pt-4 sm:grid-cols-3">
+        <div className="mt-5 grid gap-4 border-t pt-4 sm:grid-cols-2">
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-medium">First row is a header</label>
             <input
@@ -379,23 +369,6 @@ function CsvImportCard({ onNavigate }: CsvImportCardProps) {
               onChange={(event) => setHasHeader(event.target.checked)}
               className="size-4 self-start"
             />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium" htmlFor="date-order">
-              Date format
-            </label>
-            <select
-              id="date-order"
-              value={dateOrder}
-              onChange={(event) => setDateOrder(event.target.value as DateOrder)}
-              className="w-full rounded-lg border border-input bg-background px-2.5 py-1.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-            >
-              {DATE_ORDER_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
           </div>
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-medium">Sign convention</label>

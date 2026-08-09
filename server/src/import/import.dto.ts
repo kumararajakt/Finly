@@ -10,7 +10,7 @@ import {
   Min,
   ValidateNested,
 } from 'class-validator';
-import type { DateOrder, SignConvention } from './csv';
+import type { SignConvention } from './csv';
 
 export class CsvPreviewDto {
   @IsString()
@@ -55,10 +55,6 @@ export class ColumnMappingDto {
   @IsOptional()
   @IsBoolean()
   hasHeader?: boolean;
-
-  @IsOptional()
-  @IsIn(['mdY', 'dmY', 'Ymd'])
-  dateOrder?: DateOrder;
 }
 
 export class CsvImportDto {

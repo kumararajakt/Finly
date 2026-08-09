@@ -1,6 +1,5 @@
 import {
   detectColumns,
-  detectDateOrder,
   detectHeaderRow,
   normalizeDate,
   parseAmount,
@@ -124,67 +123,46 @@ describe('detectColumns', () => {
   });
 });
 
-describe('detectDateOrder', () => {
-  it('prefers DD/MM when values disambiguate', () => {
-    const rows = [
-      ['15/01/2024', 'x'],
-      ['20/02/2024', 'y'],
-    ];
-    expect(detectDateOrder(rows, 0)).toBe('dmY');
-  });
-
-  it('prefers MM/DD when values disambiguate', () => {
-    const rows = [
-      ['01/15/2024', 'x'],
-      ['02/20/2024', 'y'],
-    ];
-    expect(detectDateOrder(rows, 0)).toBe('mdY');
-  });
-
-  it('defaults to MM/DD on ties', () => {
-    const rows = [
-      ['01/02/2024', 'x'],
-      ['03/04/2024', 'y'],
-    ];
-    expect(detectDateOrder(rows, 0)).toBe('mdY');
-  });
-});
-
 describe('normalizeDate', () => {
   it('normalizes ISO dates', () => {
-    expect(normalizeDate('2024-01-15', 'mdY')).toBe('2024-01-15');
+    expect(normalizeDate('2024-01-15')).toBe('2024-01-15');
   });
 
   it('normalizes MM/DD/YYYY', () => {
-    expect(normalizeDate('01/15/2024', 'mdY')).toBe('2024-01-15');
+    expect(normalizeDate('01/15/2024')).toBe('2024-01-15');
   });
 
   it('normalizes DD/MM/YYYY', () => {
-    expect(normalizeDate('15/01/2024', 'dmY')).toBe('2024-01-15');
+    expect(normalizeDate('15/01/2024')).toBe('2024-01-15');
+  });
+
+  it('auto-detects day-first when the first part cannot be a month', () => {
+    expect(normalizeDate('13/01/2024')).toBe('2024-01-13');
   });
 
   it('normalizes YYYY/MM/DD with dots', () => {
-    expect(normalizeDate('2024.01.15', 'Ymd')).toBe('2024-01-15');
+    expect(normalizeDate('2024.01.15')).toBe('2024-01-15');
   });
 
   it('expands two-digit years', () => {
-    expect(normalizeDate('1/15/24', 'mdY')).toBe('2024-01-15');
-    expect(normalizeDate('1/15/99', 'mdY')).toBe('1999-01-15');
+    expect(normalizeDate('1/15/24')).toBe('2024-01-15');
+    expect(normalizeDate('1/15/99')).toBe('1999-01-15');
   });
 
   it('normalizes day-month-name formats', () => {
-    expect(normalizeDate('15 Jan 2024', 'mdY')).toBe('2024-01-15');
-    expect(normalizeDate('Jan 15, 2024', 'mdY')).toBe('2024-01-15');
+    expect(normalizeDate('15 Jan 2024')).toBe('2024-01-15');
+    expect(normalizeDate('Jan 15, 2024')).toBe('2024-01-15');
   });
 
   it('rejects invalid calendar dates', () => {
-    expect(normalizeDate('02/30/2024', 'mdY')).toBeNull();
-    expect(normalizeDate('13/01/2024', 'mdY')).toBeNull();
+    expect(normalizeDate('02/30/2024')).toBeNull();
+    expect(normalizeDate('13/13/2024')).toBeNull();
+    expect(normalizeDate('31/04/2024')).toBeNull();
   });
 
   it('rejects non-date values', () => {
-    expect(normalizeDate('N/A', 'mdY')).toBeNull();
-    expect(normalizeDate('', 'mdY')).toBeNull();
+    expect(normalizeDate('N/A')).toBeNull();
+    expect(normalizeDate('')).toBeNull();
   });
 });
 

@@ -179,7 +179,6 @@ export interface Summary {
   lastImport: ImportResult | null;
 }
 
-export type DateOrder = "mdY" | "dmY" | "Ymd";
 export type SignConvention = "negative-expense" | "negative-income";
 
 export interface CsvColumnMapping {
@@ -199,7 +198,6 @@ export interface CsvPreview {
   rowCount: number;
   hasHeader: boolean;
   mapping: CsvColumnMapping;
-  dateOrder: DateOrder;
   ambiguous: string[];
 }
 
@@ -212,7 +210,6 @@ export interface CsvMapping {
   category?: number;
   account?: number;
   hasHeader?: boolean;
-  dateOrder?: DateOrder;
 }
 
 export interface AuthUser {

@@ -23,7 +23,6 @@ interface CsvPreviewBody {
   rowCount: number;
   hasHeader: boolean;
   mapping: { date: number; merchant: number; amount: number; category: number };
-  dateOrder: string;
   ambiguous: string[];
 }
 

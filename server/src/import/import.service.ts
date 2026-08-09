@@ -16,13 +16,11 @@ import {
 import { computeFingerprint } from '../common/fingerprint';
 import {
   detectColumns,
-  detectDateOrder,
   detectHeaderRow,
   normalizeDate,
   parseAmount,
   parseCsv,
   type ColumnMapping,
-  type DateOrder,
   type SignConvention,
 } from './csv';
 import { CsvImportDto, CsvPreviewDto } from './import.dto';
@@ -40,7 +38,6 @@ export interface CsvPreviewResult {
   rowCount: number;
   hasHeader: boolean;
   mapping: ColumnMapping;
-  dateOrder: DateOrder;
   ambiguous: string[];
 }
 
@@ -92,7 +89,6 @@ export class ImportService {
     }
 
     const detection = detectColumns(hasHeader ? headerCells : (rows[0] ?? []));
-    const dateOrder = detectDateOrder(dataRows, detection.mapping.date);
     const sampleRows = dataRows.slice(0, SAMPLE_ROWS);
 
     return {
@@ -102,7 +98,6 @@ export class ImportService {
       rowCount: dataRows.length,
       hasHeader,
       mapping: detection.mapping,
-      dateOrder,
       ambiguous: detection.ambiguous,
     };
   }
@@ -123,7 +118,7 @@ export class ImportService {
       });
     }
 
-    const { mapping, hasHeader, dateOrder } = this.resolveMapping(dto, rows);
+    const { mapping, hasHeader } = this.resolveMapping(dto, rows);
 
     const dataRows = hasHeader ? rows.slice(1) : rows;
     if (dataRows.length > MAX_ROWS) {
@@ -146,7 +141,6 @@ export class ImportService {
       const parsed = this.parseRow(
         row,
         mapping,
-        dateOrder,
         signConvention,
         categoryMap,
         accountMap,
@@ -229,7 +223,6 @@ export class ImportService {
   ): {
     mapping: ColumnMapping;
     hasHeader: boolean;
-    dateOrder: DateOrder;
     columnCount: number;
   } {
     const columnCount = rows[0].length;
@@ -284,14 +277,12 @@ export class ImportService {
     }
 
     const hasHeader = dto.mapping.hasHeader ?? true;
-    const dateOrder: DateOrder = dto.mapping.dateOrder ?? 'mdY';
-    return { mapping, hasHeader, dateOrder, columnCount };
+    return { mapping, hasHeader, columnCount };
   }
 
   private parseRow(
     row: string[],
     mapping: ColumnMapping,
-    dateOrder: DateOrder,
     signConvention: SignConvention,
     categoryMap: Map<string, string>,
     accountMap: Map<string, string>,
@@ -301,7 +292,7 @@ export class ImportService {
       return null;
     }
 
-    const date = normalizeDate(row[mapping.date] ?? '', dateOrder);
+    const date = normalizeDate(row[mapping.date] ?? '');
     if (date === null) {
       return null;
     }

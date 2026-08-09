@@ -191,13 +191,13 @@ describe('ImportService', () => {
       expect(result.needsReview).toBe(1);
     });
 
-    it('normalizes dates according to the detected order', async () => {
+    it('auto-detects and normalizes DD/MM/YYYY dates', async () => {
       const { db, valuesCalls } = makeDb();
       service = new ImportService(db);
 
       await service.importCsv({
         csv: 'Date,Description,Amount\n15/01/2024,Rent,1200.00\n',
-        mapping: { date: 0, merchant: 1, amount: 2, dateOrder: 'dmY' },
+        mapping: { date: 0, merchant: 1, amount: 2 },
       });
 
       const values = valuesCalls.flat();
