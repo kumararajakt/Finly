@@ -8,6 +8,7 @@ import { GoalsModule } from './goals/goals.module';
 import { HealthModule } from './health/health.module';
 import { ManagedModule } from './managed/managed.module';
 import { RecurringModule } from './recurring/recurring.module';
+import { RulesModule } from './rules/rules.module';
 import { SettingsModule } from './settings/settings.module';
 import { SubscriptionsModule } from './subscriptions/subscriptions.module';
 import { SummaryModule } from './summary/summary.module';
@@ -27,6 +28,7 @@ import { TransactionsModule } from './transactions/transactions.module';
     SubscriptionsModule,
     BudgetsModule,
     GoalsModule,
+    RulesModule,
     DetectionModule,
   ],
 })

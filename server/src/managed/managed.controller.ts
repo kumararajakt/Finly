@@ -5,6 +5,7 @@ import {
   Get,
   HttpCode,
   Param,
+  ParseUUIDPipe,
   Post,
 } from '@nestjs/common';
 import type { Account, Category } from '../database/schema';
@@ -27,7 +28,7 @@ export class CategoriesController {
 
   @Delete(':id')
   @HttpCode(204)
-  async remove(@Param('id') id: string): Promise<void> {
+  async remove(@Param('id', ParseUUIDPipe) id: string): Promise<void> {
     await this.managedService.deleteCategory(id);
   }
 }
@@ -48,7 +49,7 @@ export class AccountsController {
 
   @Delete(':id')
   @HttpCode(204)
-  async remove(@Param('id') id: string): Promise<void> {
+  async remove(@Param('id', ParseUUIDPipe) id: string): Promise<void> {
     await this.managedService.deleteAccount(id);
   }
 }

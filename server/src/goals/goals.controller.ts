@@ -5,6 +5,7 @@ import {
   Get,
   HttpCode,
   Param,
+  ParseUUIDPipe,
   Patch,
   Post,
 } from '@nestjs/common';
@@ -27,13 +28,16 @@ export class GoalsController {
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() body: UpdateGoalDto): Promise<Goal> {
+  update(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: UpdateGoalDto,
+  ): Promise<Goal> {
     return this.goalsService.update(id, body);
   }
 
   @Delete(':id')
   @HttpCode(204)
-  async remove(@Param('id') id: string): Promise<void> {
+  async remove(@Param('id', ParseUUIDPipe) id: string): Promise<void> {
     await this.goalsService.remove(id);
   }
 }

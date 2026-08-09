@@ -5,6 +5,7 @@ import {
   Get,
   HttpCode,
   Param,
+  ParseUUIDPipe,
   Patch,
   Post,
 } from '@nestjs/common';
@@ -31,7 +32,7 @@ export class SubscriptionsController {
 
   @Patch(':id')
   update(
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @Body() body: UpdateSubscriptionDto,
   ): Promise<Subscription> {
     return this.subscriptionsService.update(id, body);
@@ -39,7 +40,7 @@ export class SubscriptionsController {
 
   @Delete(':id')
   @HttpCode(204)
-  async remove(@Param('id') id: string): Promise<void> {
+  async remove(@Param('id', ParseUUIDPipe) id: string): Promise<void> {
     await this.subscriptionsService.remove(id);
   }
 }
