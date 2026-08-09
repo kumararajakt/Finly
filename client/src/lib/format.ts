@@ -64,6 +64,26 @@ export function formatMonthYear(date: string): string {
   }).format(parsed);
 }
 
+export function currentYearMonth(): string {
+  return todayISO().slice(0, 7);
+}
+
+export function monthLabelYM(ym: string): string {
+  const [year, month] = ym.split("-").map(Number);
+  const parsed = new Date(year, month - 1, 1);
+  if (Number.isNaN(parsed.getTime())) return ym;
+  return new Intl.DateTimeFormat(undefined, {
+    month: "long",
+    year: "numeric",
+  }).format(parsed);
+}
+
+export function shiftMonth(ym: string, delta: number): string {
+  const [year, month] = ym.split("-").map(Number);
+  const d = new Date(year, month - 1 + delta, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
 export function formatDateTime(iso: string): string {
   const parsed = new Date(iso);
   if (Number.isNaN(parsed.getTime())) return iso;

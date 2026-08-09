@@ -181,6 +181,8 @@ export const api = {
     update: (id: string, patch: Partial<Omit<Budget, "id" | "createdAt">>) =>
       apiFetch<Budget>(`/budgets/${encodeURIComponent(id)}`, { method: "PATCH", body: patch }),
     remove: (id: string) => apiFetch<void>(`/budgets/${encodeURIComponent(id)}`, { method: "DELETE" }),
+    spending: (month: string) =>
+      apiFetch<Record<string, number>>(`/budgets/spending?month=${encodeURIComponent(month)}`),
   },
 
   goals: {

@@ -4,9 +4,17 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  Matches,
   Max,
   Min,
 } from 'class-validator';
+
+export class BudgetSpendingQueryDto {
+  @Matches(/^\d{4}-\d{2}$/, {
+    message: 'Month must be in YYYY-MM format.',
+  })
+  month: string;
+}
 
 export class CreateBudgetDto {
   @IsString()

@@ -7,14 +7,26 @@ import {
   Param,
   Patch,
   Post,
+  Query,
 } from '@nestjs/common';
 import type { Budget } from '../database/schema';
-import { CreateBudgetDto, UpdateBudgetDto } from './budgets.dto';
+import {
+  BudgetSpendingQueryDto,
+  CreateBudgetDto,
+  UpdateBudgetDto,
+} from './budgets.dto';
 import { BudgetsService } from './budgets.service';
 
 @Controller('budgets')
 export class BudgetsController {
   constructor(private readonly budgetsService: BudgetsService) {}
+
+  @Get('spending')
+  spending(
+    @Query() query: BudgetSpendingQueryDto,
+  ): Promise<Record<string, number>> {
+    return this.budgetsService.spending(query.month);
+  }
 
   @Get()
   list(): Promise<Budget[]> {

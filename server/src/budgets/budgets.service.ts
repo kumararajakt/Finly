@@ -1,9 +1,15 @@
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { asc, eq } from 'drizzle-orm';
+import { and, asc, eq, gte, lte, sql } from 'drizzle-orm';
 import { DRIZZLE } from '../database/database.constants';
 import type { Database } from '../database/database.module';
-import { budgets, type Budget, type NewBudget } from '../database/schema';
+import {
+  budgets,
+  transactions,
+  type Budget,
+  type NewBudget,
+} from '../database/schema';
 import { CreateBudgetDto, UpdateBudgetDto } from './budgets.dto';
+import { monthRange } from './month-range';
 
 function round2(value: number): number {
   return Math.round(value * 100) / 100;
@@ -68,5 +74,29 @@ export class BudgetsService {
     if (result.length === 0) {
       throw notFound();
     }
+  }
+
+  async spending(month: string): Promise<Record<string, number>> {
+    const { start, end } = monthRange(month);
+    const rows = await this.db
+      .select({
+        category: transactions.category,
+        total: sql<number>`coalesce(sum(${transactions.amount}), 0)`,
+      })
+      .from(transactions)
+      .where(
+        and(
+          eq(transactions.type, 'expense'),
+          gte(transactions.date, start),
+          lte(transactions.date, end),
+        ),
+      )
+      .groupBy(transactions.category);
+
+    const totals: Record<string, number> = {};
+    for (const row of rows) {
+      totals[row.category] = round2(Number(row.total));
+    }
+    return totals;
   }
 }
