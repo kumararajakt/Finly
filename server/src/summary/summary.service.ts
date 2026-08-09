@@ -30,9 +30,10 @@ export interface ComingUpItem {
 
 export interface ImportResult {
   inserted: number;
-  duplicate: number;
+  duplicates: number;
   skipped: number;
-  review: number;
+  needsReview: number;
+  totalRows: number;
 }
 
 export interface Summary {

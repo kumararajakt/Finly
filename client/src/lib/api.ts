@@ -219,17 +219,17 @@ export const api = {
   },
 
   importCsv: {
-    preview: (file: File) => {
-      const form = new FormData();
-      form.append("file", file);
-      return apiFetch<CsvPreview>("/import/csv/preview", { method: "POST", body: form });
-    },
-    run: (file: File, mapping: CsvMapping) => {
-      const form = new FormData();
-      form.append("file", file);
-      form.append("mapping", JSON.stringify(mapping));
-      return apiFetch<ImportResult>("/import/csv", { method: "POST", body: form });
-    },
+    preview: (csv: string) =>
+      apiFetch<CsvPreview>("/import/csv/preview", { method: "POST", body: { csv } }),
+    run: (
+      csv: string,
+      mapping: CsvMapping,
+      signConvention: "negative-expense" | "negative-income"
+    ) =>
+      apiFetch<ImportResult>("/import/csv", {
+        method: "POST",
+        body: { csv, mapping, signConvention },
+      }),
   },
 
   drive: {

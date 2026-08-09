@@ -6,6 +6,7 @@ import { DatabaseModule } from './database/database.module';
 import { DetectionModule } from './detection/detection.module';
 import { GoalsModule } from './goals/goals.module';
 import { HealthModule } from './health/health.module';
+import { ImportModule } from './import/import.module';
 import { ManagedModule } from './managed/managed.module';
 import { RecurringModule } from './recurring/recurring.module';
 import { RulesModule } from './rules/rules.module';
@@ -20,6 +21,7 @@ import { TransactionsModule } from './transactions/transactions.module';
     DatabaseModule,
     AuthModule,
     HealthModule,
+    ImportModule,
     ManagedModule,
     SettingsModule,
     SummaryModule,

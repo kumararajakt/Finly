@@ -103,9 +103,10 @@ export interface Settings {
 
 export interface ImportResult {
   inserted: number;
-  duplicate: number;
+  duplicates: number;
   skipped: number;
-  review: number;
+  needsReview: number;
+  totalRows: number;
 }
 
 export interface TransactionFilters {
@@ -188,27 +189,40 @@ export interface DocumentItem {
   importedAt: string;
 }
 
-export interface CsvColumn {
-  index: number;
-  header: string;
-  sample: string[];
+export type DateOrder = "mdY" | "dmY" | "Ymd";
+export type SignConvention = "negative-expense" | "negative-income";
+
+export interface CsvColumnMapping {
+  date: number;
+  merchant: number;
+  amount: number | null;
+  debit: number | null;
+  credit: number | null;
+  category: number | null;
+  account: number | null;
 }
 
 export interface CsvPreview {
   headers: string[];
+  columnCount: number;
   sampleRows: string[][];
-  proposedMapping: Record<string, number>;
-  detectedColumns: CsvColumn[];
+  rowCount: number;
+  hasHeader: boolean;
+  mapping: CsvColumnMapping;
+  dateOrder: DateOrder;
+  ambiguous: string[];
 }
 
 export interface CsvMapping {
   date: number;
   merchant: number;
-  amount: number;
+  amount?: number;
   debit?: number;
   credit?: number;
   category?: number;
   account?: number;
+  hasHeader?: boolean;
+  dateOrder?: DateOrder;
 }
 
 export interface DriveStatus {

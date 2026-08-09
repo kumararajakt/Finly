@@ -42,7 +42,7 @@ function InsightList({ summary }: { summary: Summary }) {
       const last = summary.lastImport;
       items.push({
         icon: Upload,
-        text: `Last import: ${last.inserted} inserted, ${last.duplicate} duplicate, ${last.skipped} skipped, ${last.review} to review`,
+        text: `Last import: ${last.inserted} inserted, ${last.duplicates} duplicate, ${last.skipped} skipped, ${last.needsReview} to review`,
       });
     }
     if (items.length === 0) {
