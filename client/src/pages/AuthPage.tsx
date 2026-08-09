@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Home, Loader2, LockKeyhole, LogIn, Mail, UserPlus } from "lucide-react";
+import ThemeToggle from "@/components/ThemeToggle";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/contexts/AuthContext";
@@ -51,7 +52,10 @@ export default function AuthPage() {
   };
 
   return (
-    <div className="flex min-h-dvh items-center justify-center bg-background p-4">
+    <div className="relative flex min-h-dvh items-center justify-center bg-background p-4">
+      <div className="absolute right-4 top-4">
+        <ThemeToggle />
+      </div>
       <div className="w-full max-w-sm">
         <div className="mb-6 flex flex-col items-center gap-3 text-center">
           <div className="flex aspect-square size-11 items-center justify-center rounded-xl bg-primary text-primary-foreground">

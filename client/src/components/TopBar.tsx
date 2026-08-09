@@ -1,4 +1,5 @@
 import { Plus, Upload } from "lucide-react";
+import ThemeToggle from "@/components/ThemeToggle";
 import { Button } from "@/components/ui/button";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { menus } from "@/utils/menu";
@@ -21,6 +22,7 @@ export default function TopBar({ selectedMenu, onImport, onAddEntry }: TopBarPro
       <h1 className="min-w-0 flex-1 truncate text-lg font-semibold">
         {getTitle(selectedMenu)}
       </h1>
+      <ThemeToggle />
       {selectedMenu === "transactions" && (
         <div className="flex shrink-0 items-center gap-2">
           <Button variant="outline" onClick={onImport}>

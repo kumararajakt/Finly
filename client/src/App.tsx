@@ -5,6 +5,7 @@ import MobileBottomNav from "./components/MobileBottomNav";
 import LoadingState from "./components/ui/loading-state";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import { SettingsProvider } from "./contexts/SettingsContext";
+import { ThemeProvider } from "./contexts/ThemeContext";
 import AuthPage from "./pages/AuthPage";
 import DashboardPage from "./pages/DashboardPage";
 import TransactionPage from "./pages/TransactionPage";
@@ -86,7 +87,9 @@ function FinlyApp() {
 function App() {
   return (
     <AuthProvider>
-      <FinlyApp />
+      <ThemeProvider>
+        <FinlyApp />
+      </ThemeProvider>
     </AuthProvider>
   );
 }

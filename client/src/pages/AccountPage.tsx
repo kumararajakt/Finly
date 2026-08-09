@@ -21,10 +21,10 @@ type Account = {
 }
 
 const typeConfig: Record<string, { icon: typeof Wallet; color: string }> = {
-  checking: { icon: Wallet, color: "text-blue-600 bg-blue-100" },
-  savings: { icon: PiggyBank, color: "text-emerald-600 bg-emerald-100" },
-  credit: { icon: CreditCard, color: "text-red-600 bg-red-100" },
-  investment: { icon: Building2, color: "text-purple-600 bg-purple-100" },
+  checking: { icon: Wallet, color: "text-blue-600 bg-blue-100 dark:text-blue-400 dark:bg-blue-500/20" },
+  savings: { icon: PiggyBank, color: "text-emerald-600 bg-emerald-100 dark:text-emerald-400 dark:bg-emerald-500/20" },
+  credit: { icon: CreditCard, color: "text-red-600 bg-red-100 dark:text-red-400 dark:bg-red-500/20" },
+  investment: { icon: Building2, color: "text-purple-600 bg-purple-100 dark:text-purple-400 dark:bg-purple-500/20" },
 }
 
 export default function AccountPage() {
@@ -96,7 +96,7 @@ export default function AccountPage() {
           </p>
         ) : (
           accounts.map((account, i) => {
-          const config = typeConfig[account.type] ?? { icon: Wallet, color: "text-gray-600 bg-gray-100" }
+          const config = typeConfig[account.type] ?? { icon: Wallet, color: "text-gray-600 bg-gray-100 dark:text-gray-400 dark:bg-gray-500/20" }
           const Icon = config.icon
           return (
             <div key={i} className="rounded-lg border p-4">
@@ -106,7 +106,7 @@ export default function AccountPage() {
                 </div>
                 <span className={cn(
                   "font-mono text-lg font-semibold",
-                  account.balance >= 0 ? "text-foreground" : "text-red-600"
+                  account.balance >= 0 ? "text-foreground" : "text-red-600 dark:text-red-400"
                 )}>
                   ${account.balance.toFixed(2)}
                 </span>
