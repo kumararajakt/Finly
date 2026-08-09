@@ -24,6 +24,7 @@ interface SettingsContextValue {
   error: ApiError | undefined;
   setPeriod: (period: Period) => Promise<void>;
   updateSettings: (patch: Partial<Settings>) => void;
+  saveSetting: (key: keyof Settings, value: string | number | boolean | string[]) => Promise<Settings>;
   refetch: () => void;
 }
 
@@ -75,9 +76,18 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     setSettings((previous) => ({ ...previous, ...patch }));
   }, []);
 
+  const saveSetting = useCallback(
+    async (key: keyof Settings, value: string | number | boolean | string[]) => {
+      const data = await api.settings.set(key, value);
+      setSettings({ ...DEFAULT_SETTINGS, ...data });
+      return data;
+    },
+    []
+  );
+
   const value = useMemo<SettingsContextValue>(
-    () => ({ settings, status, error, setPeriod, updateSettings, refetch }),
-    [settings, status, error, setPeriod, updateSettings, refetch]
+    () => ({ settings, status, error, setPeriod, updateSettings, saveSetting, refetch }),
+    [settings, status, error, setPeriod, updateSettings, saveSetting, refetch]
   );
 
   return <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>;
