@@ -259,8 +259,6 @@ interface EntryForm {
   category: string;
   account: string;
   tags: string[];
-  hasReceipt: boolean;
-  receiptFile: File | null;
 }
 
 function blankForm(): EntryForm {
@@ -272,8 +270,6 @@ function blankForm(): EntryForm {
     category: "",
     account: "",
     tags: [],
-    hasReceipt: false,
-    receiptFile: null,
   };
 }
 
@@ -322,15 +318,7 @@ function AddEntryForm({ categories, accounts, tags, onSaved }: AddEntryFormProps
         amount,
         type: form.type,
         tags: form.tags,
-        receipt: form.hasReceipt,
       });
-      if (form.receiptFile) {
-        try {
-          await api.documents.upload([form.receiptFile]);
-        } catch {
-          // The transaction saved; the attachment upload is best-effort.
-        }
-      }
       setForm(blankForm());
       setSaving(false);
       onSaved();
@@ -453,30 +441,6 @@ function AddEntryForm({ categories, accounts, tags, onSaved }: AddEntryFormProps
             onChange={(next) => setForm((f) => ({ ...f, tags: next }))}
           />
         </div>
-        <label className="flex items-center gap-2">
-          <input
-            type="checkbox"
-            checked={form.hasReceipt}
-            onChange={(e) =>
-              setForm((f) => ({
-                ...f,
-                hasReceipt: e.target.checked,
-                receiptFile: e.target.checked ? f.receiptFile : null,
-              }))
-            }
-            className="size-4"
-          />
-          <span className="text-sm">I have a receipt to attach</span>
-        </label>
-        {form.hasReceipt && (
-          <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium">Receipt file</label>
-            <Input
-              type="file"
-              onChange={(e) => setForm((f) => ({ ...f, receiptFile: e.target.files?.[0] ?? null }))}
-            />
-          </div>
-        )}
         {error && (
           <p role="alert" className="text-xs text-destructive">
             {error}

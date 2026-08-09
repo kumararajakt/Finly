@@ -5,7 +5,6 @@ import {
   CheckCircle2,
   FileSpreadsheet,
   FileUp,
-  Files,
   RotateCcw,
   UploadCloud,
 } from "lucide-react";
@@ -553,24 +552,13 @@ export default function DocumentsPage({
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-semibold">Documents and import</h2>
+        <h2 className="text-lg font-semibold">Import</h2>
         <p className="text-sm text-muted-foreground">
-          Import transactions from bank statements, receipts, and your Drive inbox.
+          Import transactions from bank statement exports.
         </p>
       </div>
 
       <CsvImportCard onNavigate={onNavigate} />
-
-      <section className="rounded-xl border bg-card p-4">
-        <h3 className="flex items-center gap-2 text-sm font-medium">
-          <Files className="size-4 text-muted-foreground" aria-hidden="true" />
-          Document vault
-        </h3>
-        <p className="mt-1 text-sm text-muted-foreground">
-          No documents yet. Upload a file or add one to your Drive inbox. Receipt, invoice and
-          statement upload is coming next.
-        </p>
-      </section>
     </div>
   );
 }

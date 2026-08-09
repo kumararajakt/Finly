@@ -179,16 +179,6 @@ export interface Summary {
   lastImport: ImportResult | null;
 }
 
-export interface DocumentItem {
-  key: string;
-  name: string;
-  type: string;
-  size: number;
-  source: string;
-  status: "queued" | "stored" | "review";
-  importedAt: string;
-}
-
 export type DateOrder = "mdY" | "dmY" | "Ymd";
 export type SignConvention = "negative-expense" | "negative-income";
 
@@ -223,14 +213,6 @@ export interface CsvMapping {
   account?: number;
   hasHeader?: boolean;
   dateOrder?: DateOrder;
-}
-
-export interface DriveStatus {
-  folderName: string | null;
-  folderId: string | null;
-  schedule: string | null;
-  lastSync: string | null;
-  lastResult: ImportResult | null;
 }
 
 export interface AuthUser {

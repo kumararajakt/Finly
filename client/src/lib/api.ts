@@ -7,8 +7,6 @@ import type {
   CsvMapping,
   CsvPreview,
   DetectionSuggestion,
-  DocumentItem,
-  DriveStatus,
   Goal,
   ImportResult,
   NewTransaction,
@@ -208,16 +206,6 @@ export const api = {
       }),
   },
 
-  documents: {
-    list: () => apiFetch<DocumentItem[]>("/documents"),
-    upload: (files: File[]) => {
-      const form = new FormData();
-      for (const file of files) form.append("files", file);
-      return apiFetch<ImportResult>("/documents", { method: "POST", body: form });
-    },
-    url: (key: string) => `/api/documents/${encodeURIComponent(key)}`,
-  },
-
   importCsv: {
     preview: (csv: string) =>
       apiFetch<CsvPreview>("/import/csv/preview", { method: "POST", body: { csv } }),
@@ -230,11 +218,6 @@ export const api = {
         method: "POST",
         body: { csv, mapping, signConvention },
       }),
-  },
-
-  drive: {
-    status: () => apiFetch<DriveStatus>("/drive/status"),
-    sync: () => apiFetch<ImportResult>("/drive/sync", { method: "POST" }),
   },
 
   summary: {

@@ -10,7 +10,7 @@ interface TopBarProps {
 }
 
 function getTitle(value: string) {
-  if (value === "documents") return "Documents";
+  if (value === "documents") return "Import";
   return menus.find((menu) => menu.value === value)?.label ?? "Finly";
 }
 
