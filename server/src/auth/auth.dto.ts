@@ -1,5 +1,6 @@
 import {
   IsEmail,
+  IsIn,
   IsNotEmpty,
   IsOptional,
   IsString,
@@ -7,6 +8,7 @@ import {
   MaxLength,
   MinLength,
 } from 'class-validator';
+import { COUNTRY_CODES } from '../countries/countries';
 
 export class RegisterDto {
   @IsEmail({}, { message: 'A valid email address is required.' })
@@ -38,4 +40,8 @@ export class UpdateProfileDto {
   @IsString()
   @MaxLength(2_000_000, { message: 'Image is too large.' })
   image?: string | null;
+
+  @IsOptional()
+  @IsIn(COUNTRY_CODES, { message: 'Unsupported country.' })
+  country?: string | null;
 }

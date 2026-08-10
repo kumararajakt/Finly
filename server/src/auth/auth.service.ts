@@ -15,6 +15,7 @@ import type { Request, Response } from 'express';
 import { DRIZZLE } from '../database/database.constants';
 import type { Database } from '../database/database.module';
 import { users } from '../database/schema';
+import { timeZoneForCountry } from '../countries/countries';
 import {
   createAuthInstance,
   OWNER_NAME,
@@ -26,6 +27,8 @@ export interface SessionUser {
   name: string;
   email: string;
   image: string | null;
+  country: string | null;
+  timeZone: string | null;
   createdAt: Date;
 }
 
@@ -139,11 +142,15 @@ export class AuthService {
     userId: string,
     request: Request,
     response: Response,
-    patch: { name?: string; image?: string | null },
+    patch: { name?: string; image?: string | null; country?: string | null },
   ): Promise<SessionUser> {
     const body: Record<string, string | null> = {};
     if (patch.name !== undefined) body.name = patch.name;
     if (patch.image !== undefined) body.image = patch.image;
+    if (patch.country !== undefined) {
+      body.country = patch.country;
+      body.timeZone = timeZoneForCountry(patch.country);
+    }
 
     try {
       const result = (await this.auth.api.updateUser({
@@ -168,6 +175,8 @@ export class AuthService {
         name: users.name,
         email: users.email,
         image: users.image,
+        country: users.country,
+        timeZone: users.timeZone,
         createdAt: users.createdAt,
       })
       .from(users)

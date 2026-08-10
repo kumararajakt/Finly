@@ -217,7 +217,16 @@ export interface AuthUser {
   name: string;
   email: string;
   image: string | null;
+  country: string | null;
+  timeZone: string | null;
   createdAt: string;
+}
+
+export interface Country {
+  code: string;
+  name: string;
+  currency: string;
+  timeZone: string;
 }
 
 export interface AuthMe {

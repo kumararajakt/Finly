@@ -232,4 +232,79 @@ describe('Auth (e2e)', () => {
     expect(res.status).toBe(401);
     expect((res.body as AuthErrorBody).error.code).toBe('UNAUTHORIZED');
   });
+
+  it('lists supported countries for an authenticated agent', async () => {
+    const agent = request.agent(app.getHttpServer());
+    await agent
+      .post('/api/auth/login')
+      .send({ email: validEmail, password: validPassword })
+      .expect(200);
+
+    const res = await agent.get('/api/countries');
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'US',
+          name: 'United States',
+          currency: 'USD',
+        }),
+      ]),
+    );
+    const us = (res.body as { code: string }[]).find(
+      (entry) => entry.code === 'US',
+    );
+    expect(us).toBeDefined();
+  });
+
+  it('rejects the countries list without a session', async () => {
+    const res = await request(app.getHttpServer()).get('/api/countries');
+    expect(res.status).toBe(401);
+    expect((res.body as AuthErrorBody).error.code).toBe('UNAUTHORIZED');
+  });
+
+  it('sets the country and derives the timezone on profile update', async () => {
+    const agent = request.agent(app.getHttpServer());
+    await agent
+      .post('/api/auth/login')
+      .send({ email: validEmail, password: validPassword })
+      .expect(200);
+
+    const res = await agent.patch('/api/auth/profile').send({ country: 'JP' });
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({
+      country: 'JP',
+      timeZone: 'Asia/Tokyo',
+    });
+
+    const me = await agent.get('/api/auth/me');
+    expect((me.body as AuthMeBody).user).toMatchObject({
+      country: 'JP',
+      timeZone: 'Asia/Tokyo',
+    });
+  });
+
+  it('clears the country and timezone when set to null', async () => {
+    const agent = request.agent(app.getHttpServer());
+    await agent
+      .post('/api/auth/login')
+      .send({ email: validEmail, password: validPassword })
+      .expect(200);
+
+    const res = await agent.patch('/api/auth/profile').send({ country: null });
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ country: null, timeZone: null });
+  });
+
+  it('rejects an unsupported country code', async () => {
+    const agent = request.agent(app.getHttpServer());
+    await agent
+      .post('/api/auth/login')
+      .send({ email: validEmail, password: validPassword })
+      .expect(200);
+
+    const res = await agent.patch('/api/auth/profile').send({ country: 'XX' });
+    expect(res.status).toBe(422);
+    expect((res.body as AuthErrorBody).error.code).toBe('VALIDATION_FAILED');
+  });
 });

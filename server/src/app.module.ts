@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { AuthModule } from './auth/auth.module';
 import { BudgetsModule } from './budgets/budgets.module';
+import { CountriesModule } from './countries/countries.module';
 import { DatabaseModule } from './database/database.module';
 import { DetectionModule } from './detection/detection.module';
 import { GoalsModule } from './goals/goals.module';
@@ -20,6 +21,7 @@ import { TransactionsModule } from './transactions/transactions.module';
     ConfigModule.forRoot({ isGlobal: true }),
     DatabaseModule,
     AuthModule,
+    CountriesModule,
     HealthModule,
     ImportModule,
     ManagedModule,

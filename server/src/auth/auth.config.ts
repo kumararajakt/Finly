@@ -17,6 +17,18 @@ export function createAuthInstance(db: Database) {
       `http://localhost:${process.env.PORT ?? 3000}`,
     user: {
       modelName: 'users',
+      additionalFields: {
+        country: {
+          type: 'string',
+          required: false,
+          defaultValue: null,
+        },
+        timeZone: {
+          type: 'string',
+          required: false,
+          defaultValue: null,
+        },
+      },
     },
     session: {
       modelName: 'sessions',

@@ -1,5 +1,4 @@
 import AccountMenu from "@/components/AccountMenu";
-import ThemeToggle from "@/components/ThemeToggle";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { menus } from "@/utils/menu";
 
@@ -19,7 +18,6 @@ export default function TopBar({ selectedMenu }: TopBarProps) {
       <h1 className="min-w-0 flex-1 truncate text-lg font-semibold">
         {getTitle(selectedMenu)}
       </h1>
-      <ThemeToggle />
       <AccountMenu />
     </header>
   );

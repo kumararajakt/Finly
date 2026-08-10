@@ -1,6 +1,44 @@
 import type { Period, TransactionType } from "./types";
+import { tzOption } from "./timezone";
 
 const DEFAULT_CURRENCY = "USD";
+
+function pad2(value: number): string {
+  return String(value).padStart(2, "0");
+}
+
+function parseISODate(value: string): { year: number; month: number; day: number } | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+  return { year, month, day };
+}
+
+function calendarParts(
+  date: Date
+): { year: number; month: number; day: number } {
+  const values: Record<string, string> = {};
+  for (const part of new Intl.DateTimeFormat("en", {
+    ...tzOption(),
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date)) {
+    if (part.type !== "literal") values[part.type] = part.value;
+  }
+  return {
+    year: Number(values.year),
+    month: Number(values.month),
+    day: Number(values.day),
+  };
+}
+
+function calendarInstant(parsed: { year: number; month: number; day: number }): Date {
+  return new Date(Date.UTC(parsed.year, parsed.month - 1, parsed.day, 11));
+}
 
 const formatters = new Map<string, Intl.NumberFormat>();
 
@@ -40,28 +78,29 @@ export function formatPercent(value: number): string {
 }
 
 export function todayISO(): string {
-  const now = new Date();
-  const offset = now.getTimezoneOffset();
-  return new Date(now.getTime() - offset * 60000).toISOString().slice(0, 10);
+  const parts = calendarParts(new Date());
+  return `${parts.year}-${pad2(parts.month)}-${pad2(parts.day)}`;
 }
 
 export function formatDate(date: string): string {
-  const parsed = new Date(`${date}`);  
-  if (Number.isNaN(parsed.getTime())) return date;
+  const parsed = parseISODate(date);
+  if (!parsed) return date;
   return new Intl.DateTimeFormat(undefined, {
+    ...tzOption(),
     month: "short",
     day: "numeric",
     year: "numeric",
-  }).format(parsed);
+  }).format(calendarInstant(parsed));
 }
 
 export function formatMonthYear(date: string): string {
-  const parsed = new Date(`${date}T00:00:00`);
-  if (Number.isNaN(parsed.getTime())) return date;
+  const parsed = parseISODate(date);
+  if (!parsed) return date;
   return new Intl.DateTimeFormat(undefined, {
+    ...tzOption(),
     month: "long",
     year: "numeric",
-  }).format(parsed);
+  }).format(calendarInstant(parsed));
 }
 
 export function currentYearMonth(): string {
@@ -70,12 +109,14 @@ export function currentYearMonth(): string {
 
 export function monthLabelYM(ym: string): string {
   const [year, month] = ym.split("-").map(Number);
-  const parsed = new Date(year, month - 1, 1);
-  if (Number.isNaN(parsed.getTime())) return ym;
+  if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12) {
+    return ym;
+  }
   return new Intl.DateTimeFormat(undefined, {
+    ...tzOption(),
     month: "long",
     year: "numeric",
-  }).format(parsed);
+  }).format(calendarInstant({ year, month, day: 1 }));
 }
 
 export function shiftMonth(ym: string, delta: number): string {
@@ -88,6 +129,7 @@ export function formatDateTime(iso: string): string {
   const parsed = new Date(iso);
   if (Number.isNaN(parsed.getTime())) return iso;
   return new Intl.DateTimeFormat(undefined, {
+    ...tzOption(),
     month: "short",
     day: "numeric",
     year: "numeric",
@@ -119,30 +161,35 @@ export function periodLabel(period: Period): string {
 }
 
 export function periodStartDate(period: Period, now = new Date()): string | null {
-  const year = now.getFullYear();
-  const month = now.getMonth();
+  const { year, month } = calendarParts(now);
 
-  const start = new Date(year, month, 1);
+  let startMonth = month;
+  let startYear = year;
   switch (period) {
     case "all-time":
       return null;
     case "this-month":
       break;
     case "last-month":
-      start.setMonth(month - 1);
+      startMonth -= 1;
       break;
     case "last-3-months":
-      start.setMonth(month - 2);
+      startMonth -= 2;
       break;
     case "last-6-months":
-      start.setMonth(month - 5);
+      startMonth -= 5;
       break;
     case "this-year":
-      start.setMonth(0);
+      startMonth = 1;
       break;
   }
 
-  return `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")}-01`;
+  while (startMonth < 1) {
+    startMonth += 12;
+    startYear -= 1;
+  }
+
+  return `${startYear}-${pad2(startMonth)}-01`;
 }
 
 export function formatFileSize(bytes: number): string {

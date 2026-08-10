@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
+import { setAppTimeZone } from "@/lib/timezone";
 import type { AuthMe, AuthUser } from "@/lib/types";
 
 type AuthStatus = "loading" | "authenticated" | "unauthenticated";
@@ -10,7 +11,11 @@ interface AuthContextValue {
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
-  updateProfile: (patch: { name?: string; image?: string | null }) => Promise<AuthUser>;
+  updateProfile: (patch: {
+    name?: string;
+    image?: string | null;
+    country?: string | null;
+  }) => Promise<AuthUser>;
 }
 
 const UNAUTHORIZED_EVENT = "finly:unauthorized";
@@ -58,6 +63,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener(UNAUTHORIZED_EVENT, handleUnauthorized);
   }, []);
 
+  useEffect(() => {
+    setAppTimeZone(user?.timeZone ?? null);
+  }, [user]);
+
   const login = useCallback(async (email: string, password: string) => {
     const result = await api.auth.login(email, password);
     applySession(result.user ?? null, setUser, setStatus);
@@ -78,7 +87,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const updateProfile = useCallback(
-    async (patch: { name?: string; image?: string | null }): Promise<AuthUser> => {
+    async (patch: {
+      name?: string;
+      image?: string | null;
+      country?: string | null;
+    }): Promise<AuthUser> => {
       const updated = await api.auth.updateProfile(patch);
       setUser(updated);
       return updated;
