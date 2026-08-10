@@ -3,12 +3,15 @@ import {
   Controller,
   Get,
   HttpCode,
+  Patch,
   Post,
   Req,
   Res,
+  UnauthorizedException,
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
-import { LoginDto, RegisterDto } from './auth.dto';
+import { LoginDto, RegisterDto, UpdateProfileDto } from './auth.dto';
+import type { AuthenticatedRequest } from './auth.guard';
 import { AuthService } from './auth.service';
 import { Public } from './public.decorator';
 
@@ -50,5 +53,22 @@ export class AuthController {
   @Get('me')
   me(@Req() request: Request) {
     return this.authService.getSession(request);
+  }
+
+  @Patch('profile')
+  @HttpCode(200)
+  updateProfile(
+    @Req() request: AuthenticatedRequest,
+    @Res({ passthrough: true }) response: Response,
+    @Body() body: UpdateProfileDto,
+  ) {
+    const userId = request.auth?.user?.id;
+    if (!userId) {
+      throw new UnauthorizedException({
+        message: 'Authentication required.',
+        code: 'UNAUTHORIZED',
+      });
+    }
+    return this.authService.updateProfile(userId, request, response, body);
   }
 }

@@ -35,7 +35,6 @@ interface AuthMeBody {
   session: { id: string; expiresAt: string } | null;
   user: AuthUserBody | null;
 }
-
 interface AuthErrorBody {
   error: { message: string; code: string };
 }
@@ -174,5 +173,63 @@ describe('Auth (e2e)', () => {
     const me = await agent.get('/api/auth/me');
     expect(me.status).toBe(200);
     expect(me.body).toEqual({ session: null, user: null });
+  });
+
+  it('updates the profile name and image for an authenticated agent', async () => {
+    const agent = request.agent(app.getHttpServer());
+    await agent
+      .post('/api/auth/login')
+      .send({ email: validEmail, password: validPassword })
+      .expect(200);
+
+    const image = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB';
+    const res = await agent
+      .patch('/api/auth/profile')
+      .send({ name: 'Alex Owner', image });
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({
+      email: 'owner@finly.local',
+      name: 'Alex Owner',
+      image,
+    });
+
+    const me = await agent.get('/api/auth/me');
+    expect((me.body as AuthMeBody).user).toMatchObject({
+      email: 'owner@finly.local',
+      name: 'Alex Owner',
+      image,
+    });
+  });
+
+  it('clears the profile image when set to null', async () => {
+    const agent = request.agent(app.getHttpServer());
+    await agent
+      .post('/api/auth/login')
+      .send({ email: validEmail, password: validPassword })
+      .expect(200);
+
+    const res = await agent.patch('/api/auth/profile').send({ image: null });
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ image: null });
+  });
+
+  it('rejects a profile name that is only whitespace', async () => {
+    const agent = request.agent(app.getHttpServer());
+    await agent
+      .post('/api/auth/login')
+      .send({ email: validEmail, password: validPassword })
+      .expect(200);
+
+    const res = await agent.patch('/api/auth/profile').send({ name: '   ' });
+    expect(res.status).toBe(422);
+    expect((res.body as AuthErrorBody).error.code).toBe('VALIDATION_FAILED');
+  });
+
+  it('rejects a profile update without a session', async () => {
+    const res = await request(app.getHttpServer())
+      .patch('/api/auth/profile')
+      .send({ name: 'Hacker' });
+    expect(res.status).toBe(401);
+    expect((res.body as AuthErrorBody).error.code).toBe('UNAUTHORIZED');
   });
 });

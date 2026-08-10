@@ -2,7 +2,6 @@ import { useEffect, useState, type ComponentType } from "react";
 import {
   FolderOpen,
   Landmark,
-  LogOut,
   RotateCcw,
   Tags,
   Trash2,
@@ -13,7 +12,6 @@ import EmptyState from "@/components/ui/empty-state";
 import ErrorState from "@/components/ui/error-state";
 import { Input } from "@/components/ui/input";
 import LoadingState from "@/components/ui/loading-state";
-import { useAuth } from "@/contexts/AuthContext";
 import { useSettings } from "@/contexts/SettingsContext";
 import { useQuery } from "@/hooks/use-query";
 import { ApiError, api } from "@/lib/api";
@@ -404,8 +402,6 @@ function IgnoredSuggestionsSection() {
 }
 
 export default function SettingsPage() {
-  const { logout, user } = useAuth();
-
   return (
     <div className="space-y-6">
       <div>
@@ -482,27 +478,6 @@ export default function SettingsPage() {
       />
 
       <IgnoredSuggestionsSection />
-
-      <section className="rounded-xl border bg-card p-4">
-        <div className="flex items-center gap-2">
-          <LogOut className="size-4 text-muted-foreground" aria-hidden="true" />
-          <h3 className="text-sm font-medium">Account</h3>
-        </div>
-        <p className="mt-2 max-w-xl text-sm text-muted-foreground">
-          {user?.email ? (
-            <>
-              Signed in as <span className="font-medium text-foreground">{user.email}</span>.
-            </>
-          ) : (
-            "Signed in on this device."
-          )}{" "}
-          Sign out of this device. You will need your password to get back in.
-        </p>
-        <Button variant="outline" className="mt-4" onClick={() => void logout()}>
-          <LogOut />
-          Log out
-        </Button>
-      </section>
     </div>
   );
 }

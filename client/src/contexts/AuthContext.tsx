@@ -10,6 +10,7 @@ interface AuthContextValue {
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
+  updateProfile: (patch: { name?: string; image?: string | null }) => Promise<AuthUser>;
 }
 
 const UNAUTHORIZED_EVENT = "finly:unauthorized";
@@ -76,9 +77,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  const updateProfile = useCallback(
+    async (patch: { name?: string; image?: string | null }): Promise<AuthUser> => {
+      const updated = await api.auth.updateProfile(patch);
+      setUser(updated);
+      return updated;
+    },
+    []
+  );
+
   const value = useMemo<AuthContextValue>(
-    () => ({ status, user, login, register, logout }),
-    [status, user, login, register, logout]
+    () => ({ status, user, login, register, logout, updateProfile }),
+    [status, user, login, register, logout, updateProfile]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -94,6 +94,8 @@ export const api = {
         body: { email, password },
       }),
     logout: () => apiFetch<{ success: true }>("/auth/logout", { method: "POST" }),
+    updateProfile: (patch: { name?: string; image?: string | null }) =>
+      apiFetch<AuthUser>("/auth/profile", { method: "PATCH", body: patch }),
   },
 
   settings: {

@@ -6,10 +6,11 @@ import {
   Injectable,
   InternalServerErrorException,
   Logger,
+  NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { isAPIError } from 'better-auth/api';
-import { sql } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import type { Request, Response } from 'express';
 import { DRIZZLE } from '../database/database.constants';
 import type { Database } from '../database/database.module';
@@ -20,9 +21,17 @@ import {
   type AuthInstance,
 } from './auth.config';
 
+export interface SessionUser {
+  id: string;
+  name: string;
+  email: string;
+  image: string | null;
+  createdAt: Date;
+}
+
 export interface SessionResult {
   session: { id: string; expiresAt: Date } | null;
-  user: { id: string; email: string; createdAt: Date } | null;
+  user: SessionUser | null;
 }
 
 interface AuthCallResult {
@@ -124,6 +133,52 @@ export class AuthService {
     } catch (error) {
       throw this.mapAuthError(error, 'Session check failed.');
     }
+  }
+
+  async updateProfile(
+    userId: string,
+    request: Request,
+    response: Response,
+    patch: { name?: string; image?: string | null },
+  ): Promise<SessionUser> {
+    const body: Record<string, string | null> = {};
+    if (patch.name !== undefined) body.name = patch.name;
+    if (patch.image !== undefined) body.image = patch.image;
+
+    try {
+      const result = (await this.auth.api.updateUser({
+        headers: this.headersFrom(request),
+        body,
+        returnHeaders: true,
+      })) as AuthCallResult;
+      if (result.headers) {
+        this.applyCookies(response, result.headers);
+      }
+    } catch (error) {
+      throw this.mapAuthError(error, 'Profile update failed.');
+    }
+
+    return this.fetchUser(userId);
+  }
+
+  private async fetchUser(userId: string): Promise<SessionUser> {
+    const [user] = await this.db
+      .select({
+        id: users.id,
+        name: users.name,
+        email: users.email,
+        image: users.image,
+        createdAt: users.createdAt,
+      })
+      .from(users)
+      .where(eq(users.id, userId));
+    if (!user) {
+      throw new NotFoundException({
+        message: 'User not found.',
+        code: 'USER_NOT_FOUND',
+      });
+    }
+    return user;
   }
 
   private headersFrom(request: Request): Record<string, string> {
