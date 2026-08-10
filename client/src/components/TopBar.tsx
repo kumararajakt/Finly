@@ -1,13 +1,9 @@
-import { Plus, Upload } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
-import { Button } from "@/components/ui/button";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { menus } from "@/utils/menu";
 
 interface TopBarProps {
   selectedMenu: string;
-  onImport: () => void;
-  onAddEntry: () => void;
 }
 
 function getTitle(value: string) {
@@ -15,7 +11,7 @@ function getTitle(value: string) {
   return menus.find((menu) => menu.value === value)?.label ?? "Finly";
 }
 
-export default function TopBar({ selectedMenu, onImport, onAddEntry }: TopBarProps) {
+export default function TopBar({ selectedMenu }: TopBarProps) {
   return (
     <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-3 border-b bg-background/95 px-4 backdrop-blur md:h-[76px] md:px-6">
       <SidebarTrigger className="-ml-2 md:-ml-3" />
@@ -23,18 +19,6 @@ export default function TopBar({ selectedMenu, onImport, onAddEntry }: TopBarPro
         {getTitle(selectedMenu)}
       </h1>
       <ThemeToggle />
-      {selectedMenu === "transactions" && (
-        <div className="flex shrink-0 items-center gap-2">
-          <Button variant="outline" onClick={onImport}>
-            <Upload />
-            <span>Import</span>
-          </Button>
-          <Button onClick={onAddEntry}>
-            <Plus />
-            <span>Add entry</span>
-          </Button>
-        </div>
-      )}
     </header>
   );
 }

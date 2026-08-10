@@ -18,7 +18,6 @@ import SettingsPage from "./pages/SettingsPage";
 import DocumentsPage from "./pages/DocumentsPage";
 
 interface PageProps {
-  addEntrySignal?: number;
   onNavigate?: (value: string) => void;
 }
 
@@ -37,14 +36,9 @@ const pages: Record<string, React.ComponentType<PageProps>> = {
 function FinlyApp() {
   const { status } = useAuth();
   const [selectedMenu, setSelectedMenu] = useState("dashboard");
-  const [addEntrySignal, setAddEntrySignal] = useState(0);
 
   const handleSelectMenu = useCallback((value: string) => {
     setSelectedMenu(value);
-  }, []);
-
-  const handleImport = useCallback(() => {
-    setSelectedMenu("documents");
   }, []);
 
   if (status === "loading") {
@@ -67,13 +61,9 @@ function FinlyApp() {
         selectedMenu={selectedMenu}
         onSelectMenu={handleSelectMenu}
       >
-        <TopBar
-          selectedMenu={selectedMenu}
-          onImport={handleImport}
-          onAddEntry={() => setAddEntrySignal((signal) => signal + 1)}
-        />
+        <TopBar selectedMenu={selectedMenu} />
         <div className="p-4 pb-24 md:p-6 md:pb-6">
-          <Page addEntrySignal={addEntrySignal} onNavigate={handleSelectMenu} />
+          <Page onNavigate={handleSelectMenu} />
         </div>
       </AppSidebar>
       <MobileBottomNav

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { ChevronsUpDown, Paperclip, Plus, Receipt, Search, X } from "lucide-react";
+import { ChevronsUpDown, Paperclip, Plus, Receipt, Search, Upload, X } from "lucide-react";
+import CsvImportCard from "@/components/CsvImportCard";
 import PeriodSelector from "@/components/PeriodSelector";
 import { Button } from "@/components/ui/button";
 import EmptyState from "@/components/ui/empty-state";
@@ -456,11 +457,7 @@ function AddEntryForm({ categories, accounts, tags, onSaved }: AddEntryFormProps
   );
 }
 
-interface TransactionPageProps {
-  addEntrySignal?: number;
-}
-
-export default function TransactionPage({ addEntrySignal }: TransactionPageProps) {
+export default function TransactionPage() {
   const { settings } = useSettings();
   const period = settings.selectedPeriod;
   const currency = settings.currency;
@@ -470,6 +467,7 @@ export default function TransactionPage({ addEntrySignal }: TransactionPageProps
   const [accountFilter, setAccountFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [addOpen, setAddOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [editorTx, setEditorTx] = useState<Transaction | null>(null);
   const [removingTag, setRemovingTag] = useState<string | null>(null);
   const [savingCategory, setSavingCategory] = useState<string | null>(null);
@@ -479,12 +477,6 @@ export default function TransactionPage({ addEntrySignal }: TransactionPageProps
     const timer = setTimeout(() => setDebouncedSearch(search.trim()), 300);
     return () => clearTimeout(timer);
   }, [search]);
-
-  useEffect(() => {
-    if (addEntrySignal && addEntrySignal > 0) {
-      setAddOpen(true);
-    }
-  }, [addEntrySignal]);
 
   const transactions = useQuery<Transaction[]>(
     () =>
@@ -569,6 +561,10 @@ export default function TransactionPage({ addEntrySignal }: TransactionPageProps
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <PeriodSelector />
+          <Button variant="outline" onClick={() => setImportOpen(true)}>
+            <Upload />
+            <span>Import</span>
+          </Button>
           <Button onClick={() => setAddOpen(true)}>
             <Plus />
             Add entry
@@ -667,10 +663,16 @@ export default function TransactionPage({ addEntrySignal }: TransactionPageProps
                 title="No transactions yet"
                 description="Add your first entry or import a statement to get started."
                 action={
-                  <Button size="sm" onClick={() => setAddOpen(true)}>
-                    <Plus />
-                    Add entry
-                  </Button>
+                  <div className="flex flex-wrap items-center justify-center gap-2">
+                    <Button variant="outline" size="sm" onClick={() => setImportOpen(true)}>
+                      <Upload />
+                      Import
+                    </Button>
+                    <Button size="sm" onClick={() => setAddOpen(true)}>
+                      <Plus />
+                      Add entry
+                    </Button>
+                  </div>
                 }
               />
             )
@@ -755,6 +757,17 @@ export default function TransactionPage({ addEntrySignal }: TransactionPageProps
             tags={tags.data ?? []}
             onSaved={handleEntrySaved}
           />
+        </SheetContent>
+      </Sheet>
+
+      <Sheet open={importOpen} onOpenChange={setImportOpen}>
+        <SheetContent side="right" className="sm:max-w-xl">
+          <div className="flex-1 overflow-y-auto px-4 pb-4">
+            <CsvImportCard
+              onNavigate={() => setImportOpen(false)}
+              onImported={() => transactions.refetch()}
+            />
+          </div>
         </SheetContent>
       </Sheet>
     </div>
