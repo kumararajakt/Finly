@@ -8,6 +8,7 @@ import {
   IsOptional,
   IsString,
   Max,
+  MaxLength,
   Min,
 } from 'class-validator';
 import type { TransactionType } from '../database/schema';
@@ -75,6 +76,11 @@ export class CreateTransactionDto {
   tags?: string[];
 
   @IsOptional()
+  @IsString()
+  @MaxLength(2000, { message: 'Notes must be at most 2000 characters.' })
+  notes?: string;
+
+  @IsOptional()
   @IsBoolean()
   receipt?: boolean;
 }
@@ -115,4 +121,9 @@ export class UpdateTransactionDto {
   @IsString({ each: true })
   @IsNotEmpty({ each: true })
   tags?: string[];
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000, { message: 'Notes must be at most 2000 characters.' })
+  notes?: string;
 }

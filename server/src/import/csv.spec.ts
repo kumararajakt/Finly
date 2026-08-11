@@ -86,6 +86,7 @@ describe('detectColumns', () => {
       credit: 3,
       category: 4,
       account: null,
+      notes: null,
     });
   });
 

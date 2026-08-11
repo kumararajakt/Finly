@@ -54,6 +54,7 @@ interface ParsedRow {
   merchant: string;
   category: string;
   account: string;
+  notes: string | null;
   amount: number;
   type: 'expense' | 'income';
   fingerprint: string;
@@ -156,6 +157,7 @@ export class ImportService {
         amount: parsed.amount,
         type: parsed.type,
         account: parsed.account,
+        notes: parsed.notes,
         tags: [],
         receipt: false,
         source: 'csv',
@@ -234,6 +236,7 @@ export class ImportService {
       credit: dto.mapping.credit ?? null,
       category: dto.mapping.category ?? null,
       account: dto.mapping.account ?? null,
+      notes: dto.mapping.notes ?? null,
     };
 
     const hasAmountColumn =
@@ -266,6 +269,7 @@ export class ImportService {
       mapping.credit,
       mapping.category,
       mapping.account,
+      mapping.notes,
     ].filter((index): index is number => index !== null && index !== undefined);
 
     const invalid = indices.find((index) => index >= columnCount);
@@ -316,6 +320,10 @@ export class ImportService {
         ? (accountMap.get(rawAccount.toLowerCase()) ?? rawAccount)
         : 'Imported account';
 
+    const rawNotes =
+      mapping.notes === null ? '' : (row[mapping.notes] ?? '').trim();
+    const notes = rawNotes.length > 0 ? rawNotes : null;
+
     const fingerprint = computeFingerprint({
       type: resolved.type,
       date,
@@ -328,6 +336,7 @@ export class ImportService {
       merchant,
       category,
       account,
+      notes,
       amount: resolved.amount,
       type: resolved.type,
       fingerprint,

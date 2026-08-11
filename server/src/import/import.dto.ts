@@ -53,6 +53,11 @@ export class ColumnMappingDto {
   account?: number;
 
   @IsOptional()
+  @IsInt()
+  @Min(0)
+  notes?: number;
+
+  @IsOptional()
   @IsBoolean()
   hasHeader?: boolean;
 }

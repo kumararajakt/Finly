@@ -10,6 +10,7 @@ export interface Transaction {
   type: TransactionType;
   account: string;
   tags: string[];
+  notes: string | null;
   receipt: boolean;
   source: TransactionSource;
   fingerprint: string;
@@ -124,11 +125,15 @@ export interface NewTransaction {
   type: TransactionType;
   account: string;
   tags?: string[];
+  notes?: string;
   receipt?: boolean;
 }
 
 export type TransactionPatch = Partial<
-  Pick<NewTransaction, "merchant" | "category" | "amount" | "date" | "type" | "account" | "tags">
+  Pick<
+    NewTransaction,
+    "merchant" | "category" | "amount" | "date" | "type" | "account" | "tags" | "notes"
+  >
 >;
 
 export interface DetectionSuggestion {
@@ -189,6 +194,7 @@ export interface CsvColumnMapping {
   credit: number | null;
   category: number | null;
   account: number | null;
+  notes: number | null;
 }
 
 export interface CsvPreview {
@@ -209,6 +215,7 @@ export interface CsvMapping {
   credit?: number;
   category?: number;
   account?: number;
+  notes?: number;
   hasHeader?: boolean;
 }
 

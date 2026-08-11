@@ -101,6 +101,7 @@ export class TransactionsService {
       type: dto.type,
       account: dto.account?.trim() || 'Imported account',
       tags: normalizeTags(dto.tags),
+      notes: dto.notes?.trim() || null,
       receipt: dto.receipt ?? false,
       source: 'manual',
       fingerprint: computeFingerprint({
@@ -149,6 +150,7 @@ export class TransactionsService {
       type: dto.type ?? current.type,
       account: dto.account !== undefined ? dto.account.trim() : current.account,
       tags: dto.tags !== undefined ? normalizeTags(dto.tags) : current.tags,
+      notes: dto.notes !== undefined ? dto.notes.trim() || null : current.notes,
       receipt: current.receipt,
       source: current.source,
       fingerprint: computeFingerprint({

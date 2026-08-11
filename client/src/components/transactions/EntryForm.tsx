@@ -22,6 +22,7 @@ interface EntryForm {
   category: string;
   account: string;
   tags: string[];
+  notes: string;
 }
 
 function initialForm(initial: Transaction | null): EntryForm {
@@ -33,6 +34,7 @@ function initialForm(initial: Transaction | null): EntryForm {
     category: initial?.category ?? "",
     account: initial?.account ?? "",
     tags: initial?.tags ?? [],
+    notes: initial?.notes ?? "",
   };
 }
 
@@ -74,6 +76,7 @@ export default function EntryForm({ categories, accounts, tags, initial, onSaved
     setError(null);
     try {
       await ensureTags(form.tags);
+      const notes = form.notes.trim();
       if (initial) {
         await api.transactions.update(initial.id, {
           date: form.date,
@@ -83,6 +86,7 @@ export default function EntryForm({ categories, accounts, tags, initial, onSaved
           amount,
           type: form.type,
           tags: form.tags,
+          notes,
         });
       } else {
         await api.transactions.create({
@@ -93,6 +97,7 @@ export default function EntryForm({ categories, accounts, tags, initial, onSaved
           amount,
           type: form.type,
           tags: form.tags,
+          notes,
         });
       }
       setSaving(false);
@@ -216,6 +221,17 @@ export default function EntryForm({ categories, accounts, tags, initial, onSaved
             available={tags.map((tag) => tag.name)}
             selected={form.tags}
             onChange={(next) => setForm((f) => ({ ...f, tags: next }))}
+          />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <label className="text-xs font-medium">Notes</label>
+          <textarea
+            value={form.notes}
+            onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
+            placeholder="Optional notes about this transaction"
+            maxLength={2000}
+            rows={3}
+            className="min-h-20 w-full resize-y rounded-lg border border-input bg-transparent px-2.5 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
           />
         </div>
         {error && (

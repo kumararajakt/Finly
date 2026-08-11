@@ -337,6 +337,7 @@ export default function TransactionPage() {
                     <TableHead>Merchant</TableHead>
                     <TableHead>Category</TableHead>
                     <TableHead className="hidden sm:table-cell">Account</TableHead>
+                    <TableHead className="hidden md:table-cell">Notes</TableHead>
                     <TableHead>Tags</TableHead>
                     <TableHead className="text-right">Amount</TableHead>
                     <TableHead className="text-right">
@@ -368,6 +369,15 @@ export default function TransactionPage() {
                       </TableCell>
                       <TableCell className="hidden text-muted-foreground sm:table-cell">
                         {tx.account}
+                      </TableCell>
+                      <TableCell className="hidden max-w-56 md:table-cell">
+                        {tx.notes ? (
+                          <p className="truncate text-sm text-muted-foreground" title={tx.notes}>
+                            {tx.notes}
+                          </p>
+                        ) : (
+                          <span className="text-muted-foreground/40">—</span>
+                        )}
                       </TableCell>
                       <TableCell>
                         <TagPills

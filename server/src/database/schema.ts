@@ -107,6 +107,7 @@ export const transactions = pgTable(
       .$type<string[]>()
       .notNull()
       .default(sql`'[]'::jsonb`),
+    notes: text('notes'),
     receipt: boolean('receipt').notNull().default(false),
     source: text('source')
       .notNull()

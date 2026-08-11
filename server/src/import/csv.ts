@@ -10,6 +10,7 @@ export interface ColumnMapping {
   credit: number | null;
   category: number | null;
   account: number | null;
+  notes: number | null;
 }
 
 export interface ColumnDetection {
@@ -45,7 +46,14 @@ const MONTHS: Record<string, number> = {
 };
 
 type Role =
-  'date' | 'merchant' | 'amount' | 'debit' | 'credit' | 'category' | 'account';
+  | 'date'
+  | 'merchant'
+  | 'amount'
+  | 'debit'
+  | 'credit'
+  | 'category'
+  | 'account'
+  | 'notes';
 
 const KEYWORDS: Record<Role, string[]> = {
   date: [
@@ -88,6 +96,7 @@ const KEYWORDS: Record<Role, string[]> = {
     'spending category',
   ],
   account: ['account'],
+  notes: ['note', 'notes', 'remark', 'remarks', 'comment', 'comments'],
 };
 
 const ROLE_ORDER: Role[] = [
@@ -98,6 +107,7 @@ const ROLE_ORDER: Role[] = [
   'credit',
   'amount',
   'account',
+  'notes',
 ];
 
 function matchesKeywords(header: string, role: Role): boolean {
@@ -182,16 +192,59 @@ export function detectColumns(headers: string[]): ColumnDetection {
     credit,
     category: assigned.get('category') ?? null,
     account: assigned.get('account') ?? null,
+    notes: assigned.get('notes') ?? null,
   };
 
   return { mapping, ambiguous: ambiguity };
 }
 
 export function normalizeDate(value: string): string | null {
-  const date = new Date(value);
+  const raw = value.trim();
+  if (raw.length === 0) {
+    return null;
+  }
 
-  if (date) {
-    return date.toISOString()
+  const iso = /^(\d{4})-(\d{2})-(\d{2})(?:[T\s].*)?$/.exec(raw);
+  if (iso) {
+    return validDate(Number(iso[1]), Number(iso[2]), Number(iso[3]));
+  }
+
+  const ymd = /^(\d{4})[./](\d{1,2})[./](\d{1,2})$/.exec(raw);
+  if (ymd) {
+    return validDate(Number(ymd[1]), Number(ymd[2]), Number(ymd[3]));
+  }
+
+  const dayName = /^(\d{1,2})[./\s]+([a-zA-Z]{3,9})\.?[./\s]+(\d{2,4})$/.exec(
+    raw,
+  );
+  if (dayName) {
+    const month = MONTHS[dayName[2].toLowerCase()];
+    if (month === undefined) {
+      return null;
+    }
+    return validDate(expandYear(Number(dayName[3])), month, Number(dayName[1]));
+  }
+
+  const nameDay = /^([a-zA-Z]{3,9})\.?[./\s]+(\d{1,2}),?[./\s]+(\d{2,4})$/.exec(
+    raw,
+  );
+  if (nameDay) {
+    const month = MONTHS[nameDay[1].toLowerCase()];
+    if (month === undefined) {
+      return null;
+    }
+    return validDate(expandYear(Number(nameDay[3])), month, Number(nameDay[2]));
+  }
+
+  const numeric = /^(\d{1,2})[./-](\d{1,2})[./-](\d{2,4})$/.exec(raw);
+  if (numeric) {
+    const first = Number(numeric[1]);
+    const second = Number(numeric[2]);
+    const year = expandYear(Number(numeric[3]));
+    if (first > 12) {
+      return validDate(year, second, first);
+    }
+    return validDate(year, first, second);
   }
 
   return null;

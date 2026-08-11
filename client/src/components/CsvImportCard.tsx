@@ -28,6 +28,7 @@ const ROLE_LABELS: Record<string, string> = {
   credit: "Credit (money in)",
   category: "Category",
   account: "Account",
+  notes: "Notes",
 };
 
 const REQUIRED_ROLES = ["date", "merchant"] as const;
@@ -100,9 +101,19 @@ function RoleSelect({
   );
 }
 
+type MappingRole =
+  | "date"
+  | "merchant"
+  | "amount"
+  | "debit"
+  | "credit"
+  | "category"
+  | "account"
+  | "notes";
+
 function setRole(
   mapping: CsvColumnMapping,
-  role: "date" | "merchant" | "amount" | "debit" | "credit" | "category" | "account",
+  role: MappingRole,
   value: number | null
 ): CsvColumnMapping {
   return { ...mapping, [role]: value };
@@ -156,7 +167,7 @@ export default function CsvImportCard({ onNavigate, onImported }: CsvImportCardP
   }
 
   function handleMappingChange(
-    role: "date" | "merchant" | "amount" | "debit" | "credit" | "category" | "account",
+    role: MappingRole,
     value: number | null
   ) {
     if (!mapping) return;
@@ -217,6 +228,7 @@ export default function CsvImportCard({ onNavigate, onImported }: CsvImportCardP
       credit: mapping.credit ?? undefined,
       category: mapping.category ?? undefined,
       account: mapping.account ?? undefined,
+      notes: mapping.notes ?? undefined,
       hasHeader,
     };
 
@@ -357,6 +369,13 @@ export default function CsvImportCard({ onNavigate, onImported }: CsvImportCardP
             role="account"
             value={mapping.account}
             onChange={(value) => handleMappingChange("account", value)}
+            preview={preview}
+            allowNone
+          />
+          <RoleSelect
+            role="notes"
+            value={mapping.notes}
+            onChange={(value) => handleMappingChange("notes", value)}
             preview={preview}
             allowNone
           />
