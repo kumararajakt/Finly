@@ -33,7 +33,11 @@ class DatabasePoolManager implements OnModuleDestroy {
       useFactory: (configService: ConfigService): Pool => {
         const connectionString =
           configService.getOrThrow<string>('DATABASE_URL');
-        return new Pool({ connectionString });
+        return new Pool({
+          connectionString,
+          max: Number(process.env.PG_POOL_MAX ?? 3),
+          connectionTimeoutMillis: 10_000,
+        });
       },
     },
     {

@@ -35,13 +35,17 @@ export class ApiError extends Error {
   }
 }
 
+const API_BASE = (import.meta.env.VITE_API_URL as string | undefined)
+  ?.replace(/\/+$/, "") ?? "";
+
 async function apiFetch<T>(
   path: string,
   options: Omit<RequestInit, "body"> & { body?: unknown } = {}
 ): Promise<T> {
   const { headers, body, ...rest } = options;
-  const response = await fetch(`/api${path}`, {
+  const response = await fetch(`${API_BASE}/api${path}`, {
     ...rest,
+    credentials: "include",
     headers: {
       ...(body instanceof FormData ? {} : { "Content-Type": "application/json" }),
       ...headers,

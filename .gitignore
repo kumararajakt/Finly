@@ -25,6 +25,9 @@ dist-ssr
 
 *.md
 
+# Vercel
+.vercel
+
 
 # compiled output
 /dist

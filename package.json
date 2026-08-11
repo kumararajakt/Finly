@@ -12,6 +12,7 @@
     "test": "pnpm -r test"
   },
   "devDependencies": {
+    "@vercel/node": "^4.0.0",
     "concurrently": "^9.1.2"
   }
 }
