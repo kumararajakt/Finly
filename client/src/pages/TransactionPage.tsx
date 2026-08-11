@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ChevronsUpDown, Paperclip, Plus, Receipt, Search, Upload, X } from "lucide-react";
+import { ChevronsUpDown, Paperclip, Pencil, Plus, Receipt, Search, Trash2, Upload, X } from "lucide-react";
 import CsvImportCard from "@/components/CsvImportCard";
 import PeriodSelector from "@/components/PeriodSelector";
 import { Button } from "@/components/ui/button";
@@ -262,27 +262,28 @@ interface EntryForm {
   tags: string[];
 }
 
-function blankForm(): EntryForm {
+function initialForm(initial: Transaction | null): EntryForm {
   return {
-    type: "expense",
-    amount: "",
-    merchant: "",
-    date: todayISO(),
-    category: "",
-    account: "",
-    tags: [],
+    type: initial?.type ?? "expense",
+    amount: initial ? String(initial.amount) : "",
+    merchant: initial?.merchant ?? "",
+    date: initial?.date ?? todayISO(),
+    category: initial?.category ?? "",
+    account: initial?.account ?? "",
+    tags: initial?.tags ?? [],
   };
 }
 
-interface AddEntryFormProps {
+interface EntryFormProps {
   categories: Category[];
   accounts: Account[];
   tags: Tag[];
+  initial?: Transaction | null;
   onSaved: () => void;
 }
 
-function AddEntryForm({ categories, accounts, tags, onSaved }: AddEntryFormProps) {
-  const [form, setForm] = useState<EntryForm>(blankForm);
+function EntryForm({ categories, accounts, tags, initial, onSaved }: EntryFormProps) {
+  const [form, setForm] = useState<EntryForm>(() => initialForm(initial ?? null));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -311,16 +312,27 @@ function AddEntryForm({ categories, accounts, tags, onSaved }: AddEntryFormProps
     setError(null);
     try {
       await ensureTags(form.tags);
-      await api.transactions.create({
-        date: form.date,
-        merchant: form.merchant.trim(),
-        category: form.category,
-        account: form.account,
-        amount,
-        type: form.type,
-        tags: form.tags,
-      });
-      setForm(blankForm());
+      if (initial) {
+        await api.transactions.update(initial.id, {
+          date: form.date,
+          merchant: form.merchant.trim(),
+          category: form.category,
+          account: form.account,
+          amount,
+          type: form.type,
+          tags: form.tags,
+        });
+      } else {
+        await api.transactions.create({
+          date: form.date,
+          merchant: form.merchant.trim(),
+          category: form.category,
+          account: form.account,
+          amount,
+          type: form.type,
+          tags: form.tags,
+        });
+      }
       setSaving(false);
       onSaved();
     } catch (err) {
@@ -335,8 +347,10 @@ function AddEntryForm({ categories, accounts, tags, onSaved }: AddEntryFormProps
   return (
     <form onSubmit={handleSubmit}>
       <SheetHeader>
-        <SheetTitle>Add entry</SheetTitle>
-        <SheetDescription>Record an expense or income transaction.</SheetDescription>
+        <SheetTitle>{initial ? "Edit entry" : "Add entry"}</SheetTitle>
+        <SheetDescription>
+          {initial ? initial.merchant : "Record an expense or income transaction."}
+        </SheetDescription>
       </SheetHeader>
       <div className="flex flex-col gap-4 px-4">
         <div className="grid grid-cols-2 gap-1 rounded-lg border bg-muted/50 p-1" role="group" aria-label="Transaction type">
@@ -450,7 +464,7 @@ function AddEntryForm({ categories, accounts, tags, onSaved }: AddEntryFormProps
       </div>
       <SheetFooter>
         <Button type="submit" disabled={saving}>
-          {saving ? "Saving…" : "Save entry"}
+          {saving ? "Saving…" : initial ? "Save changes" : "Save entry"}
         </Button>
       </SheetFooter>
     </form>
@@ -469,8 +483,10 @@ export default function TransactionPage() {
   const [addOpen, setAddOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [editorTx, setEditorTx] = useState<Transaction | null>(null);
+  const [editTx, setEditTx] = useState<Transaction | null>(null);
   const [removingTag, setRemovingTag] = useState<string | null>(null);
   const [savingCategory, setSavingCategory] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [mutationError, setMutationError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -537,6 +553,22 @@ export default function TransactionPage() {
     }
   }
 
+  async function handleDeleteTransaction(tx: Transaction) {
+    if (!window.confirm(`Delete the transaction "${tx.merchant}"? This cannot be undone.`)) return;
+    setDeletingId(tx.id);
+    setMutationError(null);
+    try {
+      await api.transactions.remove(tx.id);
+      transactions.setData((list) =>
+        (list ?? []).filter((item) => item.id !== tx.id)
+      );
+    } catch (error) {
+      setMutationError(message(error));
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
   function handleTagsSaved(updated: Transaction) {
     transactions.setData((list) =>
       (list ?? []).map((item) => (item.id === updated.id ? updated : item))
@@ -548,6 +580,7 @@ export default function TransactionPage() {
     transactions.refetch();
     tags.refetch();
     setAddOpen(false);
+    setEditTx(null);
   }
 
   const hasActiveFilters = debouncedSearch !== "" || accountFilter !== "all" || categoryFilter !== "all";
@@ -686,6 +719,9 @@ export default function TransactionPage() {
                     <TableHead className="hidden sm:table-cell">Account</TableHead>
                     <TableHead>Tags</TableHead>
                     <TableHead className="text-right">Amount</TableHead>
+                    <TableHead className="text-right">
+                      <span className="sr-only">Actions</span>
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -731,6 +767,28 @@ export default function TransactionPage() {
                           {formatSignedAmount(tx.amount, tx.type, currency)}
                         </span>
                       </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-0.5">
+                          <Button
+                            size="icon-sm"
+                            variant="ghost"
+                            onClick={() => setEditTx(tx)}
+                            aria-label={`Edit ${tx.merchant}`}
+                          >
+                            <Pencil />
+                          </Button>
+                          <Button
+                            size="icon-sm"
+                            variant="ghost"
+                            onClick={() => handleDeleteTransaction(tx)}
+                            disabled={deletingId === tx.id}
+                            aria-label={`Delete ${tx.merchant}`}
+                            className="text-destructive hover:text-destructive"
+                          >
+                            <Trash2 />
+                          </Button>
+                        </div>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -751,12 +809,26 @@ export default function TransactionPage() {
 
       <Sheet open={addOpen} onOpenChange={setAddOpen}>
         <SheetContent side="right" className="sm:max-w-md">
-          <AddEntryForm
+          <EntryForm
             categories={categories.data ?? []}
             accounts={accounts.data ?? []}
             tags={tags.data ?? []}
             onSaved={handleEntrySaved}
           />
+        </SheetContent>
+      </Sheet>
+
+      <Sheet open={!!editTx} onOpenChange={(open) => !open && setEditTx(null)}>
+        <SheetContent side="right" className="sm:max-w-md">
+          {editTx && (
+            <EntryForm
+              initial={editTx}
+              categories={categories.data ?? []}
+              accounts={accounts.data ?? []}
+              tags={tags.data ?? []}
+              onSaved={handleEntrySaved}
+            />
+          )}
         </SheetContent>
       </Sheet>
 
