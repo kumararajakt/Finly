@@ -6,6 +6,8 @@ export type Period =
   | 'last-6-months'
   | 'this-year';
 
+export type Density = 'compact' | 'cozy' | 'comfortable' | 'roomy' | 'spacious';
+
 export interface ImportResult {
   inserted: number;
   duplicate: number;
@@ -19,6 +21,7 @@ export interface Settings {
   totalAssets: number;
   totalLiabilities: number;
   currency: string;
+  density: Density;
   dismissedPatterns: string[];
   googleDriveFolderName: string | null;
   googleDriveFolderId: string | null;

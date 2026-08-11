@@ -15,6 +15,7 @@ const DEFAULT_SETTINGS: { key: string; value: string }[] = [
   { key: 'totalAssets', value: '0' },
   { key: 'totalLiabilities', value: '0' },
   { key: 'currency', value: 'USD' },
+  { key: 'density', value: 'comfortable' },
   { key: 'dismissedPatterns', value: '[]' },
 ];
 

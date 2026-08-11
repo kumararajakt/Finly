@@ -2,6 +2,7 @@ import { useEffect, useState, type ComponentType } from "react";
 import {
   FolderOpen,
   Landmark,
+  LayoutGrid,
   RotateCcw,
   Tags,
   Trash2,
@@ -16,7 +17,8 @@ import { useSettings } from "@/contexts/SettingsContext";
 import { useQuery } from "@/hooks/use-query";
 import { ApiError, api } from "@/lib/api";
 import { formatCurrency } from "@/lib/format";
-import type { Account, Category, Tag } from "@/lib/types";
+import type { Account, Category, Density, Tag } from "@/lib/types";
+import { cn } from "@/lib/utils";
 
 function message(error: unknown): string {
   if (error instanceof ApiError) return error.message;
@@ -321,6 +323,85 @@ function NetWorthSection() {
   );
 }
 
+const DENSITY_OPTIONS: { value: Density; label: string; description: string }[] = [
+  { value: "compact", label: "Compact", description: "Densest layout — more rows fit on screen." },
+  { value: "cozy", label: "Cozy", description: "Snug spacing with a little more room." },
+  { value: "comfortable", label: "Comfortable", description: "Balanced spacing, the default." },
+  { value: "roomy", label: "Roomy", description: "Extra breathing room between elements." },
+  { value: "spacious", label: "Spacious", description: "Generous, relaxed layout." },
+];
+
+function DensitySection() {
+  const { settings, status, error, refetch, saveSetting } = useSettings();
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  async function handleSelect(density: Density) {
+    if (density === settings.density || saving) return;
+    setSaving(true);
+    setSaveError(null);
+    try {
+      await saveSetting("density", density);
+    } catch (err) {
+      setSaveError(message(err));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <section className="rounded-xl border bg-card p-4">
+      <div className="flex items-center gap-2">
+        <LayoutGrid className="size-4 text-muted-foreground" aria-hidden="true" />
+        <h3 className="text-sm font-medium">Layout density</h3>
+      </div>
+      <p className="mt-2 max-w-xl text-sm text-muted-foreground">
+        Control how tightly content is packed across the app. Changes apply immediately.
+      </p>
+
+      {status === "loading" ? (
+        <LoadingState label="Loading settings…" />
+      ) : status === "error" ? (
+        <ErrorState
+          message={error?.message ?? "Failed to load settings."}
+          onRetry={refetch}
+        />
+      ) : (
+        <div
+          className="mt-4 flex flex-wrap gap-1 rounded-lg border bg-muted/50 p-1"
+          role="group"
+          aria-label="Layout density"
+        >
+          {DENSITY_OPTIONS.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              disabled={saving}
+              onClick={() => handleSelect(option.value)}
+              aria-pressed={settings.density === option.value}
+              title={option.description}
+              className={cn(
+                "h-7 rounded-md px-2.5 text-sm font-medium transition-colors disabled:opacity-50",
+                settings.density === option.value
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {saveError && (
+        <p role="alert" className="mt-3 text-xs text-destructive">
+          {saveError}
+        </p>
+      )}
+    </section>
+  );
+}
+
 function IgnoredSuggestionsSection() {
   const { settings, saveSetting } = useSettings();
   const [saving, setSaving] = useState(false);
@@ -412,6 +493,8 @@ export default function SettingsPage() {
       </div>
 
       <NetWorthSection />
+
+      <DensitySection />
 
       <ManagedList
         icon={FolderOpen}

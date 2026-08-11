@@ -1,4 +1,4 @@
-import type { Period, Settings } from './settings.types';
+import type { Density, Period, Settings } from './settings.types';
 
 export const PERIODS: Period[] = [
   'all-time',
@@ -7,6 +7,14 @@ export const PERIODS: Period[] = [
   'last-3-months',
   'last-6-months',
   'this-year',
+];
+
+export const DENSITIES: Density[] = [
+  'compact',
+  'cozy',
+  'comfortable',
+  'roomy',
+  'spacious',
 ];
 
 type SettingType =
@@ -28,6 +36,7 @@ export const SETTING_DEFS: Record<keyof Settings, SettingDef> = {
   totalAssets: { type: 'number', default: 0 },
   totalLiabilities: { type: 'number', default: 0 },
   currency: { type: 'string', default: 'USD' },
+  density: { type: 'string', default: 'comfortable' },
   dismissedPatterns: { type: 'stringArray', default: [] },
   googleDriveFolderName: { type: 'nullableString', default: null },
   googleDriveFolderId: { type: 'nullableString', default: null },
@@ -112,6 +121,11 @@ export function validateSetting(key: keyof Settings, value: unknown): boolean {
     case 'string':
       if (key === 'selectedPeriod') {
         return typeof value === 'string' && PERIODS.includes(value as Period);
+      }
+      if (key === 'density') {
+        return (
+          typeof value === 'string' && DENSITIES.includes(value as Density)
+        );
       }
       return typeof value === 'string' && value.length > 0;
     case 'boolean':

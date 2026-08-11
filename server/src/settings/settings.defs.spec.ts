@@ -12,6 +12,7 @@ describe('settings.defs', () => {
     expect(SETTING_KEYS).toContain('totalAssets');
     expect(SETTING_KEYS).toContain('totalLiabilities');
     expect(SETTING_KEYS).toContain('currency');
+    expect(SETTING_KEYS).toContain('density');
     expect(SETTING_KEYS).toContain('dismissedPatterns');
     expect(SETTING_KEYS).toContain('googleDriveFolderName');
     expect(SETTING_KEYS).toContain('googleDriveFolderId');
@@ -70,6 +71,7 @@ describe('settings.defs', () => {
   describe('validateSetting', () => {
     it('accepts valid values', () => {
       expect(validateSetting('selectedPeriod', 'this-month')).toBe(true);
+      expect(validateSetting('density', 'cozy')).toBe(true);
       expect(validateSetting('netWorthConfigured', false)).toBe(true);
       expect(validateSetting('totalAssets', 0)).toBe(true);
       expect(validateSetting('dismissedPatterns', [])).toBe(true);
@@ -78,6 +80,7 @@ describe('settings.defs', () => {
 
     it('rejects invalid values', () => {
       expect(validateSetting('selectedPeriod', 'next-week')).toBe(false);
+      expect(validateSetting('density', 'huge')).toBe(false);
       expect(validateSetting('netWorthConfigured', 'true')).toBe(false);
       expect(validateSetting('totalAssets', -5)).toBe(false);
       expect(validateSetting('totalAssets', '10')).toBe(false);

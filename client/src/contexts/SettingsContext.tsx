@@ -8,6 +8,7 @@ const DEFAULT_SETTINGS: Settings = {
   totalAssets: 0,
   totalLiabilities: 0,
   currency: "USD",
+  density: "comfortable",
   dismissedPatterns: [],
   googleDriveFolderName: null,
   googleDriveFolderId: null,
@@ -37,6 +38,10 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   const [revision, setRevision] = useState(0);
 
   const refetch = useCallback(() => setRevision((value) => value + 1), []);
+
+  useEffect(() => {
+    document.documentElement.dataset.density = settings.density;
+  }, [settings.density]);
 
   useEffect(() => {
     let cancelled = false;
