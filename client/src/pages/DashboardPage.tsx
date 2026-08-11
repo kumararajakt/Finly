@@ -1,9 +1,7 @@
-import { useMemo } from "react";
+import { Suspense, lazy, useMemo } from "react";
 import { CheckCircle2, Flag, Sparkles, Upload, ArrowRight } from "lucide-react";
 import PeriodSelector from "@/components/PeriodSelector";
 import SummaryCard from "@/components/SummaryCard";
-import CashFlowChart from "@/components/charts/CashFlowChart";
-import CategoryDonut from "@/components/charts/CategoryDonut";
 import EmptyState from "@/components/ui/empty-state";
 import ErrorState from "@/components/ui/error-state";
 import LoadingState from "@/components/ui/loading-state";
@@ -13,6 +11,20 @@ import { api } from "@/lib/api";
 import { formatCurrency, formatDate, formatPercent, formatSignedAmount } from "@/lib/format";
 import type { Summary } from "@/lib/types";
 import { cn } from "@/lib/utils";
+
+const CashFlowChart = lazy(() => import("@/components/charts/CashFlowChart"));
+const CategoryDonut = lazy(() => import("@/components/charts/CategoryDonut"));
+
+function ChartFallback() {
+  return (
+    <div
+      role="status"
+      className="flex h-64 items-center justify-center text-sm text-muted-foreground"
+    >
+      Loading chart…
+    </div>
+  );
+}
 
 interface DashboardPageProps {
   onNavigate?: (value: string) => void;
@@ -210,7 +222,9 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
                 {summary.cashFlow.length === 0 ? (
                   <EmptyState description="Import or add transactions to see cash flow." />
                 ) : (
-                  <CashFlowChart data={summary.cashFlow} currency={currency} />
+                  <Suspense fallback={<ChartFallback />}>
+                    <CashFlowChart data={summary.cashFlow} currency={currency} />
+                  </Suspense>
                 )}
               </div>
             </section>
@@ -221,7 +235,9 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
                 {summary.categoryBreakdown.length === 0 ? (
                   <EmptyState description="No spending yet in this period." />
                 ) : (
-                  <CategoryDonut data={summary.categoryBreakdown} currency={currency} />
+                  <Suspense fallback={<ChartFallback />}>
+                    <CategoryDonut data={summary.categoryBreakdown} currency={currency} />
+                  </Suspense>
                 )}
               </div>
             </section>

@@ -13,22 +13,24 @@ import {
 } from "@/components/ui/sidebar";
 import { Home } from "lucide-react";
 import type { ReactNode } from "react";
-import { menus } from "./utils/menu";
+import { useLocation, useNavigate } from "react-router";
+import { menuPath, menus } from "./utils/menu";
 
 interface AppSidebarProps {
   children: ReactNode;
-  selectedMenu: string;
-  onSelectMenu: (value: string) => void;
 }
 
-const SidebarNav = (props: { selectedMenu: string; onSelectMenu: (value: string) => void }) => {
-  const { selectedMenu, onSelectMenu } = props;
+const SidebarNav = () => {
   const { setOpenMobile } = useSidebar();
+  const navigate = useNavigate();
+  const { pathname } = useLocation();
 
   const handleSelect = (value: string) => {
     setOpenMobile(false);
-    onSelectMenu(value);
+    navigate(menuPath(value));
   };
+
+  const isActive = (value: string) => pathname === menuPath(value);
 
   return (
     <>
@@ -56,7 +58,7 @@ const SidebarNav = (props: { selectedMenu: string; onSelectMenu: (value: string)
                 .map((menu) => (
                   <SidebarMenuItem key={menu.value}>
                     <SidebarMenuButton
-                      isActive={selectedMenu === menu.value}
+                      isActive={isActive(menu.value)}
                       onClick={() => handleSelect(menu.value)}
                     >
                       <menu.icon />
@@ -76,7 +78,7 @@ const SidebarNav = (props: { selectedMenu: string; onSelectMenu: (value: string)
             .map((menu) => (
               <SidebarMenuItem key={menu.value}>
                 <SidebarMenuButton
-                  isActive={selectedMenu === menu.value}
+                  isActive={isActive(menu.value)}
                   onClick={() => handleSelect(menu.value)}
                 >
                   <menu.icon />
@@ -91,12 +93,12 @@ const SidebarNav = (props: { selectedMenu: string; onSelectMenu: (value: string)
 };
 
 const AppSidebar = (props: AppSidebarProps) => {
-  const { children, selectedMenu, onSelectMenu } = props;
+  const { children } = props;
 
   return (
     <SidebarProvider>
       <Sidebar>
-        <SidebarNav selectedMenu={selectedMenu} onSelectMenu={onSelectMenu} />
+        <SidebarNav />
       </Sidebar>
 
       <main className="flex min-w-0 flex-1 flex-col">

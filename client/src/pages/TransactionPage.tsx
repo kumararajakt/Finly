@@ -1,122 +1,24 @@
-import { useEffect, useState } from "react";
+import { Suspense, lazy, useEffect, useState } from "react";
 import { ChevronsUpDown, Paperclip, Pencil, Plus, Receipt, Search, Trash2, Upload, X } from "lucide-react";
-import CsvImportCard from "@/components/CsvImportCard";
 import PeriodSelector from "@/components/PeriodSelector";
 import { Button } from "@/components/ui/button";
 import EmptyState from "@/components/ui/empty-state";
 import ErrorState from "@/components/ui/error-state";
 import { Input } from "@/components/ui/input";
 import LoadingState from "@/components/ui/loading-state";
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetFooter,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
+import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { message } from "@/components/transactions/shared";
 import { useSettings } from "@/contexts/SettingsContext";
 import { useQuery } from "@/hooks/use-query";
-import { ApiError, api } from "@/lib/api";
-import { formatDate, formatSignedAmount, todayISO } from "@/lib/format";
-import type { Account, Category, Tag, Transaction, TransactionType } from "@/lib/types";
+import { api } from "@/lib/api";
+import { formatDate, formatSignedAmount } from "@/lib/format";
+import type { Account, Category, Tag, Transaction } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-function message(error: unknown): string {
-  if (error instanceof ApiError) return error.message;
-  if (error instanceof Error) return error.message;
-  return "Something went wrong.";
-}
-
-async function ensureTags(names: string[]): Promise<void> {
-  for (const name of names) {
-    try {
-      await api.tags.create(name);
-    } catch (error) {
-      if (!(error instanceof ApiError && error.code === "DUPLICATE_TAG")) throw error;
-    }
-  }
-}
-
-interface TagPickerProps {
-  available: string[];
-  selected: string[];
-  onChange: (next: string[]) => void;
-}
-
-function TagPicker({ available, selected, onChange }: TagPickerProps) {
-  const [draft, setDraft] = useState("");
-
-  function addNew() {
-    const name = draft.trim();
-    if (!name) return;
-    if (!selected.includes(name)) onChange([...selected, name]);
-    setDraft("");
-  }
-
-  function toggle(name: string) {
-    onChange(
-      selected.includes(name) ? selected.filter((value) => value !== name) : [...selected, name]
-    );
-  }
-
-  return (
-    <div className="space-y-3">
-      {selected.length > 0 && (
-        <div className="flex flex-wrap items-center gap-1.5">
-          {selected.map((tag) => (
-            <button
-              key={tag}
-              type="button"
-              onClick={() => toggle(tag)}
-              className="inline-flex items-center gap-1 rounded-full border bg-muted/50 px-2 py-0.5 text-xs text-foreground transition-colors hover:border-input"
-            >
-              {tag}
-              <X className="size-3" aria-hidden="true" />
-            </button>
-          ))}
-        </div>
-      )}
-      {available.length > 0 && (
-        <div>
-          <p className="mb-1.5 text-xs font-medium text-muted-foreground">Existing tags</p>
-          <div className="flex flex-wrap items-center gap-1.5">
-            {available
-              .filter((tag) => !selected.includes(tag))
-              .map((tag) => (
-                <button
-                  key={tag}
-                  type="button"
-                  onClick={() => toggle(tag)}
-                  className="inline-flex items-center gap-1 rounded-full border border-dashed px-2 py-0.5 text-xs text-muted-foreground transition-colors hover:border-foreground hover:text-foreground"
-                >
-                  <Plus className="size-3" aria-hidden="true" />
-                  {tag}
-                </button>
-              ))}
-          </div>
-        </div>
-      )}
-      <div className="flex gap-1.5">
-        <Input
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              addNew();
-            }
-          }}
-          placeholder="Add a new tag by name"
-        />
-        <Button type="button" variant="outline" onClick={addNew} disabled={!draft.trim()}>
-          Add
-        </Button>
-      </div>
-    </div>
-  );
-}
+const CsvImportCard = lazy(() => import("@/components/CsvImportCard"));
+const EntryForm = lazy(() => import("@/components/transactions/EntryForm"));
+const TagEditorSheet = lazy(() => import("@/components/transactions/TagEditorSheet"));
 
 interface CategoryCellProps {
   value: string;
@@ -186,288 +88,6 @@ function TagPills({ tags, removing, onRemove, onAdd }: TagPillsProps) {
         </button>
       </li>
     </ul>
-  );
-}
-
-interface TagEditorSheetProps {
-  transaction: Transaction;
-  tags: Tag[];
-  onClose: () => void;
-  onSaved: (updated: Transaction) => void;
-}
-
-function TagEditorSheet({ transaction, tags, onClose, onSaved }: TagEditorSheetProps) {
-  const [selected, setSelected] = useState<string[]>(transaction.tags);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    setSelected(transaction.tags);
-  }, [transaction]);
-
-  async function handleSave() {
-    setSaving(true);
-    setError(null);
-    try {
-      await ensureTags(selected);
-      const updated = await api.transactions.update(transaction.id, { tags: selected });
-      setSaving(false);
-      onSaved(updated);
-      onClose();
-    } catch (err) {
-      setError(message(err));
-      setSaving(false);
-    }
-  }
-
-  return (
-    <Sheet open onOpenChange={(open) => !open && onClose()}>
-      <SheetContent side="right" className="sm:max-w-md">
-        <SheetHeader>
-          <SheetTitle>Edit tags</SheetTitle>
-          <SheetDescription>{transaction.merchant}</SheetDescription>
-        </SheetHeader>
-        <div className="flex-1 overflow-y-auto px-4">
-          <TagPicker
-            available={tags.map((tag) => tag.name)}
-            selected={selected}
-            onChange={setSelected}
-          />
-          {error && (
-            <p role="alert" className="mt-3 text-xs text-destructive">
-              {error}
-            </p>
-          )}
-        </div>
-        <SheetFooter>
-          <Button type="button" variant="outline" onClick={onClose} disabled={saving}>
-            Cancel
-          </Button>
-          <Button type="button" onClick={handleSave} disabled={saving}>
-            {saving ? "Saving…" : "Save tags"}
-          </Button>
-        </SheetFooter>
-      </SheetContent>
-    </Sheet>
-  );
-}
-
-interface EntryForm {
-  type: TransactionType;
-  amount: string;
-  merchant: string;
-  date: string;
-  category: string;
-  account: string;
-  tags: string[];
-}
-
-function initialForm(initial: Transaction | null): EntryForm {
-  return {
-    type: initial?.type ?? "expense",
-    amount: initial ? String(initial.amount) : "",
-    merchant: initial?.merchant ?? "",
-    date: initial?.date ?? todayISO(),
-    category: initial?.category ?? "",
-    account: initial?.account ?? "",
-    tags: initial?.tags ?? [],
-  };
-}
-
-interface EntryFormProps {
-  categories: Category[];
-  accounts: Account[];
-  tags: Tag[];
-  initial?: Transaction | null;
-  onSaved: () => void;
-}
-
-function EntryForm({ categories, accounts, tags, initial, onSaved }: EntryFormProps) {
-  const [form, setForm] = useState<EntryForm>(() => initialForm(initial ?? null));
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!form.category && categories.length > 0) {
-      setForm((f) => ({ ...f, category: categories[0].name }));
-    }
-  }, [categories, form.category]);
-
-  useEffect(() => {
-    if (!form.account && accounts.length > 0) {
-      setForm((f) => ({ ...f, account: accounts[0].name }));
-    }
-  }, [accounts, form.account]);
-
-  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const amount = Number.parseFloat(form.amount);
-    if (!form.date) return setError("Please choose a date.");
-    if (!form.merchant.trim()) return setError("Please enter a merchant or source.");
-    if (!Number.isFinite(amount) || amount <= 0) return setError("Please enter a positive amount.");
-    if (!form.category) return setError("Please choose a category.");
-    if (!form.account) return setError("Please choose an account.");
-
-    setSaving(true);
-    setError(null);
-    try {
-      await ensureTags(form.tags);
-      if (initial) {
-        await api.transactions.update(initial.id, {
-          date: form.date,
-          merchant: form.merchant.trim(),
-          category: form.category,
-          account: form.account,
-          amount,
-          type: form.type,
-          tags: form.tags,
-        });
-      } else {
-        await api.transactions.create({
-          date: form.date,
-          merchant: form.merchant.trim(),
-          category: form.category,
-          account: form.account,
-          amount,
-          type: form.type,
-          tags: form.tags,
-        });
-      }
-      setSaving(false);
-      onSaved();
-    } catch (err) {
-      setError(message(err));
-      setSaving(false);
-    }
-  }
-
-  const knownCategory = form.category && !categories.some((c) => c.name === form.category);
-  const knownAccount = form.account && !accounts.some((a) => a.name === form.account);
-
-  return (
-    <form onSubmit={handleSubmit}>
-      <SheetHeader>
-        <SheetTitle>{initial ? "Edit entry" : "Add entry"}</SheetTitle>
-        <SheetDescription>
-          {initial ? initial.merchant : "Record an expense or income transaction."}
-        </SheetDescription>
-      </SheetHeader>
-      <div className="flex flex-col gap-4 px-4">
-        <div className="grid grid-cols-2 gap-1 rounded-lg border bg-muted/50 p-1" role="group" aria-label="Transaction type">
-          {(["expense", "income"] as const).map((type) => (
-            <button
-              key={type}
-              type="button"
-              onClick={() => setForm((f) => ({ ...f, type }))}
-              aria-pressed={form.type === type}
-              className={cn(
-                "h-7 rounded-md text-sm font-medium transition-colors",
-                form.type === type
-                  ? "bg-background text-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground"
-              )}
-            >
-              {type === "expense" ? "Expense" : "Income"}
-            </button>
-          ))}
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium">Amount</label>
-            <Input
-              type="number"
-              inputMode="decimal"
-              step="0.01"
-              min="0"
-              value={form.amount}
-              onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))}
-              placeholder="0.00"
-              required
-            />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium">Date</label>
-            <Input
-              type="date"
-              value={form.date}
-              onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))}
-              required
-            />
-          </div>
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-medium">Merchant / source</label>
-          <Input
-            value={form.merchant}
-            onChange={(e) => setForm((f) => ({ ...f, merchant: e.target.value }))}
-            placeholder="e.g. Grocery Store"
-            required
-          />
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium">Category</label>
-            <select
-              value={form.category}
-              onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
-              required
-              className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
-            >
-              {categories.length === 0 && (
-                <option value="" disabled>
-                  No categories yet
-                </option>
-              )}
-              {knownCategory && <option value={form.category}>{form.category}</option>}
-              {categories.map((category) => (
-                <option key={category.id} value={category.name}>
-                  {category.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium">Account</label>
-            <select
-              value={form.account}
-              onChange={(e) => setForm((f) => ({ ...f, account: e.target.value }))}
-              required
-              className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
-            >
-              {accounts.length === 0 && (
-                <option value="" disabled>
-                  No accounts yet
-                </option>
-              )}
-              {knownAccount && <option value={form.account}>{form.account}</option>}
-              {accounts.map((account) => (
-                <option key={account.id} value={account.name}>
-                  {account.name}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-medium">Tags</label>
-          <TagPicker
-            available={tags.map((tag) => tag.name)}
-            selected={form.tags}
-            onChange={(next) => setForm((f) => ({ ...f, tags: next }))}
-          />
-        </div>
-        {error && (
-          <p role="alert" className="text-xs text-destructive">
-            {error}
-          </p>
-        )}
-      </div>
-      <SheetFooter>
-        <Button type="submit" disabled={saving}>
-          {saving ? "Saving…" : initial ? "Save changes" : "Save entry"}
-        </Button>
-      </SheetFooter>
-    </form>
   );
 }
 
@@ -799,46 +419,54 @@ export default function TransactionPage() {
       )}
 
       {editorTx && (
-        <TagEditorSheet
-          transaction={editorTx}
-          tags={tags.data ?? []}
-          onClose={() => setEditorTx(null)}
-          onSaved={handleTagsSaved}
-        />
+        <Suspense fallback={null}>
+          <TagEditorSheet
+            transaction={editorTx}
+            tags={tags.data ?? []}
+            onClose={() => setEditorTx(null)}
+            onSaved={handleTagsSaved}
+          />
+        </Suspense>
       )}
 
       <Sheet open={addOpen} onOpenChange={setAddOpen}>
         <SheetContent side="right" className="sm:max-w-md">
-          <EntryForm
-            categories={categories.data ?? []}
-            accounts={accounts.data ?? []}
-            tags={tags.data ?? []}
-            onSaved={handleEntrySaved}
-          />
-        </SheetContent>
-      </Sheet>
-
-      <Sheet open={!!editTx} onOpenChange={(open) => !open && setEditTx(null)}>
-        <SheetContent side="right" className="sm:max-w-md">
-          {editTx && (
+          <Suspense fallback={<LoadingState className="border-0" label="Loading form…" />}>
             <EntryForm
-              initial={editTx}
               categories={categories.data ?? []}
               accounts={accounts.data ?? []}
               tags={tags.data ?? []}
               onSaved={handleEntrySaved}
             />
-          )}
+          </Suspense>
+        </SheetContent>
+      </Sheet>
+
+      <Sheet open={!!editTx} onOpenChange={(open) => !open && setEditTx(null)}>
+        <SheetContent side="right" className="sm:max-w-md">
+          <Suspense fallback={<LoadingState className="border-0" label="Loading form…" />}>
+            {editTx && (
+              <EntryForm
+                initial={editTx}
+                categories={categories.data ?? []}
+                accounts={accounts.data ?? []}
+                tags={tags.data ?? []}
+                onSaved={handleEntrySaved}
+              />
+            )}
+          </Suspense>
         </SheetContent>
       </Sheet>
 
       <Sheet open={importOpen} onOpenChange={setImportOpen}>
         <SheetContent side="right" className="sm:max-w-xl">
           <div className="flex-1 overflow-y-auto px-4 pb-4">
-            <CsvImportCard
-              onNavigate={() => setImportOpen(false)}
-              onImported={() => transactions.refetch()}
-            />
+            <Suspense fallback={<LoadingState className="py-8" label="Loading importer…" />}>
+              <CsvImportCard
+                onNavigate={() => setImportOpen(false)}
+                onImported={() => transactions.refetch()}
+              />
+            </Suspense>
           </div>
         </SheetContent>
       </Sheet>

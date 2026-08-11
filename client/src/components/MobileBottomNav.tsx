@@ -1,15 +1,11 @@
-import { menus } from "@/utils/menu";
+import { useLocation, useNavigate } from "react-router";
 import { cn } from "@/lib/utils";
+import { menuPath, menus } from "@/utils/menu";
 
-interface MobileBottomNavProps {
-  selectedMenu: string;
-  onSelectMenu: (value: string) => void;
-}
+export default function MobileBottomNav() {
+  const navigate = useNavigate();
+  const { pathname } = useLocation();
 
-export default function MobileBottomNav({
-  selectedMenu,
-  onSelectMenu,
-}: MobileBottomNavProps) {
   return (
     <nav
       aria-label="Primary navigation"
@@ -17,12 +13,12 @@ export default function MobileBottomNav({
     >
       <div className="no-scrollbar flex overflow-x-auto">
         {menus.map((menu) => {
-          const active = selectedMenu === menu.value;
+          const active = pathname === menu.path;
           return (
             <button
               key={menu.value}
               type="button"
-              onClick={() => onSelectMenu(menu.value)}
+              onClick={() => navigate(menuPath(menu.value))}
               aria-current={active ? "page" : undefined}
               className={cn(
                 "flex min-w-[72px] flex-1 flex-col items-center gap-1 px-3 py-2.5 text-[11px] transition-colors",

@@ -1,4 +1,5 @@
-import { useCallback, useState } from "react";
+import { Suspense, lazy, useCallback } from "react";
+import { BrowserRouter, Navigate, Route, Routes, useNavigate } from "react-router";
 import AppSidebar from "./Sidebar";
 import TopBar from "./components/TopBar";
 import MobileBottomNav from "./components/MobileBottomNav";
@@ -7,15 +8,17 @@ import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import { SettingsProvider } from "./contexts/SettingsContext";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import AuthPage from "./pages/AuthPage";
-import DashboardPage from "./pages/DashboardPage";
-import TransactionPage from "./pages/TransactionPage";
-import RecurringPage from "./pages/RecurringPage";
-import SubscriptionsPage from "./pages/SubscriptionsPage";
-import BudgetsPage from "./pages/BudgetsPage";
-import GoalsPage from "./pages/GoalsPage";
-import RulesPage from "./pages/RulesPage";
-import SettingsPage from "./pages/SettingsPage";
-import DocumentsPage from "./pages/DocumentsPage";
+import { menuPath } from "./utils/menu";
+
+const DashboardPage = lazy(() => import("./pages/DashboardPage"));
+const TransactionPage = lazy(() => import("./pages/TransactionPage"));
+const RecurringPage = lazy(() => import("./pages/RecurringPage"));
+const SubscriptionsPage = lazy(() => import("./pages/SubscriptionsPage"));
+const BudgetsPage = lazy(() => import("./pages/BudgetsPage"));
+const GoalsPage = lazy(() => import("./pages/GoalsPage"));
+const RulesPage = lazy(() => import("./pages/RulesPage"));
+const SettingsPage = lazy(() => import("./pages/SettingsPage"));
+const DocumentsPage = lazy(() => import("./pages/DocumentsPage"));
 
 interface PageProps {
   onNavigate?: (value: string) => void;
@@ -33,13 +36,40 @@ const pages: Record<string, React.ComponentType<PageProps>> = {
   documents: DocumentsPage,
 };
 
+function AppShell() {
+  const navigate = useNavigate();
+  const handleNavigate = useCallback(
+    (value: string) => navigate(menuPath(value)),
+    [navigate]
+  );
+
+  return (
+    <>
+      <AppSidebar>
+        <TopBar />
+        <div className="p-4 pb-24 md:p-6 md:pb-6">
+          <Suspense fallback={<LoadingState label="Loading…" />}>
+            <Routes>
+              <Route index element={<Navigate to={menuPath("dashboard")} replace />} />
+              {Object.entries(pages).map(([value, Component]) => (
+                <Route
+                  key={value}
+                  path={menuPath(value)}
+                  element={<Component onNavigate={handleNavigate} />}
+                />
+              ))}
+              <Route path="*" element={<Navigate to={menuPath("dashboard")} replace />} />
+            </Routes>
+          </Suspense>
+        </div>
+      </AppSidebar>
+      <MobileBottomNav />
+    </>
+  );
+}
+
 function FinlyApp() {
   const { status } = useAuth();
-  const [selectedMenu, setSelectedMenu] = useState("dashboard");
-
-  const handleSelectMenu = useCallback((value: string) => {
-    setSelectedMenu(value);
-  }, []);
 
   if (status === "loading") {
     return (
@@ -53,23 +83,9 @@ function FinlyApp() {
     return <AuthPage />;
   }
 
-  const Page = pages[selectedMenu] ?? DashboardPage;
-
   return (
     <SettingsProvider>
-      <AppSidebar
-        selectedMenu={selectedMenu}
-        onSelectMenu={handleSelectMenu}
-      >
-        <TopBar selectedMenu={selectedMenu} />
-        <div className="p-4 pb-24 md:p-6 md:pb-6">
-          <Page onNavigate={handleSelectMenu} />
-        </div>
-      </AppSidebar>
-      <MobileBottomNav
-        selectedMenu={selectedMenu}
-        onSelectMenu={handleSelectMenu}
-      />
+      <AppShell />
     </SettingsProvider>
   );
 }
@@ -78,7 +94,9 @@ function App() {
   return (
     <AuthProvider>
       <ThemeProvider>
-        <FinlyApp />
+        <BrowserRouter>
+          <FinlyApp />
+        </BrowserRouter>
       </ThemeProvider>
     </AuthProvider>
   );
