@@ -19,8 +19,8 @@ The client and server deploy as **two separate Vercel projects** (they live on d
 ### API project (`server/`)
 
 - `server/api/index.ts` is a single serverless function that lazily bootstraps the Nest app once per warm lambda and hands the request to the underlying Express instance.
-- `server/vercel.json` sets the build (`pnpm --filter server build`), bundles `server/drizzle/**` into the function so pending migrations can run at runtime, and caps `maxDuration` at 10s.
-- First boot runs pending Drizzle migrations (unless `AUTO_MIGRATE=false`); the function resolves the migrations folder from the working directory or the compiled output.
+- `server/vercel.json` sets the build (`pnpm --filter server build`), bundles `server/drizzle/**` into the function so migrations can run there if needed, and caps `maxDuration` at 10s.
+- Migrations are **not** run automatically at boot; run `pnpm --filter server db:migrate` before deploying, or set `AUTO_MIGRATE=true` to apply pending migrations on first boot (failures are non-fatal and logged, so the API still starts).
 
 Required environment variables:
 
@@ -31,7 +31,7 @@ Required environment variables:
 | `BETTER_AUTH_URL` | The deployed API origin, e.g. `https://finly-api.vercel.app` |
 | `FINLY_OWNER_EMAIL` | Owner account email used by auth |
 | `CORS_ORIGIN` | Comma-separated list of allowed client origins (e.g. `https://finly.vercel.app`); if unset, any origin is reflected (fine for a single-user app) |
-| `AUTO_MIGRATE` | Optional; defaults to running migrations when `VERCEL=1` |
+| `AUTO_MIGRATE` | Optional; set to `true` to apply pending migrations on boot (default: off — migrate manually) |
 | `PG_POOL_MAX` | Optional; DB pool cap, default 3 to fit hosted-Postgres limits |
 
 Cookies are `secure` and `sameSite: none` in production so the browser sends them across origins.

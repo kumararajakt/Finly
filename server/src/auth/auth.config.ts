@@ -1,5 +1,3 @@
-import { drizzleAdapter } from '@better-auth/drizzle-adapter';
-import { betterAuth } from 'better-auth';
 import type { Database } from '../database/database.module';
 
 export const OWNER_EMAIL = process.env.FINLY_OWNER_EMAIL ?? 'owner@finly.local';
@@ -8,7 +6,33 @@ export const OWNER_NAME = 'Owner';
 export const SESSION_DURATION_SECONDS = 60 * 60 * 24 * 30;
 export const SESSION_REFRESH_WINDOW_SECONDS = 60 * 60 * 24;
 
-export function createAuthInstance(db: Database) {
+type BetterAuthModule = typeof import('better-auth');
+type DrizzleAdapterModule = typeof import('@better-auth/drizzle-adapter');
+type BetterAuthApiModule = typeof import('better-auth/api');
+
+export interface AuthModules {
+  betterAuth: BetterAuthModule['betterAuth'];
+  drizzleAdapter: DrizzleAdapterModule['drizzleAdapter'];
+  isAPIError: BetterAuthApiModule['isAPIError'];
+}
+
+let modulesPromise: Promise<AuthModules> | null = null;
+
+export function loadAuthModules(): Promise<AuthModules> {
+  modulesPromise ??= Promise.all([
+    import('better-auth'),
+    import('@better-auth/drizzle-adapter'),
+    import('better-auth/api'),
+  ]).then(([betterAuthModule, adapterModule, apiModule]) => ({
+    betterAuth: betterAuthModule.betterAuth,
+    drizzleAdapter: adapterModule.drizzleAdapter,
+    isAPIError: apiModule.isAPIError,
+  }));
+  return modulesPromise;
+}
+
+export async function createAuthInstance(db: Database) {
+  const { betterAuth, drizzleAdapter } = await loadAuthModules();
   return betterAuth({
     database: drizzleAdapter(db, { provider: 'pg' }),
     secret: process.env.SESSION_SECRET ?? 'somesecret',
@@ -51,4 +75,4 @@ export function createAuthInstance(db: Database) {
   });
 }
 
-export type AuthInstance = ReturnType<typeof createAuthInstance>;
+export type AuthInstance = Awaited<ReturnType<typeof createAuthInstance>>;

@@ -7,17 +7,19 @@ import {
   InternalServerErrorException,
   Logger,
   NotFoundException,
+  OnModuleInit,
   UnauthorizedException,
 } from '@nestjs/common';
-import { isAPIError } from 'better-auth/api';
 import { eq, sql } from 'drizzle-orm';
 import type { Request, Response } from 'express';
+import type { isAPIError } from 'better-auth/api';
 import { DRIZZLE } from '../database/database.constants';
 import type { Database } from '../database/database.module';
 import { users } from '../database/schema';
 import { timeZoneForCountry } from '../countries/countries';
 import {
   createAuthInstance,
+  loadAuthModules,
   OWNER_NAME,
   type AuthInstance,
 } from './auth.config';
@@ -43,12 +45,17 @@ interface AuthCallResult {
 }
 
 @Injectable()
-export class AuthService {
+export class AuthService implements OnModuleInit {
   private readonly logger = new Logger(AuthService.name);
-  private readonly auth: AuthInstance;
+  private auth!: AuthInstance;
+  private isAPIError!: typeof isAPIError;
 
-  constructor(@Inject(DRIZZLE) private readonly db: Database) {
-    this.auth = createAuthInstance(db);
+  constructor(@Inject(DRIZZLE) private readonly db: Database) {}
+
+  async onModuleInit(): Promise<void> {
+    const { isAPIError } = await loadAuthModules();
+    this.isAPIError = isAPIError;
+    this.auth = await createAuthInstance(this.db);
   }
 
   async register(
@@ -205,7 +212,7 @@ export class AuthService {
   }
 
   private mapAuthError(error: unknown, fallback: string): HttpException {
-    if (isAPIError(error)) {
+    if (this.isAPIError(error)) {
       const status = error.statusCode ?? HttpStatus.BAD_REQUEST;
       const message = error.body?.message ?? error.message ?? fallback;
       if (status === 422) {

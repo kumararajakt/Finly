@@ -8,7 +8,7 @@ let appPromise: Promise<FinlyApp> | null = null;
 function getApp(): Promise<FinlyApp> {
   if (!appPromise) {
     appPromise = bootstrap({
-      migrate: process.env.AUTO_MIGRATE === 'true' || process.env.VERCEL === '1',
+      migrate: process.env.AUTO_MIGRATE === 'true',
     });
   }
   return appPromise;

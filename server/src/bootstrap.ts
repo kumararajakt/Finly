@@ -57,7 +57,13 @@ export async function bootstrap(
   app.use(requestLogging);
 
   if (options.migrate) {
-    await runMigrations(app);
+    try {
+      await runMigrations(app);
+    } catch (error) {
+      console.warn(
+        `Migrations skipped: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
   }
 
   return app;
