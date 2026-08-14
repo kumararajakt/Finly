@@ -10,6 +10,7 @@ import {
   Post,
 } from '@nestjs/common';
 import type { Rule } from '../database/schema';
+import { CurrentUser } from '../auth/current-user.decorator';
 import { CreateRuleDto, UpdateRuleDto } from './rules.dto';
 import { RulesService } from './rules.service';
 
@@ -18,26 +19,33 @@ export class RulesController {
   constructor(private readonly rulesService: RulesService) {}
 
   @Get()
-  list(): Promise<Rule[]> {
-    return this.rulesService.list();
+  list(@CurrentUser() userId: string): Promise<Rule[]> {
+    return this.rulesService.list(userId);
   }
 
   @Post()
-  create(@Body() body: CreateRuleDto): Promise<Rule> {
-    return this.rulesService.create(body);
+  create(
+    @CurrentUser() userId: string,
+    @Body() body: CreateRuleDto,
+  ): Promise<Rule> {
+    return this.rulesService.create(userId, body);
   }
 
   @Patch(':id')
   update(
+    @CurrentUser() userId: string,
     @Param('id', ParseUUIDPipe) id: string,
     @Body() body: UpdateRuleDto,
   ): Promise<Rule> {
-    return this.rulesService.update(id, body);
+    return this.rulesService.update(userId, id, body);
   }
 
   @Delete(':id')
   @HttpCode(204)
-  async remove(@Param('id', ParseUUIDPipe) id: string): Promise<void> {
-    await this.rulesService.remove(id);
+  async remove(
+    @CurrentUser() userId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<void> {
+    await this.rulesService.remove(userId, id);
   }
 }

@@ -1,4 +1,5 @@
 import { Body, Controller, Post } from '@nestjs/common';
+import { CurrentUser } from '../auth/current-user.decorator';
 import { CsvImportDto, CsvPreviewDto } from './import.dto';
 import type { CsvImportResult, CsvPreviewResult } from './import.service';
 import { ImportService } from './import.service';
@@ -13,7 +14,10 @@ export class ImportController {
   }
 
   @Post()
-  importCsv(@Body() body: CsvImportDto): Promise<CsvImportResult> {
-    return this.importService.importCsv(body);
+  importCsv(
+    @CurrentUser() userId: string,
+    @Body() body: CsvImportDto,
+  ): Promise<CsvImportResult> {
+    return this.importService.importCsv(userId, body);
   }
 }

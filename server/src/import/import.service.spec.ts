@@ -3,6 +3,8 @@ import { computeFingerprint } from '../common/fingerprint';
 import { accounts, categories, transactions } from '../database/schema';
 import { ImportService } from './import.service';
 
+const USER_ID = 'user-1';
+
 type InsertValues = Record<string, unknown>;
 
 interface DbOptions {
@@ -120,7 +122,7 @@ describe('ImportService', () => {
       const { db, valuesCalls } = makeDb();
       service = new ImportService(db);
 
-      const result = await service.importCsv({
+      const result = await service.importCsv(USER_ID, {
         csv: STATEMENT,
         mapping: { date: 0, merchant: 1, amount: 2 },
       });
@@ -157,7 +159,7 @@ describe('ImportService', () => {
       const { db, valuesCalls } = makeDb();
       service = new ImportService(db);
 
-      await service.importCsv({
+      await service.importCsv(USER_ID, {
         csv: 'Date,Description,Amount\n2024-01-05,Fee,-50.00\n',
         mapping: { date: 0, merchant: 1, amount: 2 },
         signConvention: 'negative-income',
@@ -174,7 +176,7 @@ describe('ImportService', () => {
       const { db, valuesCalls } = makeDb({ categories: ['Dining'] });
       service = new ImportService(db);
 
-      const result = await service.importCsv({
+      const result = await service.importCsv(USER_ID, {
         csv: 'Date,Description,Amount,Category\n2024-01-05,Coffee,5.50,Dining\n2024-01-06,Gas,40.00,Automotive\n',
         mapping: { date: 0, merchant: 1, amount: 2, category: 3 },
       });
@@ -195,7 +197,7 @@ describe('ImportService', () => {
       const { db, valuesCalls } = makeDb();
       service = new ImportService(db);
 
-      await service.importCsv({
+      await service.importCsv(USER_ID, {
         csv: 'Date,Description,Amount\n15/01/2024,Rent,1200.00\n',
         mapping: { date: 0, merchant: 1, amount: 2 },
       });
@@ -208,7 +210,7 @@ describe('ImportService', () => {
       const { db, valuesCalls } = makeDb();
       service = new ImportService(db);
 
-      const result = await service.importCsv({
+      const result = await service.importCsv(USER_ID, {
         csv: 'Date,Description,Debit,Credit\n2024-01-05,Coffee,5.50,\n2024-01-06,Paycheck,,2500.00\n',
         mapping: { date: 0, merchant: 1, debit: 2, credit: 3 },
       });
@@ -230,7 +232,7 @@ describe('ImportService', () => {
       const { db, valuesCalls } = makeDb();
       service = new ImportService(db);
 
-      const result = await service.importCsv({
+      const result = await service.importCsv(USER_ID, {
         csv: [
           'Date,Description,Amount',
           'not-a-date,Coffee,5.50',
@@ -265,7 +267,7 @@ describe('ImportService', () => {
       });
       service = new ImportService(db);
 
-      const result = await service.importCsv({
+      const result = await service.importCsv(USER_ID, {
         csv: [
           'Date,Description,Amount',
           '2024-01-05,Coffee,5.50',
@@ -290,7 +292,7 @@ describe('ImportService', () => {
       const { db, valuesCalls } = makeDb();
       service = new ImportService(db);
 
-      const result = await service.importCsv({
+      const result = await service.importCsv(USER_ID, {
         csv: [
           'Date,Description,Amount',
           '2024-01-05,Coffee,5.50',
@@ -317,7 +319,7 @@ describe('ImportService', () => {
       const { db, valuesCalls } = makeDb();
       service = new ImportService(db);
 
-      const result = await service.importCsv({
+      const result = await service.importCsv(USER_ID, {
         csv: '2024-01-05,Coffee,5.50\n2024-01-06,Rent,1200.00\n',
         mapping: { date: 0, merchant: 1, amount: 2, hasHeader: false },
       });
@@ -333,7 +335,7 @@ describe('ImportService', () => {
       const { db } = makeDb();
       service = new ImportService(db);
       await expect(
-        service.importCsv({
+        service.importCsv(USER_ID, {
           csv: STATEMENT,
           mapping: { date: 0, merchant: 1, amount: 2, debit: 2 },
         }),
@@ -344,7 +346,7 @@ describe('ImportService', () => {
       const { db } = makeDb();
       service = new ImportService(db);
       await expect(
-        service.importCsv({
+        service.importCsv(USER_ID, {
           csv: STATEMENT,
           mapping: { date: 0, merchant: 1, amount: 9 },
         }),
@@ -355,7 +357,7 @@ describe('ImportService', () => {
       const { db, valuesCalls } = makeDb({ accounts: ['Checking'] });
       service = new ImportService(db);
 
-      await service.importCsv({
+      await service.importCsv(USER_ID, {
         csv: 'Date,Description,Amount,Account\n2024-01-05,Coffee,5.50,checking\n',
         mapping: { date: 0, merchant: 1, amount: 2, account: 3 },
       });
@@ -377,7 +379,7 @@ describe('ImportService', () => {
       let caught:
         { response?: { message?: string; code?: string } } | undefined;
       try {
-        await service.importCsv({
+        await service.importCsv(USER_ID, {
           csv,
           mapping: { date: 0, merchant: 1, amount: 2 },
         });

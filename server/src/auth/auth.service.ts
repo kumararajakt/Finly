@@ -10,19 +10,29 @@ import {
   OnModuleInit,
   UnauthorizedException,
 } from '@nestjs/common';
-import { eq, sql } from 'drizzle-orm';
+import { desc, eq } from 'drizzle-orm';
 import type { Request, Response } from 'express';
 import type { isAPIError } from 'better-auth/api';
 import { DRIZZLE } from '../database/database.constants';
 import type { Database } from '../database/database.module';
-import { users } from '../database/schema';
+import { DatabaseSeedService } from '../database/database-seed.service';
+import { emailOtps, users } from '../database/schema';
 import { timeZoneForCountry } from '../countries/countries';
+import { MailService } from '../mail/mail.service';
 import {
   createAuthInstance,
   loadAuthModules,
-  OWNER_NAME,
   type AuthInstance,
 } from './auth.config';
+import {
+  generateOtp,
+  hashOtp,
+  normalizeEmail,
+  otpMatches,
+  OTP_MAX_ATTEMPTS,
+  OTP_RESEND_COOLDOWN_MS,
+  OTP_TTL_MS,
+} from './otp';
 
 export interface SessionUser {
   id: string;
@@ -44,13 +54,22 @@ interface AuthCallResult {
   response?: { user?: unknown; success?: boolean };
 }
 
+function displayNameFromEmail(email: string): string {
+  const local = email.split('@')[0] ?? '';
+  return local.length > 0 ? local : email;
+}
+
 @Injectable()
 export class AuthService implements OnModuleInit {
   private readonly logger = new Logger(AuthService.name);
   private auth!: AuthInstance;
   private isAPIError!: typeof isAPIError;
 
-  constructor(@Inject(DRIZZLE) private readonly db: Database) {}
+  constructor(
+    @Inject(DRIZZLE) private readonly db: Database,
+    private readonly mail: MailService,
+    private readonly seed: DatabaseSeedService,
+  ) {}
 
   async onModuleInit(): Promise<void> {
     const { isAPIError } = await loadAuthModules();
@@ -58,32 +77,120 @@ export class AuthService implements OnModuleInit {
     this.auth = await createAuthInstance(this.db);
   }
 
-  async register(
+  async register(email: string): Promise<{ pending: true; email: string }> {
+    const normalized = normalizeEmail(email);
+    const otp = await this.issueOtp(normalized);
+    await this.mail.sendOtp(normalized, otp);
+    return { pending: true, email: normalized };
+  }
+
+  async verifyOtp(
     email: string,
+    otp: string,
     password: string,
     response: Response,
   ): Promise<{ user: unknown }> {
-    const [{ count }] = await this.db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(users);
+    const normalized = normalizeEmail(email);
+    const [row] = await this.db
+      .select()
+      .from(emailOtps)
+      .where(eq(emailOtps.email, normalized))
+      .orderBy(desc(emailOtps.createdAt))
+      .limit(1);
 
-    if (count > 0) {
-      throw new ConflictException({
-        message: 'An account already exists. Sign in instead.',
-        code: 'ALREADY_REGISTERED',
-      });
+    if (!row || row.expiresAt.getTime() < Date.now()) {
+      if (row) {
+        await this.deleteOtp(row.id);
+      }
+      throw new HttpException(
+        {
+          message: 'This code has expired. Request a new one.',
+          code: 'OTP_EXPIRED',
+        },
+        HttpStatus.BAD_REQUEST,
+      );
     }
+
+    if (row.attempts >= OTP_MAX_ATTEMPTS) {
+      await this.deleteOtp(row.id);
+      throw new HttpException(
+        {
+          message: 'Too many attempts. Request a new code.',
+          code: 'OTP_TOO_MANY_ATTEMPTS',
+        },
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    if (!otpMatches(normalized, otp, row.otpHash)) {
+      const attempts = row.attempts + 1;
+      if (attempts >= OTP_MAX_ATTEMPTS) {
+        await this.deleteOtp(row.id);
+      } else {
+        await this.db
+          .update(emailOtps)
+          .set({ attempts })
+          .where(eq(emailOtps.id, row.id));
+      }
+      throw new HttpException(
+        {
+          message: 'Incorrect code. Try again.',
+          code: 'INVALID_OTP',
+        },
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    const name = displayNameFromEmail(normalized);
 
     try {
       const result = (await this.auth.api.signUpEmail({
-        body: { email: email.trim().toLowerCase(), password, name: OWNER_NAME },
+        body: { email: normalized, password, name },
         returnHeaders: true,
       })) as AuthCallResult;
       this.applyCookies(response, result.headers);
+      await this.db
+        .update(users)
+        .set({ emailVerified: true })
+        .where(eq(users.email, normalized));
+      await this.deleteOtp(row.id);
+
+      const userId = (result.response?.user as { id?: string } | undefined)?.id;
+      if (userId) {
+        await this.seed.seedUserDefaults(userId);
+      }
+
       return { user: result.response?.user };
     } catch (error) {
       throw this.mapAuthError(error, 'Registration failed.');
     }
+  }
+
+  async resendOtp(email: string): Promise<{ pending: true; email: string }> {
+    const normalized = normalizeEmail(email);
+    const [latest] = await this.db
+      .select()
+      .from(emailOtps)
+      .where(eq(emailOtps.email, normalized))
+      .orderBy(desc(emailOtps.createdAt))
+      .limit(1);
+
+    if (
+      latest &&
+      latest.createdAt.getTime() > Date.now() - OTP_RESEND_COOLDOWN_MS
+    ) {
+      throw new HttpException(
+        {
+          message: 'Please wait before requesting a new code.',
+          code: 'OTP_COOLDOWN',
+        },
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+
+    const otp = await this.issueOtp(normalized);
+    await this.mail.sendOtp(normalized, otp);
+    return { pending: true, email: normalized };
   }
 
   async login(
@@ -201,6 +308,21 @@ export class AuthService implements OnModuleInit {
     return request.headers as Record<string, string>;
   }
 
+  private async issueOtp(email: string): Promise<string> {
+    await this.db.delete(emailOtps).where(eq(emailOtps.email, email));
+    const otp = generateOtp();
+    await this.db.insert(emailOtps).values({
+      email,
+      otpHash: hashOtp(email, otp),
+      expiresAt: new Date(Date.now() + OTP_TTL_MS),
+    });
+    return otp;
+  }
+
+  private async deleteOtp(id: string): Promise<void> {
+    await this.db.delete(emailOtps).where(eq(emailOtps.id, id));
+  }
+
   private applyCookies(response: Response, headers?: Headers): void {
     if (!headers) {
       return;
@@ -218,7 +340,7 @@ export class AuthService implements OnModuleInit {
       if (status === 422) {
         return new ConflictException({
           message,
-          code: 'ALREADY_REGISTERED',
+          code: 'EMAIL_IN_USE',
         });
       }
       return new HttpException(

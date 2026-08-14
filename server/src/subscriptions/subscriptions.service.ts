@@ -1,5 +1,5 @@
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { asc, eq } from 'drizzle-orm';
+import { and, asc, eq } from 'drizzle-orm';
 import { DRIZZLE } from '../database/database.constants';
 import type { Database } from '../database/database.module';
 import {
@@ -27,15 +27,20 @@ function notFound(): NotFoundException {
 export class SubscriptionsService {
   constructor(@Inject(DRIZZLE) private readonly db: Database) {}
 
-  async list(): Promise<Subscription[]> {
+  async list(userId: string): Promise<Subscription[]> {
     return this.db
       .select()
       .from(subscriptions)
+      .where(eq(subscriptions.userId, userId))
       .orderBy(asc(subscriptions.nextRenewal), asc(subscriptions.name));
   }
 
-  async create(dto: CreateSubscriptionDto): Promise<Subscription> {
+  async create(
+    userId: string,
+    dto: CreateSubscriptionDto,
+  ): Promise<Subscription> {
     const values: NewSubscription = {
+      userId,
       name: dto.name.trim(),
       category: dto.category.trim(),
       amount: round2(dto.amount),
@@ -51,11 +56,15 @@ export class SubscriptionsService {
     return row;
   }
 
-  async update(id: string, dto: UpdateSubscriptionDto): Promise<Subscription> {
+  async update(
+    userId: string,
+    id: string,
+    dto: UpdateSubscriptionDto,
+  ): Promise<Subscription> {
     const existing = await this.db
       .select()
       .from(subscriptions)
-      .where(eq(subscriptions.id, id))
+      .where(and(eq(subscriptions.id, id), eq(subscriptions.userId, userId)))
       .limit(1);
     if (existing.length === 0) {
       throw notFound();
@@ -76,15 +85,15 @@ export class SubscriptionsService {
             : current.account,
         active: dto.active ?? current.active,
       })
-      .where(eq(subscriptions.id, id))
+      .where(and(eq(subscriptions.id, id), eq(subscriptions.userId, userId)))
       .returning();
     return row;
   }
 
-  async remove(id: string): Promise<void> {
+  async remove(userId: string, id: string): Promise<void> {
     const result = await this.db
       .delete(subscriptions)
-      .where(eq(subscriptions.id, id))
+      .where(and(eq(subscriptions.id, id), eq(subscriptions.userId, userId)))
       .returning({ id: subscriptions.id });
     if (result.length === 0) {
       throw notFound();

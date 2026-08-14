@@ -4,6 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { eq } from 'drizzle-orm';
 import { DRIZZLE } from '../database/database.constants';
 import type { Database } from '../database/database.module';
 import { settings } from '../database/schema';
@@ -20,8 +21,11 @@ import type { Settings } from './settings.types';
 export class SettingsService {
   constructor(@Inject(DRIZZLE) private readonly db: Database) {}
 
-  async getAll(): Promise<Settings> {
-    const rows = await this.db.select().from(settings);
+  async getAll(userId: string): Promise<Settings> {
+    const rows = await this.db
+      .select()
+      .from(settings)
+      .where(eq(settings.userId, userId));
     const stored = new Map(rows.map((row) => [row.key, row.value]));
 
     const result = {} as Settings;
@@ -34,7 +38,11 @@ export class SettingsService {
     return result;
   }
 
-  async setValue(key: string, value: unknown): Promise<Settings> {
+  async setValue(
+    userId: string,
+    key: string,
+    value: unknown,
+  ): Promise<Settings> {
     if (!SETTING_KEYS.includes(key as keyof Settings)) {
       throw new NotFoundException({
         message: `Unknown setting "${key}".`,
@@ -52,12 +60,16 @@ export class SettingsService {
 
     await this.db
       .insert(settings)
-      .values({ key: settingKey, value: serializeSetting(settingKey, value) })
+      .values({
+        userId,
+        key: settingKey,
+        value: serializeSetting(settingKey, value),
+      })
       .onConflictDoUpdate({
-        target: settings.key,
+        target: [settings.userId, settings.key],
         set: { value: serializeSetting(settingKey, value) },
       });
 
-    return this.getAll();
+    return this.getAll(userId);
   }
 }

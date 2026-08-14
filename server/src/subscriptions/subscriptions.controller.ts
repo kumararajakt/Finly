@@ -10,6 +10,7 @@ import {
   Post,
 } from '@nestjs/common';
 import type { Subscription } from '../database/schema';
+import { CurrentUser } from '../auth/current-user.decorator';
 import {
   CreateSubscriptionDto,
   UpdateSubscriptionDto,
@@ -21,26 +22,33 @@ export class SubscriptionsController {
   constructor(private readonly subscriptionsService: SubscriptionsService) {}
 
   @Get()
-  list(): Promise<Subscription[]> {
-    return this.subscriptionsService.list();
+  list(@CurrentUser() userId: string): Promise<Subscription[]> {
+    return this.subscriptionsService.list(userId);
   }
 
   @Post()
-  create(@Body() body: CreateSubscriptionDto): Promise<Subscription> {
-    return this.subscriptionsService.create(body);
+  create(
+    @CurrentUser() userId: string,
+    @Body() body: CreateSubscriptionDto,
+  ): Promise<Subscription> {
+    return this.subscriptionsService.create(userId, body);
   }
 
   @Patch(':id')
   update(
+    @CurrentUser() userId: string,
     @Param('id', ParseUUIDPipe) id: string,
     @Body() body: UpdateSubscriptionDto,
   ): Promise<Subscription> {
-    return this.subscriptionsService.update(id, body);
+    return this.subscriptionsService.update(userId, id, body);
   }
 
   @Delete(':id')
   @HttpCode(204)
-  async remove(@Param('id', ParseUUIDPipe) id: string): Promise<void> {
-    await this.subscriptionsService.remove(id);
+  async remove(
+    @CurrentUser() userId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<void> {
+    await this.subscriptionsService.remove(userId, id);
   }
 }

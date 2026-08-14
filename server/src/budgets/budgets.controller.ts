@@ -11,6 +11,7 @@ import {
   Query,
 } from '@nestjs/common';
 import type { Budget } from '../database/schema';
+import { CurrentUser } from '../auth/current-user.decorator';
 import {
   BudgetSpendingQueryDto,
   CreateBudgetDto,
@@ -24,32 +25,40 @@ export class BudgetsController {
 
   @Get('spending')
   spending(
+    @CurrentUser() userId: string,
     @Query() query: BudgetSpendingQueryDto,
   ): Promise<Record<string, number>> {
-    return this.budgetsService.spending(query.month);
+    return this.budgetsService.spending(userId, query.month);
   }
 
   @Get()
-  list(): Promise<Budget[]> {
-    return this.budgetsService.list();
+  list(@CurrentUser() userId: string): Promise<Budget[]> {
+    return this.budgetsService.list(userId);
   }
 
   @Post()
-  create(@Body() body: CreateBudgetDto): Promise<Budget> {
-    return this.budgetsService.create(body);
+  create(
+    @CurrentUser() userId: string,
+    @Body() body: CreateBudgetDto,
+  ): Promise<Budget> {
+    return this.budgetsService.create(userId, body);
   }
 
   @Patch(':id')
   update(
+    @CurrentUser() userId: string,
     @Param('id', ParseUUIDPipe) id: string,
     @Body() body: UpdateBudgetDto,
   ): Promise<Budget> {
-    return this.budgetsService.update(id, body);
+    return this.budgetsService.update(userId, id, body);
   }
 
   @Delete(':id')
   @HttpCode(204)
-  async remove(@Param('id', ParseUUIDPipe) id: string): Promise<void> {
-    await this.budgetsService.remove(id);
+  async remove(
+    @CurrentUser() userId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<void> {
+    await this.budgetsService.remove(userId, id);
   }
 }

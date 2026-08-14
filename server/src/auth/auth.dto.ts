@@ -8,6 +8,7 @@ import {
   MaxLength,
   MinLength,
 } from 'class-validator';
+import { MatchesField } from '../common/validators/matches-field';
 import { COUNTRY_CODES } from '../countries/countries';
 
 export class RegisterDto {
@@ -27,6 +28,30 @@ export class LoginDto {
   @IsString()
   @IsNotEmpty({ message: 'Password is required.' })
   password: string;
+}
+
+export class VerifyOtpDto {
+  @IsEmail({}, { message: 'A valid email address is required.' })
+  email: string;
+
+  @IsString()
+  @Matches(/^\d{6}$/, { message: 'The code must be 6 digits.' })
+  otp: string;
+
+  @IsString()
+  @IsNotEmpty()
+  @MinLength(8, { message: 'Password must be at least 8 characters long.' })
+  password: string;
+
+  @IsString()
+  @IsNotEmpty()
+  @MatchesField('password', { message: 'Passwords do not match.' })
+  confirmPassword: string;
+}
+
+export class ResendOtpDto {
+  @IsEmail({}, { message: 'A valid email address is required.' })
+  email: string;
 }
 
 export class UpdateProfileDto {

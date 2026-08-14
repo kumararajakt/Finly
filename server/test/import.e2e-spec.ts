@@ -15,6 +15,7 @@ import {
   users,
   verification,
 } from './../src/database/schema';
+import { MailService } from './../src/mail/mail.service';
 
 interface CsvPreviewBody {
   headers: string[];
@@ -38,6 +39,18 @@ interface ErrorBody {
   error: { message: string; code: string };
 }
 
+interface AuthUserBody {
+  id: string;
+  email: string;
+}
+
+class MailServiceStub {
+  lastOtp: string | null = null;
+  sendOtp = jest.fn((_to: string, otp: string) => {
+    this.lastOtp = otp;
+  });
+}
+
 const STATEMENT = [
   'Date,Description,Amount,Category',
   '2024-01-05,Coffee,5.50,Dining',
@@ -51,14 +64,19 @@ describe('CSV Import (e2e)', () => {
   let app: INestApplication<App>;
   let db: Database;
   let agent: ReturnType<typeof request.agent>;
+  let mail: MailServiceStub;
 
   const validPassword = 'super-secret-password';
   const validEmail = 'import@finly.local';
+  let userId = '';
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
-    }).compile();
+    })
+      .overrideProvider(MailService)
+      .useClass(MailServiceStub)
+      .compile();
 
     app = moduleFixture.createNestApplication();
     app.setGlobalPrefix('api');
@@ -73,6 +91,7 @@ describe('CSV Import (e2e)', () => {
     await app.init();
 
     db = moduleFixture.get<Database>(DRIZZLE);
+    mail = moduleFixture.get(MailService);
     await db.delete(transactions);
     await db.delete(accounts);
     await db.delete(verification);
@@ -84,7 +103,17 @@ describe('CSV Import (e2e)', () => {
     await agent
       .post('/api/auth/register')
       .send({ email: validEmail, password: validPassword })
+      .expect(202);
+    const verify = await agent
+      .post('/api/auth/register/verify')
+      .send({
+        email: validEmail,
+        otp: mail.lastOtp,
+        password: validPassword,
+        confirmPassword: validPassword,
+      })
       .expect(201);
+    userId = (verify.body as { user: AuthUserBody }).user.id;
   });
 
   afterAll(async () => {
@@ -172,7 +201,7 @@ describe('CSV Import (e2e)', () => {
   });
 
   it('maps a statement account to a managed account case-insensitively', async () => {
-    await db.insert(accounts).values({ name: 'Checking' });
+    await db.insert(accounts).values({ userId, name: 'Checking' });
 
     const res = await agent.post('/api/import/csv').send({
       csv: [

@@ -63,12 +63,12 @@ export class SummaryService {
     private readonly detectionService: DetectionService,
   ) {}
 
-  async getSummary(period?: Period): Promise<Summary> {
-    const allSettings = await this.settingsService.getAll();
+  async getSummary(userId: string, period?: Period): Promise<Summary> {
+    const allSettings = await this.settingsService.getAll(userId);
     const activePeriod = period ?? allSettings.selectedPeriod;
     const range = periodRange(activePeriod);
 
-    const conditions: SQL[] = [];
+    const conditions: SQL[] = [eq(transactions.userId, userId)];
     if (range.start) {
       conditions.push(gte(transactions.date, range.start));
     }
@@ -155,6 +155,7 @@ export class SummaryService {
         .from(recurring)
         .where(
           and(
+            eq(recurring.userId, userId),
             eq(recurring.active, true),
             gte(recurring.nextDate, today),
             lte(recurring.nextDate, comingUpRangeEnd),
@@ -166,6 +167,7 @@ export class SummaryService {
         .from(subscriptions)
         .where(
           and(
+            eq(subscriptions.userId, userId),
             eq(subscriptions.active, true),
             gte(subscriptions.nextRenewal, today),
             lte(subscriptions.nextRenewal, comingUpRangeEnd),
@@ -193,8 +195,9 @@ export class SummaryService {
 
     const lastImport = null;
 
-    const pendingSuggestions = (await this.detectionService.getSuggestions())
-      .length;
+    const pendingSuggestions = (
+      await this.detectionService.getSuggestions(userId)
+    ).length;
 
     return {
       period: activePeriod,

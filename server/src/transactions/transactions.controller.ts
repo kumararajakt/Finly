@@ -10,6 +10,7 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
+import { CurrentUser } from '../auth/current-user.decorator';
 import type { Transaction } from '../database/schema';
 import {
   CreateTransactionDto,
@@ -23,26 +24,36 @@ export class TransactionsController {
   constructor(private readonly transactionsService: TransactionsService) {}
 
   @Get()
-  list(@Query() query: TransactionQueryDto): Promise<Transaction[]> {
-    return this.transactionsService.list(query);
+  list(
+    @CurrentUser() userId: string,
+    @Query() query: TransactionQueryDto,
+  ): Promise<Transaction[]> {
+    return this.transactionsService.list(userId, query);
   }
 
   @Post()
-  create(@Body() body: CreateTransactionDto): Promise<Transaction> {
-    return this.transactionsService.create(body);
+  create(
+    @CurrentUser() userId: string,
+    @Body() body: CreateTransactionDto,
+  ): Promise<Transaction> {
+    return this.transactionsService.create(userId, body);
   }
 
   @Patch(':id')
   update(
+    @CurrentUser() userId: string,
     @Param('id', ParseUUIDPipe) id: string,
     @Body() body: UpdateTransactionDto,
   ): Promise<Transaction> {
-    return this.transactionsService.update(id, body);
+    return this.transactionsService.update(userId, id, body);
   }
 
   @Delete(':id')
   @HttpCode(204)
-  async remove(@Param('id', ParseUUIDPipe) id: string): Promise<void> {
-    await this.transactionsService.remove(id);
+  async remove(
+    @CurrentUser() userId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<void> {
+    await this.transactionsService.remove(userId, id);
   }
 }

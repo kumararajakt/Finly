@@ -4,7 +4,7 @@ import {
   Injectable,
   ServiceUnavailableException,
 } from '@nestjs/common';
-import { inArray } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { DRIZZLE } from '../database/database.constants';
 import type { Database } from '../database/database.module';
 import {
@@ -103,7 +103,7 @@ export class ImportService {
     };
   }
 
-  async importCsv(dto: CsvImportDto): Promise<CsvImportResult> {
+  async importCsv(userId: string, dto: CsvImportDto): Promise<CsvImportResult> {
     if (dto.csv.length > MAX_CSV_CHARS) {
       throw new BadRequestException({
         message: 'The CSV file is too large.',
@@ -132,8 +132,8 @@ export class ImportService {
     const signConvention: SignConvention =
       dto.signConvention ?? 'negative-expense';
     const [categoryMap, accountMap] = await Promise.all([
-      this.categoryLookup(),
-      this.accountLookup(),
+      this.categoryLookup(userId),
+      this.accountLookup(userId),
     ]);
 
     const values: NewTransaction[] = [];
@@ -151,6 +151,7 @@ export class ImportService {
         continue;
       }
       values.push({
+        userId,
         date: parsed.date,
         merchant: parsed.merchant,
         category: parsed.category,
@@ -166,8 +167,10 @@ export class ImportService {
     }
 
     const plannedFingerprints = values.map((value) => value.fingerprint);
-    const existingSet =
-      await this.findExistingFingerprints(plannedFingerprints);
+    const existingSet = await this.findExistingFingerprints(
+      userId,
+      plannedFingerprints,
+    );
     const unique = new Map<string, NewTransaction>();
     for (const value of values) {
       if (
@@ -193,7 +196,9 @@ export class ImportService {
         const returned = await this.db
           .insert(transactions)
           .values(chunk)
-          .onConflictDoNothing({ target: transactions.fingerprint })
+          .onConflictDoNothing({
+            target: [transactions.userId, transactions.fingerprint],
+          })
           .returning({ id: transactions.id });
         inserted += returned.length;
       }
@@ -389,6 +394,7 @@ export class ImportService {
   }
 
   private async findExistingFingerprints(
+    userId: string,
     fingerprints: string[],
   ): Promise<Set<string>> {
     const found = new Set<string>();
@@ -397,7 +403,12 @@ export class ImportService {
       const rows = await this.db
         .select({ fingerprint: transactions.fingerprint })
         .from(transactions)
-        .where(inArray(transactions.fingerprint, chunk));
+        .where(
+          and(
+            eq(transactions.userId, userId),
+            inArray(transactions.fingerprint, chunk),
+          ),
+        );
       for (const row of rows) {
         found.add(row.fingerprint);
       }
@@ -405,15 +416,19 @@ export class ImportService {
     return found;
   }
 
-  private async categoryLookup(): Promise<Map<string, string>> {
+  private async categoryLookup(userId: string): Promise<Map<string, string>> {
     const rows = await this.db
       .select({ name: categories.name })
-      .from(categories);
+      .from(categories)
+      .where(eq(categories.userId, userId));
     return new Map(rows.map((row) => [row.name.toLowerCase(), row.name]));
   }
 
-  private async accountLookup(): Promise<Map<string, string>> {
-    const rows = await this.db.select({ name: accounts.name }).from(accounts);
+  private async accountLookup(userId: string): Promise<Map<string, string>> {
+    const rows = await this.db
+      .select({ name: accounts.name })
+      .from(accounts)
+      .where(eq(accounts.userId, userId));
     return new Map(rows.map((row) => [row.name.toLowerCase(), row.name]));
   }
 }

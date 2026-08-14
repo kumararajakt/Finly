@@ -1,10 +1,5 @@
-import {
-  Inject,
-  Injectable,
-  Logger,
-  type OnApplicationBootstrap,
-} from '@nestjs/common';
-import { sql } from 'drizzle-orm';
+import { Inject, Injectable, Logger } from '@nestjs/common';
+import { eq, sql } from 'drizzle-orm';
 import { DRIZZLE } from './database.constants';
 import type { Database } from './database.module';
 import { categories, settings } from './schema';
@@ -36,35 +31,31 @@ const STARTER_CATEGORIES = [
 ];
 
 @Injectable()
-export class DatabaseSeedService implements OnApplicationBootstrap {
+export class DatabaseSeedService {
   private readonly logger = new Logger(DatabaseSeedService.name);
 
   constructor(@Inject(DRIZZLE) private readonly db: Database) {}
 
-  async onApplicationBootstrap(): Promise<void> {
-    try {
-      await this.seedSettings();
-      await this.seedCategories();
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      this.logger.warn(`Database seeding skipped: ${message}`);
-    }
+  async seedUserDefaults(userId: string): Promise<void> {
+    await this.seedSettings(userId);
+    await this.seedCategories(userId);
   }
 
-  private async seedSettings(): Promise<void> {
+  private async seedSettings(userId: string): Promise<void> {
     if (DEFAULT_SETTINGS.length === 0) {
       return;
     }
     await this.db
       .insert(settings)
-      .values(DEFAULT_SETTINGS)
+      .values(DEFAULT_SETTINGS.map((row) => ({ userId, ...row })))
       .onConflictDoNothing();
   }
 
-  private async seedCategories(): Promise<void> {
+  private async seedCategories(userId: string): Promise<void> {
     const [{ count }] = await this.db
       .select({ count: sql<number>`count(*)::int` })
-      .from(categories);
+      .from(categories)
+      .where(eq(categories.userId, userId));
 
     if (count > 0) {
       return;
@@ -72,7 +63,9 @@ export class DatabaseSeedService implements OnApplicationBootstrap {
 
     await this.db
       .insert(categories)
-      .values(STARTER_CATEGORIES.map((name) => ({ name })));
-    this.logger.log(`Seeded ${STARTER_CATEGORIES.length} starter categories`);
+      .values(STARTER_CATEGORIES.map((name) => ({ userId, name })));
+    this.logger.log(
+      `Seeded ${STARTER_CATEGORIES.length} starter categories for user ${userId}`,
+    );
   }
 }

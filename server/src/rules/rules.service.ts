@@ -1,5 +1,5 @@
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { asc, eq } from 'drizzle-orm';
+import { and, asc, eq } from 'drizzle-orm';
 import { DRIZZLE } from '../database/database.constants';
 import type { Database } from '../database/database.module';
 import { rules, type NewRule, type Rule } from '../database/schema';
@@ -16,12 +16,17 @@ function notFound(): NotFoundException {
 export class RulesService {
   constructor(@Inject(DRIZZLE) private readonly db: Database) {}
 
-  async list(): Promise<Rule[]> {
-    return this.db.select().from(rules).orderBy(asc(rules.createdAt));
+  async list(userId: string): Promise<Rule[]> {
+    return this.db
+      .select()
+      .from(rules)
+      .where(eq(rules.userId, userId))
+      .orderBy(asc(rules.createdAt));
   }
 
-  async create(dto: CreateRuleDto): Promise<Rule> {
+  async create(userId: string, dto: CreateRuleDto): Promise<Rule> {
     const values: NewRule = {
+      userId,
       whenText: dto.whenText.trim(),
       thenText: dto.thenText.trim(),
       enabled: dto.enabled ?? true,
@@ -30,11 +35,11 @@ export class RulesService {
     return row;
   }
 
-  async update(id: string, dto: UpdateRuleDto): Promise<Rule> {
+  async update(userId: string, id: string, dto: UpdateRuleDto): Promise<Rule> {
     const existing = await this.db
       .select()
       .from(rules)
-      .where(eq(rules.id, id))
+      .where(and(eq(rules.id, id), eq(rules.userId, userId)))
       .limit(1);
     if (existing.length === 0) {
       throw notFound();
@@ -49,15 +54,15 @@ export class RulesService {
           dto.thenText !== undefined ? dto.thenText.trim() : current.thenText,
         enabled: dto.enabled ?? current.enabled,
       })
-      .where(eq(rules.id, id))
+      .where(and(eq(rules.id, id), eq(rules.userId, userId)))
       .returning();
     return row;
   }
 
-  async remove(id: string): Promise<void> {
+  async remove(userId: string, id: string): Promise<void> {
     const result = await this.db
       .delete(rules)
-      .where(eq(rules.id, id))
+      .where(and(eq(rules.id, id), eq(rules.userId, userId)))
       .returning({ id: rules.id });
     if (result.length === 0) {
       throw notFound();

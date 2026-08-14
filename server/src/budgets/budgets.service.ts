@@ -26,12 +26,17 @@ function notFound(): NotFoundException {
 export class BudgetsService {
   constructor(@Inject(DRIZZLE) private readonly db: Database) {}
 
-  async list(): Promise<Budget[]> {
-    return this.db.select().from(budgets).orderBy(asc(budgets.category));
+  async list(userId: string): Promise<Budget[]> {
+    return this.db
+      .select()
+      .from(budgets)
+      .where(eq(budgets.userId, userId))
+      .orderBy(asc(budgets.category));
   }
 
-  async create(dto: CreateBudgetDto): Promise<Budget> {
+  async create(userId: string, dto: CreateBudgetDto): Promise<Budget> {
     const values: NewBudget = {
+      userId,
       category: dto.category.trim(),
       monthlyLimit: round2(dto.monthlyLimit),
       active: dto.active ?? true,
@@ -40,11 +45,15 @@ export class BudgetsService {
     return row;
   }
 
-  async update(id: string, dto: UpdateBudgetDto): Promise<Budget> {
+  async update(
+    userId: string,
+    id: string,
+    dto: UpdateBudgetDto,
+  ): Promise<Budget> {
     const existing = await this.db
       .select()
       .from(budgets)
-      .where(eq(budgets.id, id))
+      .where(and(eq(budgets.id, id), eq(budgets.userId, userId)))
       .limit(1);
     if (existing.length === 0) {
       throw notFound();
@@ -61,22 +70,25 @@ export class BudgetsService {
             : current.monthlyLimit,
         active: dto.active ?? current.active,
       })
-      .where(eq(budgets.id, id))
+      .where(and(eq(budgets.id, id), eq(budgets.userId, userId)))
       .returning();
     return row;
   }
 
-  async remove(id: string): Promise<void> {
+  async remove(userId: string, id: string): Promise<void> {
     const result = await this.db
       .delete(budgets)
-      .where(eq(budgets.id, id))
+      .where(and(eq(budgets.id, id), eq(budgets.userId, userId)))
       .returning({ id: budgets.id });
     if (result.length === 0) {
       throw notFound();
     }
   }
 
-  async spending(month: string): Promise<Record<string, number>> {
+  async spending(
+    userId: string,
+    month: string,
+  ): Promise<Record<string, number>> {
     const { start, end } = monthRange(month);
     const rows = await this.db
       .select({
@@ -86,6 +98,7 @@ export class BudgetsService {
       .from(transactions)
       .where(
         and(
+          eq(transactions.userId, userId),
           eq(transactions.type, 'expense'),
           gte(transactions.date, start),
           lte(transactions.date, end),

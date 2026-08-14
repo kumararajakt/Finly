@@ -43,11 +43,12 @@ class DatabasePoolManager implements OnModuleDestroy {
     {
       provide: DRIZZLE,
       inject: [POOL],
-      useFactory: (pool: Pool): Database => drizzle(pool, { schema }),
+      useFactory: (pool: Pool): Database =>
+        drizzle(pool, { schema, logger: true }),
     },
     DatabasePoolManager,
     DatabaseSeedService,
   ],
-  exports: [DRIZZLE],
+  exports: [DRIZZLE, DatabaseSeedService],
 })
 export class DatabaseModule {}

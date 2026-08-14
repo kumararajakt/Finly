@@ -59,8 +59,11 @@ function duplicateError(): ConflictException {
 export class TransactionsService {
   constructor(@Inject(DRIZZLE) private readonly db: Database) {}
 
-  async list(query: TransactionQueryDto): Promise<Transaction[]> {
-    const conditions: SQL[] = [];
+  async list(
+    userId: string,
+    query: TransactionQueryDto,
+  ): Promise<Transaction[]> {
+    const conditions: SQL[] = [eq(transactions.userId, userId)];
     if (query.period) {
       const range = periodRange(query.period);
       if (range.start) {
@@ -92,8 +95,12 @@ export class TransactionsService {
       .orderBy(desc(transactions.date), desc(transactions.createdAt));
   }
 
-  async create(dto: CreateTransactionDto): Promise<Transaction> {
+  async create(
+    userId: string,
+    dto: CreateTransactionDto,
+  ): Promise<Transaction> {
     const values: NewTransaction = {
+      userId,
       date: dto.date,
       merchant: dto.merchant.trim(),
       category: dto.category?.trim() || 'Needs review',
@@ -126,11 +133,15 @@ export class TransactionsService {
     }
   }
 
-  async update(id: string, dto: UpdateTransactionDto): Promise<Transaction> {
+  async update(
+    userId: string,
+    id: string,
+    dto: UpdateTransactionDto,
+  ): Promise<Transaction> {
     const existing = await this.db
       .select()
       .from(transactions)
-      .where(eq(transactions.id, id))
+      .where(and(eq(transactions.id, id), eq(transactions.userId, userId)))
       .limit(1);
     if (existing.length === 0) {
       throw new NotFoundException({
@@ -165,7 +176,7 @@ export class TransactionsService {
       const [row] = await this.db
         .update(transactions)
         .set(merged)
-        .where(eq(transactions.id, id))
+        .where(and(eq(transactions.id, id), eq(transactions.userId, userId)))
         .returning();
       return row;
     } catch (error) {
@@ -176,10 +187,10 @@ export class TransactionsService {
     }
   }
 
-  async remove(id: string): Promise<void> {
+  async remove(userId: string, id: string): Promise<void> {
     const result = await this.db
       .delete(transactions)
-      .where(eq(transactions.id, id))
+      .where(and(eq(transactions.id, id), eq(transactions.userId, userId)))
       .returning({ id: transactions.id });
     if (result.length === 0) {
       throw new NotFoundException({

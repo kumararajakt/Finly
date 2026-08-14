@@ -1,5 +1,5 @@
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { asc, eq } from 'drizzle-orm';
+import { and, asc, eq } from 'drizzle-orm';
 import { DRIZZLE } from '../database/database.constants';
 import type { Database } from '../database/database.module';
 import {
@@ -24,15 +24,17 @@ function notFound(): NotFoundException {
 export class RecurringService {
   constructor(@Inject(DRIZZLE) private readonly db: Database) {}
 
-  async list(): Promise<Recurring[]> {
+  async list(userId: string): Promise<Recurring[]> {
     return this.db
       .select()
       .from(recurring)
+      .where(eq(recurring.userId, userId))
       .orderBy(asc(recurring.nextDate), asc(recurring.name));
   }
 
-  async create(dto: CreateRecurringDto): Promise<Recurring> {
+  async create(userId: string, dto: CreateRecurringDto): Promise<Recurring> {
     const values: NewRecurring = {
+      userId,
       name: dto.name.trim(),
       category: dto.category.trim(),
       amount: round2(dto.amount),
@@ -45,11 +47,15 @@ export class RecurringService {
     return row;
   }
 
-  async update(id: string, dto: UpdateRecurringDto): Promise<Recurring> {
+  async update(
+    userId: string,
+    id: string,
+    dto: UpdateRecurringDto,
+  ): Promise<Recurring> {
     const existing = await this.db
       .select()
       .from(recurring)
-      .where(eq(recurring.id, id))
+      .where(and(eq(recurring.id, id), eq(recurring.userId, userId)))
       .limit(1);
     if (existing.length === 0) {
       throw notFound();
@@ -70,15 +76,15 @@ export class RecurringService {
             : current.account,
         active: dto.active ?? current.active,
       })
-      .where(eq(recurring.id, id))
+      .where(and(eq(recurring.id, id), eq(recurring.userId, userId)))
       .returning();
     return row;
   }
 
-  async remove(id: string): Promise<void> {
+  async remove(userId: string, id: string): Promise<void> {
     const result = await this.db
       .delete(recurring)
-      .where(eq(recurring.id, id))
+      .where(and(eq(recurring.id, id), eq(recurring.userId, userId)))
       .returning({ id: recurring.id });
     if (result.length === 0) {
       throw notFound();

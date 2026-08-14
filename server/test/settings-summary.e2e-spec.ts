@@ -16,9 +16,15 @@ import {
   users,
   verification,
 } from './../src/database/schema';
+import { MailService } from './../src/mail/mail.service';
 
 interface AuthErrorBody {
   error: { message: string; code: string };
+}
+
+interface AuthUserBody {
+  id: string;
+  email: string;
 }
 
 interface SettingsBody {
@@ -57,18 +63,30 @@ interface SummaryBody {
   needsReviewCount: number;
 }
 
+class MailServiceStub {
+  lastOtp: string | null = null;
+  sendOtp = jest.fn((_to: string, otp: string) => {
+    this.lastOtp = otp;
+  });
+}
+
 describe('Settings & Summary (e2e)', () => {
   let app: INestApplication<App>;
   let db: Database;
   let agent: ReturnType<typeof request.agent>;
+  let mail: MailServiceStub;
 
   const validPassword = 'super-secret-password';
   const validEmail = 'settings@finly.local';
+  let userId = '';
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
-    }).compile();
+    })
+      .overrideProvider(MailService)
+      .useClass(MailServiceStub)
+      .compile();
 
     app = moduleFixture.createNestApplication();
     app.setGlobalPrefix('api');
@@ -83,6 +101,7 @@ describe('Settings & Summary (e2e)', () => {
     await app.init();
 
     db = moduleFixture.get<Database>(DRIZZLE);
+    mail = moduleFixture.get(MailService);
     await db.delete(settings);
     await db.delete(recurring);
     await db.delete(subscriptions);
@@ -96,7 +115,17 @@ describe('Settings & Summary (e2e)', () => {
     await agent
       .post('/api/auth/register')
       .send({ email: validEmail, password: validPassword })
+      .expect(202);
+    const verify = await agent
+      .post('/api/auth/register/verify')
+      .send({
+        email: validEmail,
+        otp: mail.lastOtp,
+        password: validPassword,
+        confirmPassword: validPassword,
+      })
       .expect(201);
+    userId = (verify.body as { user: AuthUserBody }).user.id;
   });
 
   afterAll(async () => {
@@ -184,6 +213,7 @@ describe('Settings & Summary (e2e)', () => {
     beforeAll(async () => {
       await db.insert(transactions).values([
         {
+          userId,
           date: todayISO,
           merchant: 'Acme Salary',
           category: 'Income',
@@ -196,6 +226,7 @@ describe('Settings & Summary (e2e)', () => {
           fingerprint: 'e2e-salary',
         },
         {
+          userId,
           date: todayISO,
           merchant: 'Grocery Store',
           category: 'Groceries',
@@ -208,6 +239,7 @@ describe('Settings & Summary (e2e)', () => {
           fingerprint: 'e2e-groceries',
         },
         {
+          userId,
           date: todayISO,
           merchant: 'Random Shop',
           category: 'Needs review',
@@ -274,6 +306,7 @@ describe('Settings & Summary (e2e)', () => {
       ).padStart(2, '0')}-${String(soon.getDate()).padStart(2, '0')}`;
 
       await db.insert(recurring).values({
+        userId,
         name: 'Rent',
         category: 'Housing',
         amount: 1500,
@@ -283,6 +316,7 @@ describe('Settings & Summary (e2e)', () => {
         active: true,
       });
       await db.insert(subscriptions).values({
+        userId,
         name: 'Netflix',
         category: 'Subscriptions',
         amount: 15.99,

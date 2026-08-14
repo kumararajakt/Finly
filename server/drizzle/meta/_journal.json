@@ -29,6 +29,20 @@
       "when": 1786417054836,
       "tag": "0003_pink_redwing",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1786460937021,
+      "tag": "0004_flippant_toro",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1786725581570,
+      "tag": "0005_shiny_blindfold",
+      "breakpoints": true
     }
   ]
 }

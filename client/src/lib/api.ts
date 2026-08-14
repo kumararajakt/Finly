@@ -89,9 +89,19 @@ export const api = {
   auth: {
     me: () => apiFetch<AuthMe>("/auth/me"),
     register: (email: string, password: string) =>
-      apiFetch<{ user: AuthUser }>("/auth/register", {
+      apiFetch<{ pending: true; email: string }>("/auth/register", {
         method: "POST",
         body: { email, password },
+      }),
+    verifyOtp: (email: string, otp: string, password: string) =>
+      apiFetch<{ user: AuthUser }>("/auth/register/verify", {
+        method: "POST",
+        body: { email, otp, password, confirmPassword: password },
+      }),
+    resendOtp: (email: string) =>
+      apiFetch<{ pending: true; email: string }>("/auth/register/resend", {
+        method: "POST",
+        body: { email },
       }),
     login: (email: string, password: string) =>
       apiFetch<{ user: AuthUser }>("/auth/login", {

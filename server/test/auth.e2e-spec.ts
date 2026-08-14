@@ -5,6 +5,7 @@ import {
   INestApplication,
   ValidationPipe,
 } from '@nestjs/common';
+import { eq } from 'drizzle-orm';
 import { Test, TestingModule } from '@nestjs/testing';
 import request from 'supertest';
 import { App } from 'supertest/types';
@@ -14,10 +15,12 @@ import { DRIZZLE } from './../src/database/database.constants';
 import type { Database } from './../src/database/database.module';
 import {
   account,
+  emailOtps,
   sessions,
   users,
   verification,
 } from './../src/database/schema';
+import { MailService } from './../src/mail/mail.service';
 
 @Controller('protected-probe')
 class ProtectedProbeController {
@@ -42,15 +45,28 @@ interface AuthErrorBody {
 describe('Auth (e2e)', () => {
   let app: INestApplication<App>;
   let db: Database;
+  let mail: MailServiceStub;
 
   const validPassword = 'super-secret-password';
   const validEmail = 'owner@finly.local';
+
+  class MailServiceStub {
+    lastOtp: string | null = null;
+    sendOtp = jest.fn((_to: string, otp: string) => {
+      this.lastOtp = otp;
+    });
+  }
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
       controllers: [ProtectedProbeController],
-    }).compile();
+    })
+      .overrideProvider(MailService)
+      .useClass(MailServiceStub)
+      .compile();
+
+    mail = moduleFixture.get(MailService);
 
     app = moduleFixture.createNestApplication();
     app.setGlobalPrefix('api');
@@ -65,6 +81,7 @@ describe('Auth (e2e)', () => {
     await app.init();
 
     db = moduleFixture.get<Database>(DRIZZLE);
+    await db.delete(emailOtps);
     await db.delete(verification);
     await db.delete(account);
     await db.delete(sessions);
@@ -72,6 +89,7 @@ describe('Auth (e2e)', () => {
   });
 
   afterAll(async () => {
+    await db.delete(emailOtps);
     await db.delete(verification);
     await db.delete(account);
     await db.delete(sessions);
@@ -114,23 +132,121 @@ describe('Auth (e2e)', () => {
     expect((res.body as AuthErrorBody).error.code).toBe('VALIDATION_FAILED');
   });
 
-  it('registers the first account and sets a session cookie', async () => {
+  it('sends an OTP on register without creating the account', async () => {
     const res = await request(app.getHttpServer())
       .post('/api/auth/register')
       .send({ email: validEmail, password: validPassword });
+    expect(res.status).toBe(202);
+    expect(res.body).toEqual({ pending: true, email: validEmail });
+    expect(mail.lastOtp).toMatch(/^\d{6}$/);
+    expect(res.headers['set-cookie']).toBeUndefined();
+
+    const me = await request(app.getHttpServer()).get('/api/auth/me');
+    expect(me.body).toEqual({ session: null, user: null });
+  });
+
+  it('rejects a wrong OTP and counts attempts', async () => {
+    await request(app.getHttpServer())
+      .post('/api/auth/register')
+      .send({ email: validEmail, password: validPassword })
+      .expect(202);
+
+    const wrong = await request(app.getHttpServer())
+      .post('/api/auth/register/verify')
+      .send({
+        email: validEmail,
+        otp: '000000',
+        password: validPassword,
+        confirmPassword: validPassword,
+      });
+    expect(wrong.status).toBe(400);
+    expect((wrong.body as AuthErrorBody).error.code).toBe('INVALID_OTP');
+
+    const me = await request(app.getHttpServer()).get('/api/auth/me');
+    expect(me.body).toEqual({ session: null, user: null });
+  });
+
+  it('rejects a mismatched confirm password on verify', async () => {
+    const res = await request(app.getHttpServer())
+      .post('/api/auth/register/verify')
+      .send({
+        email: validEmail,
+        otp: mail.lastOtp,
+        password: validPassword,
+        confirmPassword: 'a-different-password',
+      });
+    expect(res.status).toBe(422);
+    expect((res.body as AuthErrorBody).error.code).toBe('VALIDATION_FAILED');
+  });
+
+  it('enforces a resend cooldown', async () => {
+    const cooldown = await request(app.getHttpServer())
+      .post('/api/auth/register/resend')
+      .send({ email: validEmail });
+    expect(cooldown.status).toBe(429);
+    expect((cooldown.body as AuthErrorBody).error.code).toBe('OTP_COOLDOWN');
+  });
+
+  it('resends a fresh OTP after the cooldown window', async () => {
+    const [otpRow] = await db
+      .select({ id: emailOtps.id })
+      .from(emailOtps)
+      .limit(1);
+    await db
+      .update(emailOtps)
+      .set({ createdAt: new Date(Date.now() - 120_000) })
+      .where(eq(emailOtps.id, otpRow.id));
+    const res = await request(app.getHttpServer())
+      .post('/api/auth/register/resend')
+      .send({ email: validEmail });
+    expect(res.status).toBe(202);
+    expect(res.body).toEqual({ pending: true, email: validEmail });
+    expect(mail.lastOtp).toMatch(/^\d{6}$/);
+  });
+
+  it('creates the account only after the OTP is verified', async () => {
+    const agent = request.agent(app.getHttpServer());
+    const res = await agent.post('/api/auth/register/verify').send({
+      email: validEmail,
+      otp: mail.lastOtp,
+      password: validPassword,
+      confirmPassword: validPassword,
+    });
     expect(res.status).toBe(201);
     expect((res.body as AuthMeBody).user).toMatchObject({
       email: 'owner@finly.local',
     });
     expect(res.headers['set-cookie']).toBeDefined();
+
+    const me = await agent.get('/api/auth/me');
+    expect(me.body).toMatchObject({
+      session: {},
+      user: { email: validEmail },
+    });
   });
 
-  it('blocks a second registration', async () => {
-    const res = await request(app.getHttpServer())
+  it('registers a second account with a different email', async () => {
+    const secondEmail = 'second@finly.local';
+    const secondAgent = request.agent(app.getHttpServer());
+    const register = await secondAgent
       .post('/api/auth/register')
-      .send({ email: 'another@finly.local', password: validPassword });
-    expect(res.status).toBe(409);
-    expect((res.body as AuthErrorBody).error.code).toBe('ALREADY_REGISTERED');
+      .send({ email: secondEmail, password: validPassword });
+    expect(register.status).toBe(202);
+    expect(register.body).toEqual({ pending: true, email: secondEmail });
+
+    const verify = await secondAgent.post('/api/auth/register/verify').send({
+      email: secondEmail,
+      otp: mail.lastOtp,
+      password: validPassword,
+      confirmPassword: validPassword,
+    });
+    expect(verify.status).toBe(201);
+    expect((verify.body as AuthMeBody).user).toMatchObject({
+      email: secondEmail,
+    });
+
+    const me = await secondAgent.get('/api/auth/me');
+    expect(me.body).toMatchObject({ user: { email: secondEmail } });
   });
 
   it('returns the session for an authenticated agent', async () => {

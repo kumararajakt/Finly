@@ -1,5 +1,5 @@
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { DRIZZLE } from '../database/database.constants';
 import type { Database } from '../database/database.module';
 import { normalizeMerchant } from '../common/merchant';
@@ -28,16 +28,24 @@ export class DetectionService {
     private readonly settingsService: SettingsService,
   ) {}
 
-  async getSuggestions(): Promise<DetectionSuggestion[]> {
+  async getSuggestions(userId: string): Promise<DetectionSuggestion[]> {
     const [expenses, recurringRows, subscriptionRows, allSettings] =
       await Promise.all([
         this.db
           .select()
           .from(transactions)
-          .where(eq(transactions.type, 'expense')),
-        this.db.select().from(recurring),
-        this.db.select().from(subscriptions),
-        this.settingsService.getAll(),
+          .where(
+            and(
+              eq(transactions.type, 'expense'),
+              eq(transactions.userId, userId),
+            ),
+          ),
+        this.db.select().from(recurring).where(eq(recurring.userId, userId)),
+        this.db
+          .select()
+          .from(subscriptions)
+          .where(eq(subscriptions.userId, userId)),
+        this.settingsService.getAll(userId),
       ]);
 
     const exclusions = new Set<string>(allSettings.dismissedPatterns);
@@ -51,8 +59,11 @@ export class DetectionService {
     return detectSuggestions(expenses, exclusions);
   }
 
-  async keep(key: string): Promise<{ kind: string; id: string; name: string }> {
-    const suggestion = (await this.getSuggestions()).find(
+  async keep(
+    userId: string,
+    key: string,
+  ): Promise<{ kind: string; id: string; name: string }> {
+    const suggestion = (await this.getSuggestions(userId)).find(
       (item) => item.key === key,
     );
     if (!suggestion) {
@@ -60,6 +71,7 @@ export class DetectionService {
     }
     if (suggestion.kind === 'subscription') {
       const values: NewSubscription = {
+        userId,
         name: suggestion.merchant,
         category: suggestion.category,
         amount: suggestion.averageAmount,
@@ -75,6 +87,7 @@ export class DetectionService {
       return { kind: 'subscription', id: row.id, name: row.name };
     }
     const values: NewRecurring = {
+      userId,
       name: suggestion.merchant,
       category: suggestion.category,
       amount: suggestion.averageAmount,
@@ -87,18 +100,18 @@ export class DetectionService {
     return { kind: 'recurring', id: row.id, name: row.name };
   }
 
-  async ignore(key: string): Promise<{ success: true }> {
-    const suggestion = (await this.getSuggestions()).find(
+  async ignore(userId: string, key: string): Promise<{ success: true }> {
+    const suggestion = (await this.getSuggestions(userId)).find(
       (item) => item.key === key,
     );
     if (!suggestion) {
       throw notFound();
     }
-    const current = await this.settingsService.getAll();
+    const current = await this.settingsService.getAll(userId);
     const patterns = current.dismissedPatterns.includes(key)
       ? current.dismissedPatterns
       : [...current.dismissedPatterns, key];
-    await this.settingsService.setValue('dismissedPatterns', patterns);
+    await this.settingsService.setValue(userId, 'dismissedPatterns', patterns);
     return { success: true };
   }
 }

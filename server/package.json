@@ -17,7 +17,7 @@
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
-    "test:e2e": "jest --config ./test/jest-e2e.json",
+    "test:e2e": "NODE_OPTIONS=--experimental-vm-modules jest --config ./test/jest-e2e.json",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio"
@@ -34,6 +34,7 @@
     "csv": "^6.6.3",
     "drizzle-orm": "^0.45.2",
     "pg": "^8.22.0",
+    "resend": "^4.5.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1"
   },

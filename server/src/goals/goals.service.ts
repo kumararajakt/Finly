@@ -1,5 +1,5 @@
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { asc, eq } from 'drizzle-orm';
+import { and, asc, eq } from 'drizzle-orm';
 import { DRIZZLE } from '../database/database.constants';
 import type { Database } from '../database/database.module';
 import { goals, type Goal, type NewGoal } from '../database/schema';
@@ -20,12 +20,17 @@ function notFound(): NotFoundException {
 export class GoalsService {
   constructor(@Inject(DRIZZLE) private readonly db: Database) {}
 
-  async list(): Promise<Goal[]> {
-    return this.db.select().from(goals).orderBy(asc(goals.createdAt));
+  async list(userId: string): Promise<Goal[]> {
+    return this.db
+      .select()
+      .from(goals)
+      .where(eq(goals.userId, userId))
+      .orderBy(asc(goals.createdAt));
   }
 
-  async create(dto: CreateGoalDto): Promise<Goal> {
+  async create(userId: string, dto: CreateGoalDto): Promise<Goal> {
     const values: NewGoal = {
+      userId,
       name: dto.name.trim(),
       targetAmount: round2(dto.targetAmount),
       currentAmount:
@@ -37,11 +42,11 @@ export class GoalsService {
     return row;
   }
 
-  async update(id: string, dto: UpdateGoalDto): Promise<Goal> {
+  async update(userId: string, id: string, dto: UpdateGoalDto): Promise<Goal> {
     const existing = await this.db
       .select()
       .from(goals)
-      .where(eq(goals.id, id))
+      .where(and(eq(goals.id, id), eq(goals.userId, userId)))
       .limit(1);
     if (existing.length === 0) {
       throw notFound();
@@ -62,15 +67,15 @@ export class GoalsService {
         dueDate: dto.dueDate !== undefined ? dto.dueDate : current.dueDate,
         note: dto.note !== undefined ? dto.note?.trim() || null : current.note,
       })
-      .where(eq(goals.id, id))
+      .where(and(eq(goals.id, id), eq(goals.userId, userId)))
       .returning();
     return row;
   }
 
-  async remove(id: string): Promise<void> {
+  async remove(userId: string, id: string): Promise<void> {
     const result = await this.db
       .delete(goals)
-      .where(eq(goals.id, id))
+      .where(and(eq(goals.id, id), eq(goals.userId, userId)))
       .returning({ id: goals.id });
     if (result.length === 0) {
       throw notFound();

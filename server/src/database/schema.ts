@@ -3,8 +3,10 @@ import {
   boolean,
   check,
   index,
+  integer,
   jsonb,
   pgTable,
+  primaryKey,
   real,
   text,
   timestamp,
@@ -97,6 +99,9 @@ export const transactions = pgTable(
   'transactions',
   {
     id: uuid('id').defaultRandom().primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
     date: isoDate('date').notNull(),
     merchant: text('merchant').notNull(),
     category: text('category').notNull().default('Needs review'),
@@ -119,11 +124,14 @@ export const transactions = pgTable(
       .defaultNow(),
   },
   (table) => [
-    uniqueIndex('transactions_fingerprint_unique').on(table.fingerprint),
-    index('transactions_date_idx').on(table.date),
-    index('transactions_category_idx').on(table.category),
-    index('transactions_account_idx').on(table.account),
-    index('transactions_type_idx').on(table.type),
+    uniqueIndex('transactions_fingerprint_unique').on(
+      table.userId,
+      table.fingerprint,
+    ),
+    index('transactions_user_date_idx').on(table.userId, table.date),
+    index('transactions_user_category_idx').on(table.userId, table.category),
+    index('transactions_user_account_idx').on(table.userId, table.account),
+    index('transactions_user_type_idx').on(table.userId, table.type),
     index('transactions_tags_idx').using('gin', table.tags),
     check(
       'transactions_type_check',
@@ -136,13 +144,19 @@ export const categories = pgTable(
   'categories',
   {
     id: uuid('id').defaultRandom().primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
     name: text('name').notNull(),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow(),
   },
   (table) => [
-    uniqueIndex('categories_name_unique').on(sql`lower(trim(${table.name}))`),
+    uniqueIndex('categories_name_unique').on(
+      table.userId,
+      sql`lower(trim(${table.name}))`,
+    ),
   ],
 );
 
@@ -150,25 +164,41 @@ export const accounts = pgTable(
   'accounts',
   {
     id: uuid('id').defaultRandom().primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
     name: text('name').notNull(),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow(),
   },
   (table) => [
-    uniqueIndex('accounts_name_unique').on(sql`lower(trim(${table.name}))`),
+    uniqueIndex('accounts_name_unique').on(
+      table.userId,
+      sql`lower(trim(${table.name}))`,
+    ),
   ],
 );
 
-export const tags = pgTable('tags', {
-  name: text('name').primaryKey(),
-  createdAt: timestamp('created_at', { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-});
+export const tags = pgTable(
+  'tags',
+  {
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [primaryKey({ columns: [table.userId, table.name] })],
+);
 
 export const rules = pgTable('rules', {
   id: uuid('id').defaultRandom().primaryKey(),
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
   whenText: text('when_text').notNull(),
   thenText: text('then_text').notNull(),
   enabled: boolean('enabled').notNull().default(true),
@@ -181,6 +211,9 @@ export const recurring = pgTable(
   'recurring',
   {
     id: uuid('id').defaultRandom().primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
     name: text('name').notNull(),
     category: text('category').notNull(),
     amount: real('amount').notNull(),
@@ -193,7 +226,7 @@ export const recurring = pgTable(
       .defaultNow(),
   },
   (table) => [
-    index('recurring_name_idx').on(table.name),
+    index('recurring_user_name_idx').on(table.userId, table.name),
     check(
       'recurring_cadence_check',
       sql`${table.cadence} in ('weekly', 'biweekly', 'monthly', 'quarterly', 'annual')`,
@@ -205,6 +238,9 @@ export const subscriptions = pgTable(
   'subscriptions',
   {
     id: uuid('id').defaultRandom().primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
     name: text('name').notNull(),
     category: text('category').notNull(),
     amount: real('amount').notNull(),
@@ -217,7 +253,7 @@ export const subscriptions = pgTable(
       .defaultNow(),
   },
   (table) => [
-    index('subscriptions_name_idx').on(table.name),
+    index('subscriptions_user_name_idx').on(table.userId, table.name),
     check(
       'subscriptions_cadence_check',
       sql`${table.cadence} in ('weekly', 'biweekly', 'monthly', 'quarterly', 'annual')`,
@@ -227,6 +263,9 @@ export const subscriptions = pgTable(
 
 export const budgets = pgTable('budgets', {
   id: uuid('id').defaultRandom().primaryKey(),
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
   category: text('category').notNull(),
   monthlyLimit: real('monthly_limit').notNull(),
   active: boolean('active').notNull().default(true),
@@ -237,6 +276,9 @@ export const budgets = pgTable('budgets', {
 
 export const goals = pgTable('goals', {
   id: uuid('id').defaultRandom().primaryKey(),
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
   name: text('name').notNull(),
   targetAmount: real('target_amount').notNull(),
   currentAmount: real('current_amount').notNull().default(0),
@@ -247,13 +289,35 @@ export const goals = pgTable('goals', {
     .defaultNow(),
 });
 
-export const settings = pgTable('settings', {
-  key: text('key').primaryKey(),
-  value: text('value').notNull(),
-  updatedAt: timestamp('updated_at', { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-});
+export const emailOtps = pgTable(
+  'email_otps',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    email: text('email').notNull(),
+    otpHash: text('otp_hash').notNull(),
+    attempts: integer('attempts').notNull().default(0),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [index('email_otps_email_idx').on(table.email)],
+);
+
+export const settings = pgTable(
+  'settings',
+  {
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    key: text('key').notNull(),
+    value: text('value').notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [primaryKey({ columns: [table.userId, table.key] })],
+);
 
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
@@ -279,3 +343,5 @@ export type Goal = typeof goals.$inferSelect;
 export type NewGoal = typeof goals.$inferInsert;
 export type Setting = typeof settings.$inferSelect;
 export type NewSetting = typeof settings.$inferInsert;
+export type EmailOtp = typeof emailOtps.$inferSelect;
+export type NewEmailOtp = typeof emailOtps.$inferInsert;

@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { sql, eq } from 'drizzle-orm';
+import { sql, eq, and } from 'drizzle-orm';
 import { DRIZZLE } from '../database/database.constants';
 import type { Database } from '../database/database.module';
 import {
@@ -46,16 +46,20 @@ function notFound(resource: string): NotFoundException {
 export class ManagedService {
   constructor(@Inject(DRIZZLE) private readonly db: Database) {}
 
-  async listCategories(): Promise<Category[]> {
-    return this.db.select().from(categories).orderBy(categories.name);
+  async listCategories(userId: string): Promise<Category[]> {
+    return this.db
+      .select()
+      .from(categories)
+      .where(eq(categories.userId, userId))
+      .orderBy(categories.name);
   }
 
-  async createCategory(name: string): Promise<Category> {
+  async createCategory(userId: string, name: string): Promise<Category> {
     const trimmed = name.trim();
     try {
       const [row] = await this.db
         .insert(categories)
-        .values({ name: trimmed })
+        .values({ userId, name: trimmed })
         .returning();
       return row;
     } catch (error) {
@@ -69,26 +73,30 @@ export class ManagedService {
     }
   }
 
-  async deleteCategory(id: string): Promise<void> {
+  async deleteCategory(userId: string, id: string): Promise<void> {
     const result = await this.db
       .delete(categories)
-      .where(eq(categories.id, id))
+      .where(and(eq(categories.id, id), eq(categories.userId, userId)))
       .returning({ id: categories.id });
     if (result.length === 0) {
       throw notFound('Category');
     }
   }
 
-  async listAccounts(): Promise<Account[]> {
-    return this.db.select().from(accounts).orderBy(accounts.name);
+  async listAccounts(userId: string): Promise<Account[]> {
+    return this.db
+      .select()
+      .from(accounts)
+      .where(eq(accounts.userId, userId))
+      .orderBy(accounts.name);
   }
 
-  async createAccount(name: string): Promise<Account> {
+  async createAccount(userId: string, name: string): Promise<Account> {
     const trimmed = name.trim();
     try {
       const [row] = await this.db
         .insert(accounts)
-        .values({ name: trimmed })
+        .values({ userId, name: trimmed })
         .returning();
       return row;
     } catch (error) {
@@ -102,22 +110,24 @@ export class ManagedService {
     }
   }
 
-  async deleteAccount(id: string): Promise<void> {
+  async deleteAccount(userId: string, id: string): Promise<void> {
     const result = await this.db
       .delete(accounts)
-      .where(eq(accounts.id, id))
+      .where(and(eq(accounts.id, id), eq(accounts.userId, userId)))
       .returning({ id: accounts.id });
     if (result.length === 0) {
       throw notFound('Account');
     }
   }
 
-  async listTags(): Promise<TagWithCount[]> {
+  async listTags(userId: string): Promise<TagWithCount[]> {
     const result = await this.db.execute(
       sql`
         select ${tags.name} as name, count(${transactions.id})::int as count
         from ${tags}
         left join ${transactions} on ${transactions.tags} @> jsonb_build_array(${tags.name})
+          and ${transactions.userId} = ${tags.userId}
+        where ${tags.userId} = ${userId}
         group by ${tags.name}
         order by lower(trim(${tags.name}))
       `,
@@ -128,12 +138,17 @@ export class ManagedService {
     }));
   }
 
-  async createTag(name: string): Promise<{ name: string }> {
+  async createTag(userId: string, name: string): Promise<{ name: string }> {
     const trimmed = name.trim();
     const existing = await this.db
       .select()
       .from(tags)
-      .where(sql`lower(trim(${tags.name})) = lower(trim(${trimmed}))`)
+      .where(
+        and(
+          eq(tags.userId, userId),
+          sql`lower(trim(${tags.name})) = lower(trim(${trimmed}))`,
+        ),
+      )
       .limit(1);
     if (existing.length > 0) {
       throw new ConflictException({
@@ -144,7 +159,7 @@ export class ManagedService {
     try {
       const [row] = await this.db
         .insert(tags)
-        .values({ name: trimmed })
+        .values({ userId, name: trimmed })
         .returning();
       return { name: row.name };
     } catch (error) {
@@ -158,11 +173,11 @@ export class ManagedService {
     }
   }
 
-  async deleteTag(name: string): Promise<void> {
+  async deleteTag(userId: string, name: string): Promise<void> {
     const trimmed = name.trim();
     const result = await this.db
       .delete(tags)
-      .where(eq(tags.name, trimmed))
+      .where(and(eq(tags.userId, userId), eq(tags.name, trimmed)))
       .returning({ name: tags.name });
     if (result.length === 0) {
       throw notFound('Tag');

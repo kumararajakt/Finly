@@ -1,8 +1,5 @@
 import type { Database } from '../database/database.module';
 
-export const OWNER_EMAIL = process.env.FINLY_OWNER_EMAIL ?? 'owner@finly.local';
-export const OWNER_NAME = 'Owner';
-
 export const SESSION_DURATION_SECONDS = 60 * 60 * 24 * 30;
 export const SESSION_REFRESH_WINDOW_SECONDS = 60 * 60 * 24;
 

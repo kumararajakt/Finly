@@ -20,5 +20,5 @@
       }
     ]
   },
-  "transformIgnorePatterns": ["/node_modules/(?!better-auth|@better-auth)/"]
+  "transformIgnorePatterns": ["/node_modules/"]
 }

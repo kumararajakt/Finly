@@ -9,7 +9,9 @@ interface AuthContextValue {
   status: AuthStatus;
   user: AuthUser | null;
   login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string) => Promise<void>;
+  register: (email: string, password: string) => Promise<{ pending: true; email: string }>;
+  verifyOtp: (email: string, otp: string, password: string) => Promise<void>;
+  resendOtp: (email: string) => Promise<void>;
   logout: () => Promise<void>;
   updateProfile: (patch: {
     name?: string;
@@ -73,8 +75,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const register = useCallback(async (email: string, password: string) => {
-    const result = await api.auth.register(email, password);
+    return api.auth.register(email, password);
+  }, []);
+
+  const verifyOtp = useCallback(async (email: string, otp: string, password: string) => {
+    const result = await api.auth.verifyOtp(email, otp, password);
     applySession(result.user ?? null, setUser, setStatus);
+  }, []);
+
+  const resendOtp = useCallback(async (email: string) => {
+    await api.auth.resendOtp(email);
   }, []);
 
   const logout = useCallback(async () => {
@@ -100,8 +110,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 
   const value = useMemo<AuthContextValue>(
-    () => ({ status, user, login, register, logout, updateProfile }),
-    [status, user, login, register, logout, updateProfile]
+    () => ({ status, user, login, register, verifyOtp, resendOtp, logout, updateProfile }),
+    [status, user, login, register, verifyOtp, resendOtp, logout, updateProfile]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

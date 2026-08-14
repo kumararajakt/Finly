@@ -10,6 +10,7 @@ import {
   Post,
 } from '@nestjs/common';
 import type { Goal } from '../database/schema';
+import { CurrentUser } from '../auth/current-user.decorator';
 import { CreateGoalDto, UpdateGoalDto } from './goals.dto';
 import { GoalsService } from './goals.service';
 
@@ -18,26 +19,33 @@ export class GoalsController {
   constructor(private readonly goalsService: GoalsService) {}
 
   @Get()
-  list(): Promise<Goal[]> {
-    return this.goalsService.list();
+  list(@CurrentUser() userId: string): Promise<Goal[]> {
+    return this.goalsService.list(userId);
   }
 
   @Post()
-  create(@Body() body: CreateGoalDto): Promise<Goal> {
-    return this.goalsService.create(body);
+  create(
+    @CurrentUser() userId: string,
+    @Body() body: CreateGoalDto,
+  ): Promise<Goal> {
+    return this.goalsService.create(userId, body);
   }
 
   @Patch(':id')
   update(
+    @CurrentUser() userId: string,
     @Param('id', ParseUUIDPipe) id: string,
     @Body() body: UpdateGoalDto,
   ): Promise<Goal> {
-    return this.goalsService.update(id, body);
+    return this.goalsService.update(userId, id, body);
   }
 
   @Delete(':id')
   @HttpCode(204)
-  async remove(@Param('id', ParseUUIDPipe) id: string): Promise<void> {
-    await this.goalsService.remove(id);
+  async remove(
+    @CurrentUser() userId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<void> {
+    await this.goalsService.remove(userId, id);
   }
 }
