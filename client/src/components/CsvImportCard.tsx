@@ -6,6 +6,7 @@ import {
   Eye,
   FileSpreadsheet,
   FileUp,
+  Plus,
   RotateCcw,
   UploadCloud,
 } from "lucide-react";
@@ -479,6 +480,22 @@ export default function CsvImportCard({ onNavigate, onImported }: CsvImportCardP
     const visible = importPreview.rows.slice(0, MAX_PREVIEW_ROWS);
     const truncated = importPreview.rows.length > MAX_PREVIEW_ROWS;
 
+    const newCategoryNote =
+      importPreview.newCategories.length > 0
+        ? `${importPreview.newCategories.length} categor${
+            importPreview.newCategories.length === 1 ? "y" : "ies"
+          } (${importPreview.newCategories.join(", ")})`
+        : null;
+    const newAccountNote =
+      importPreview.newAccounts.length > 0
+        ? `${importPreview.newAccounts.length} account${
+            importPreview.newAccounts.length === 1 ? "" : "s"
+          } (${importPreview.newAccounts.join(", ")})`
+        : null;
+    const createdNote = [newCategoryNote, newAccountNote]
+      .filter(Boolean)
+      .join(" and ");
+
     return (
       <section className="rounded-xl border bg-card p-4 sm:p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -519,6 +536,16 @@ export default function CsvImportCard({ onNavigate, onImported }: CsvImportCardP
               {needsReview} row{needsReview === 1 ? "" : "s"} won&apos;t have a
               recognized category and will be marked “Needs review”.
             </span>
+          </p>
+        )}
+
+        {createdNote && (
+          <p
+            role="status"
+            className="mt-3 flex items-start gap-2 text-xs text-muted-foreground"
+          >
+            <Plus className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+            <span>Will also create {createdNote}.</span>
           </p>
         )}
 

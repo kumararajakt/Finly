@@ -10,6 +10,7 @@ import type { Database } from './../src/database/database.module';
 import {
   account,
   accounts,
+  categories,
   sessions,
   transactions,
   users,
@@ -74,6 +75,7 @@ describe('CSV Import (e2e)', () => {
     db = moduleFixture.get<Database>(DRIZZLE);
     await db.delete(transactions);
     await db.delete(accounts);
+    await db.delete(categories);
     await db.delete(verification);
     await db.delete(account);
     await db.delete(sessions);
@@ -89,6 +91,7 @@ describe('CSV Import (e2e)', () => {
   afterAll(async () => {
     await db.delete(transactions);
     await db.delete(accounts);
+    await db.delete(categories);
     await db.delete(verification);
     await db.delete(account);
     await db.delete(sessions);
@@ -141,7 +144,7 @@ describe('CSV Import (e2e)', () => {
       inserted: 3,
       duplicates: 1,
       skipped: 1,
-      needsReview: 1,
+      needsReview: 0,
       totalRows: 5,
     });
 
@@ -151,8 +154,53 @@ describe('CSV Import (e2e)', () => {
     const gas = rows.find((row) => row.merchant === 'Gas');
     const paycheck = rows.find((row) => row.merchant === 'Paycheck');
     expect(coffee).toMatchObject({ category: 'Dining', source: 'csv' });
-    expect(gas).toMatchObject({ category: 'Needs review' });
+    expect(gas).toMatchObject({ category: 'Automotive' });
     expect(paycheck).toMatchObject({ category: 'Income', type: 'income' });
+
+    const createdCategories = await db
+      .select()
+      .from(categories)
+      .where(inArray(categories.name, ['Automotive']));
+    expect(createdCategories).toHaveLength(1);
+  });
+
+  it('previews parsed rows, statuses, and auto-created labels', async () => {
+    const res = await agent.post('/api/import/csv/preview-rows').send({
+      csv: [
+        'Date,Description,Amount,Category',
+        '2024-01-05,Coffee,5.50,Dining',
+        '2024-01-05,Coffee,5.50,Dining',
+        'not-a-date,Bad,10.00,Anything',
+        '2024-01-08,Paycheck,3000.00,Salary',
+      ].join('\n'),
+      mapping: { date: 0, merchant: 1, amount: 2, category: 3 },
+    });
+    expect(res.status).toBe(201);
+    const body = res.body as {
+      inserted: number;
+      duplicates: number;
+      skipped: number;
+      needsReview: number;
+      totalRows: number;
+      newCategories: string[];
+      newAccounts: string[];
+      rows: { merchant: string; status: string }[];
+    };
+    expect(body).toMatchObject({
+      inserted: 2,
+      duplicates: 1,
+      skipped: 1,
+      needsReview: 0,
+      totalRows: 4,
+      newCategories: ['Salary'],
+      newAccounts: [],
+    });
+    expect(body.rows.map((row) => row.status)).toEqual([
+      'insert',
+      'duplicate',
+      'skipped',
+      'insert',
+    ]);
   });
 
   it('re-importing the same CSV counts everything as duplicates', async () => {
@@ -192,6 +240,12 @@ describe('CSV Import (e2e)', () => {
     const other = rows.find((row) => row.merchant === 'Other');
     expect(rent!.account).toBe('Checking');
     expect(other!.account).toBe('Unknown');
+
+    const createdAccounts = await db
+      .select()
+      .from(accounts)
+      .where(inArray(accounts.name, ['Unknown']));
+    expect(createdAccounts).toHaveLength(1);
   });
 
   it('rejects an invalid mapping', async () => {

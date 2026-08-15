@@ -69,6 +69,8 @@ export interface CsvImportPreview {
   skipped: number;
   needsReview: number;
   totalRows: number;
+  newCategories: string[];
+  newAccounts: string[];
 }
 
 interface ParsedRow {
@@ -126,7 +128,12 @@ export class ImportService {
   }
 
   async importCsv(userId: string, dto: CsvImportDto): Promise<CsvImportResult> {
-    const { values: planned, skipped } = await this.buildPlan(userId, dto);
+    const {
+      values: planned,
+      skipped,
+      categoryMap,
+      accountMap,
+    } = await this.buildPlan(userId, dto);
     const values = planned.filter(
       (value): value is NewTransaction => value !== null,
     );
@@ -153,6 +160,8 @@ export class ImportService {
         needsReview += 1;
       }
     }
+
+    await this.ensureManagedLabels(userId, fresh, categoryMap, accountMap);
 
     let inserted = 0;
     try {
@@ -193,7 +202,10 @@ export class ImportService {
     userId: string,
     dto: CsvImportDto,
   ): Promise<CsvImportPreview> {
-    const { values, skipped } = await this.buildPlan(userId, dto);
+    const { values, skipped, categoryMap, accountMap } = await this.buildPlan(
+      userId,
+      dto,
+    );
 
     const valid = values.filter(
       (value): value is NewTransaction => value !== null,
@@ -205,6 +217,7 @@ export class ImportService {
 
     const seen = new Set<string>();
     const rows: CsvRowPreview[] = [];
+    const inserts: NewTransaction[] = [];
     let inserted = 0;
     let duplicates = 0;
     let needsReview = 0;
@@ -243,6 +256,7 @@ export class ImportService {
         duplicates += 1;
       } else {
         inserted += 1;
+        inserts.push(value);
         if (value.category === 'Needs review') {
           needsReview += 1;
         }
@@ -257,13 +271,30 @@ export class ImportService {
       skipped,
       needsReview,
       totalRows: values.length,
+      newCategories: this.collectNewLabels(
+        inserts,
+        categoryMap,
+        (value) => value.category ?? '',
+        'Needs review',
+      ),
+      newAccounts: this.collectNewLabels(
+        inserts,
+        accountMap,
+        (value) => value.account ?? '',
+        'Imported account',
+      ),
     };
   }
 
   private async buildPlan(
     userId: string,
     dto: CsvImportDto,
-  ): Promise<{ values: (NewTransaction | null)[]; skipped: number }> {
+  ): Promise<{
+    values: (NewTransaction | null)[];
+    skipped: number;
+    categoryMap: Map<string, string>;
+    accountMap: Map<string, string>;
+  }> {
     if (dto.csv.length > MAX_CSV_CHARS) {
       throw new BadRequestException({
         message: 'The CSV file is too large.',
@@ -325,7 +356,62 @@ export class ImportService {
       } satisfies NewTransaction;
     });
 
-    return { values, skipped };
+    return { values, skipped, categoryMap, accountMap };
+  }
+
+  private collectNewLabels(
+    values: NewTransaction[],
+    existing: Map<string, string>,
+    pick: (value: NewTransaction) => string,
+    fallback: string,
+  ): string[] {
+    const seen = new Set<string>();
+    const missing: string[] = [];
+    for (const value of values) {
+      const label = pick(value).trim();
+      const key = label.toLowerCase();
+      if (label.length === 0 || label === fallback || existing.has(key)) {
+        continue;
+      }
+      if (!seen.has(key)) {
+        seen.add(key);
+        missing.push(label);
+      }
+    }
+    return missing;
+  }
+
+  private async ensureManagedLabels(
+    userId: string,
+    values: NewTransaction[],
+    categoryMap: Map<string, string>,
+    accountMap: Map<string, string>,
+  ): Promise<void> {
+    const missingCategories = this.collectNewLabels(
+      values,
+      categoryMap,
+      (value) => value.category ?? '',
+      'Needs review',
+    );
+    if (missingCategories.length > 0) {
+      await this.db
+        .insert(categories)
+        .values(missingCategories.map((name) => ({ userId, name })))
+        .onConflictDoNothing();
+    }
+
+    const missingAccounts = this.collectNewLabels(
+      values,
+      accountMap,
+      (value) => value.account ?? '',
+      'Imported account',
+    );
+    if (missingAccounts.length > 0) {
+      await this.db
+        .insert(accounts)
+        .values(missingAccounts.map((name) => ({ userId, name })))
+        .onConflictDoNothing();
+    }
   }
 
   private resolveMapping(
@@ -419,7 +505,7 @@ export class ImportService {
       mapping.category === null ? '' : (row[mapping.category] ?? '').trim();
     const category =
       rawCategory.length > 0
-        ? (categoryMap.get(rawCategory.toLowerCase()) ?? 'Needs review')
+        ? (categoryMap.get(rawCategory.toLowerCase()) ?? rawCategory)
         : 'Needs review';
 
     const rawAccount =

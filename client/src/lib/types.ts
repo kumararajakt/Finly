@@ -133,6 +133,8 @@ export interface CsvImportPreview {
   skipped: number;
   needsReview: number;
   totalRows: number;
+  newCategories: string[];
+  newAccounts: string[];
 }
 
 export interface TransactionFilters {

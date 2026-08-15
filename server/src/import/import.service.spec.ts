@@ -172,7 +172,7 @@ describe('ImportService', () => {
       });
     });
 
-    it('preserves a supported statement category and falls back to Needs review', async () => {
+    it('keeps a supported statement category and auto-creates a missing one', async () => {
       const { db, valuesCalls } = makeDb({ categories: ['Dining'] });
       service = new ImportService(db);
 
@@ -188,9 +188,67 @@ describe('ImportService', () => {
         },
       );
       expect(values.find((value) => value.merchant === 'Gas')).toMatchObject({
-        category: 'Needs review',
+        category: 'Automotive',
       });
-      expect(result.needsReview).toBe(1);
+      expect(valuesCalls[0]).toEqual([{ userId: USER_ID, name: 'Automotive' }]);
+      expect(result.needsReview).toBe(0);
+    });
+
+    it('auto-creates missing categories and accounts for inserted rows', async () => {
+      const { db, valuesCalls } = makeDb();
+      service = new ImportService(db);
+
+      const result = await service.importCsv(USER_ID, {
+        csv: 'Date,Description,Amount,Category,Account\n2024-01-05,Coffee,5.50,Breakfast,Main wallet\n2024-01-06,Paycheck,3000.00,Breakfast,Main wallet\n',
+        mapping: {
+          date: 0,
+          merchant: 1,
+          amount: 2,
+          category: 3,
+          account: 4,
+        },
+      });
+
+      expect(result).toMatchObject({
+        inserted: 2,
+        needsReview: 0,
+      });
+      expect(valuesCalls[0]).toEqual([{ userId: USER_ID, name: 'Breakfast' }]);
+      expect(valuesCalls[1]).toEqual([
+        { userId: USER_ID, name: 'Main wallet' },
+      ]);
+      const values = valuesCalls.flat();
+      expect(values.find((value) => value.merchant === 'Coffee')).toMatchObject(
+        {
+          category: 'Breakfast',
+          account: 'Main wallet',
+        },
+      );
+    });
+
+    it('does not auto-create categories or accounts for duplicate rows', async () => {
+      const existing = computeFingerprint({
+        type: 'income',
+        date: '2024-01-05',
+        merchant: 'Coffee',
+        amount: 5.5,
+      });
+      const { db, valuesCalls } = makeDb({
+        existingFingerprints: [existing],
+      });
+      service = new ImportService(db);
+
+      const result = await service.importCsv(USER_ID, {
+        csv: 'Date,Description,Amount,Category\n2024-01-05,Coffee,5.50,NewCat\n',
+        mapping: { date: 0, merchant: 1, amount: 2, category: 3 },
+      });
+
+      expect(result).toMatchObject({ inserted: 0, duplicates: 1 });
+      expect(
+        valuesCalls.some((call) =>
+          call.some((value) => value.name === 'NewCat'),
+        ),
+      ).toBe(false);
     });
 
     it('auto-detects and normalizes DD/MM/YYYY dates', async () => {
@@ -432,6 +490,53 @@ describe('ImportService', () => {
         skipped: 0,
         needsReview: 2,
         totalRows: 2,
+        newCategories: [],
+        newAccounts: [],
+      });
+    });
+
+    it('reports which categories and accounts would be created', async () => {
+      const { db } = makeDb({ categories: ['Dining'] });
+      service = new ImportService(db);
+
+      const result = await service.previewRows(USER_ID, {
+        csv: 'Date,Description,Amount,Category,Account\n2024-01-05,Coffee,5.50,Dining,Main wallet\n2024-01-06,Paycheck,3000.00,Breakfast,checking\n',
+        mapping: {
+          date: 0,
+          merchant: 1,
+          amount: 2,
+          category: 3,
+          account: 4,
+        },
+      });
+
+      expect(result.rows.map((row) => row.category)).toEqual([
+        'Dining',
+        'Breakfast',
+      ]);
+      expect(result).toMatchObject({
+        newCategories: ['Breakfast'],
+        newAccounts: ['Main wallet', 'checking'],
+      });
+    });
+
+    it('excludes duplicates from the would-be-created labels', async () => {
+      const existing = computeFingerprint({
+        type: 'income',
+        date: '2024-01-05',
+        merchant: 'Coffee',
+        amount: 5.5,
+      });
+      const { db } = makeDb({ existingFingerprints: [existing] });
+      service = new ImportService(db);
+
+      const result = await service.previewRows(USER_ID, {
+        csv: 'Date,Description,Amount,Category\n2024-01-05,Coffee,5.50,NewCat\n2024-01-06,Paycheck,3000.00,OtherCat\n',
+        mapping: { date: 0, merchant: 1, amount: 2, category: 3 },
+      });
+
+      expect(result).toMatchObject({
+        newCategories: ['OtherCat'],
       });
     });
 
