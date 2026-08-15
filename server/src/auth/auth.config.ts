@@ -28,14 +28,21 @@ export function loadAuthModules(): Promise<AuthModules> {
   return modulesPromise;
 }
 
-export async function createAuthInstance(db: Database) {
+export async function createAuthInstance(
+  db: Database,
+  seedDefaults: (userId: string) => Promise<void>,
+) {
   const { betterAuth, drizzleAdapter } = await loadAuthModules();
+  const trustedOrigins = process.env.CORS_ORIGIN?.split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
   return betterAuth({
     database: drizzleAdapter(db, { provider: 'pg' }),
     secret: process.env.SESSION_SECRET ?? 'somesecret',
     baseURL:
       process.env.BETTER_AUTH_URL ??
       `http://localhost:${process.env.PORT ?? 3000}`,
+    trustedOrigins,
     user: {
       modelName: 'users',
       additionalFields: {
@@ -49,6 +56,11 @@ export async function createAuthInstance(db: Database) {
           required: false,
           defaultValue: null,
         },
+        onboardingComplete: {
+          type: 'boolean',
+          required: false,
+          defaultValue: false,
+        },
       },
     },
     session: {
@@ -57,9 +69,30 @@ export async function createAuthInstance(db: Database) {
       updateAge: SESSION_REFRESH_WINDOW_SECONDS,
       cookieCache: { enabled: true, maxAge: 5 * 60 },
     },
-    emailAndPassword: {
-      enabled: true,
-      minPasswordLength: 8,
+    socialProviders: {
+      google:
+        process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
+          ? {
+              clientId: process.env.GOOGLE_CLIENT_ID,
+              clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+            }
+          : undefined,
+      github:
+        process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET
+          ? {
+              clientId: process.env.GITHUB_CLIENT_ID,
+              clientSecret: process.env.GITHUB_CLIENT_SECRET,
+            }
+          : undefined,
+    },
+    databaseHooks: {
+      user: {
+        create: {
+          after: async (user) => {
+            await seedDefaults(user.id);
+          },
+        },
+      },
     },
     advanced: {
       cookiePrefix: 'finly',

@@ -3,7 +3,6 @@ import {
   boolean,
   check,
   index,
-  integer,
   jsonb,
   pgTable,
   primaryKey,
@@ -31,6 +30,7 @@ export const users = pgTable('users', {
   image: text('image'),
   country: text('country'),
   timeZone: text('time_zone'),
+  onboardingComplete: boolean('onboarding_complete').notNull().default(false),
   createdAt: timestamp('created_at', { withTimezone: true })
     .notNull()
     .defaultNow(),
@@ -289,21 +289,6 @@ export const goals = pgTable('goals', {
     .defaultNow(),
 });
 
-export const emailOtps = pgTable(
-  'email_otps',
-  {
-    id: uuid('id').defaultRandom().primaryKey(),
-    email: text('email').notNull(),
-    otpHash: text('otp_hash').notNull(),
-    attempts: integer('attempts').notNull().default(0),
-    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
-    createdAt: timestamp('created_at', { withTimezone: true })
-      .notNull()
-      .defaultNow(),
-  },
-  (table) => [index('email_otps_email_idx').on(table.email)],
-);
-
 export const settings = pgTable(
   'settings',
   {
@@ -343,5 +328,3 @@ export type Goal = typeof goals.$inferSelect;
 export type NewGoal = typeof goals.$inferInsert;
 export type Setting = typeof settings.$inferSelect;
 export type NewSetting = typeof settings.$inferInsert;
-export type EmailOtp = typeof emailOtps.$inferSelect;
-export type NewEmailOtp = typeof emailOtps.$inferInsert;

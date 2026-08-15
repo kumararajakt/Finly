@@ -10,13 +10,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
-import {
-  LoginDto,
-  RegisterDto,
-  ResendOtpDto,
-  UpdateProfileDto,
-  VerifyOtpDto,
-} from './auth.dto';
+import { SocialSignInDto, UpdateProfileDto } from './auth.dto';
 import type { AuthenticatedRequest } from './auth.guard';
 import { AuthService } from './auth.service';
 import { Public } from './public.decorator';
@@ -26,46 +20,19 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Public()
-  @Post('register')
-  @HttpCode(202)
-  register(
-    @Body() body: RegisterDto,
-  ): Promise<{ pending: true; email: string }> {
-    return this.authService.register(body.email);
-  }
-
-  @Public()
-  @Post('register/verify')
-  @HttpCode(201)
-  verify(
-    @Body() body: VerifyOtpDto,
+  @Post('social')
+  @HttpCode(200)
+  socialSignIn(
+    @Body() body: SocialSignInDto,
+    @Req() request: Request,
     @Res({ passthrough: true }) response: Response,
-  ): Promise<{ user: unknown }> {
-    return this.authService.verifyOtp(
-      body.email,
-      body.otp,
-      body.password,
+  ): Promise<{ url: string }> {
+    return this.authService.signInSocial(
+      body.provider,
+      body.callbackURL,
+      request,
       response,
     );
-  }
-
-  @Public()
-  @Post('register/resend')
-  @HttpCode(202)
-  resend(
-    @Body() body: ResendOtpDto,
-  ): Promise<{ pending: true; email: string }> {
-    return this.authService.resendOtp(body.email);
-  }
-
-  @Public()
-  @Post('login')
-  @HttpCode(200)
-  login(
-    @Body() body: LoginDto,
-    @Res({ passthrough: true }) response: Response,
-  ): Promise<{ user: unknown }> {
-    return this.authService.login(body.email, body.password, response);
   }
 
   @Public()

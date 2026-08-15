@@ -1,113 +1,62 @@
 import { useState } from "react";
-import { Home, Loader2, LockKeyhole, LogIn, Mail, RefreshCw, ShieldCheck, UserPlus } from "lucide-react";
+import { Home, Loader2 } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { useAuth } from "@/contexts/AuthContext";
 import { ApiError } from "@/lib/api";
-import { isValidEmail } from "@/lib/utils";
+import { api } from "@/lib/api";
 
-type AuthMode = "login" | "register";
-type RegisterStep = "form" | "otp";
+type Provider = "google" | "github";
 
 function errorMessage(err: unknown, fallback: string): string {
   return err instanceof ApiError ? err.message : fallback;
 }
 
+function GoogleIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="size-4" aria-hidden="true">
+      <path
+        fill="#4285F4"
+        d="M23.49 12.27c0-.79-.07-1.54-.19-2.27H12v4.51h6.47a5.57 5.57 0 0 1-2.4 3.58v3h3.86c2.26-2.09 3.56-5.17 3.56-8.82Z"
+      />
+      <path
+        fill="#34A853"
+        d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.86-3c-1.08.72-2.45 1.16-4.07 1.16-3.13 0-5.78-2.11-6.73-4.96H1.29v3.09A11.99 11.99 0 0 0 12 24Z"
+      />
+      <path
+        fill="#FBBC05"
+        d="M5.27 14.29A7.13 7.13 0 0 1 4.89 12c0-.8.14-1.57.38-2.29V6.62H1.29a11.99 11.99 0 0 0 0 10.76l3.98-3.09Z"
+      />
+      <path
+        fill="#EA4335"
+        d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.31 0 3.26 2.69 1.29 6.62l3.98 3.09C6.22 6.86 8.87 4.75 12 4.75Z"
+      />
+    </svg>
+  );
+}
+
+function GithubIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="size-4" aria-hidden="true" fill="currentColor">
+      <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.44 9.8 8.21 11.39.6.11.82-.26.82-.58 0-.28-.01-1.02-.02-2-3.34.73-4.04-1.61-4.04-1.61-.55-1.39-1.34-1.76-1.34-1.76-1.09-.75.08-.73.08-.73 1.2.08 1.84 1.24 1.84 1.24 1.07 1.83 2.81 1.3 3.5 1 .11-.78.42-1.31.76-1.61-2.66-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.12-.3-.54-1.52.12-3.18 0 0 1.01-.32 3.3 1.23a11.5 11.5 0 0 1 6 0c2.29-1.55 3.3-1.23 3.3-1.23.66 1.66.24 2.88.12 3.18.77.84 1.24 1.91 1.24 3.22 0 4.61-2.81 5.63-5.49 5.92.43.37.81 1.1.81 2.22 0 1.6-.01 2.9-.01 3.3 0 .32.21.7.82.58A12.01 12.01 0 0 0 24 12c0-6.63-5.37-12-12-12Z" />
+    </svg>
+  );
+}
+
 export default function AuthPage() {
-  const { login, register, verifyOtp, resendOtp } = useAuth();
-  const [mode, setMode] = useState<AuthMode>("login");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [otp, setOtp] = useState("");
-  const [registerStep, setRegisterStep] = useState<RegisterStep>("form");
-  const [saving, setSaving] = useState(false);
+  const [pending, setPending] = useState<Provider | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const isRegister = mode === "register";
-  const isOtpStep = isRegister && registerStep === "otp";
-
-  const emailValid = isValidEmail(email.trim());
-  const passwordValid = password.length >= 8;
-  const passwordsMatch = confirmPassword.length > 0 && confirmPassword === password;
-  const formValid = isRegister
-    ? emailValid && passwordValid && passwordsMatch
-    : emailValid && password.length > 0;
-  const otpValid = /^\d{6}$/.test(otp);
-
-  const handleLogin = async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (saving || !formValid) return;
-    setSaving(true);
+  const handleSignIn = async (provider: Provider) => {
+    if (pending) return;
+    setPending(provider);
     setError(null);
     try {
-      await login(email, password);
+      const { url } = await api.auth.socialSignIn(provider);
+      window.location.href = url;
     } catch (err) {
       setError(errorMessage(err, "Something went wrong. Try again."));
-    } finally {
-      setSaving(false);
+      setPending(null);
     }
-  };
-
-  const handleRegister = async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (saving || !formValid) return;
-    setSaving(true);
-    setError(null);
-    try {
-      await register(email, password);
-      setOtp("");
-      setRegisterStep("otp");
-    } catch (err) {
-      setError(errorMessage(err, "Something went wrong. Try again."));
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleVerify = async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (saving || !otpValid) return;
-    setSaving(true);
-    setError(null);
-    try {
-      await verifyOtp(email, otp, password);
-    } catch (err) {
-      if (err instanceof ApiError && err.code === "EMAIL_IN_USE") {
-        setError("An account already exists. Sign in instead.");
-        setMode("login");
-        setRegisterStep("form");
-      } else if (err instanceof ApiError && (err.code === "OTP_EXPIRED" || err.code === "OTP_TOO_MANY_ATTEMPTS")) {
-        setRegisterStep("form");
-      }
-      setError(errorMessage(err, "Something went wrong. Try again."));
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleResend = async () => {
-    if (saving) return;
-    setSaving(true);
-    setError(null);
-    try {
-      await resendOtp(email);
-    } catch (err) {
-      setError(errorMessage(err, "Something went wrong. Try again."));
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const switchMode = (next: AuthMode) => {
-    setMode(next);
-    setRegisterStep("form");
-    setError(null);
-    setEmail("");
-    setPassword("");
-    setConfirmPassword("");
-    setOtp("");
   };
 
   return (
@@ -123,191 +72,34 @@ export default function AuthPage() {
           <div>
             <h1 className="text-lg font-semibold">Finly</h1>
             <p className="text-sm text-muted-foreground">
-              {isOtpStep
-                ? "Enter the 6-digit code sent to your email to finish creating your account."
-                : isRegister
-                  ? "Set your email and password to get started. This is a one-time setup."
-                  : "Enter your email and password to continue."}
+              Sign in with Google to continue.
             </p>
           </div>
         </div>
 
-        {isOtpStep ? (
-          <form
-            onSubmit={handleVerify}
-            className="space-y-4 rounded-xl border bg-card p-5 shadow-sm"
+        <div className="space-y-3">
+          <Button
+            type="button"
+            onClick={() => handleSignIn("google")}
+            disabled={pending !== null}
+            className="w-full"
           >
-            <div className="space-y-1.5">
-              <label htmlFor="auth-otp" className="text-sm font-medium">
-                Verification code
-              </label>
-              <div className="relative">
-                <ShieldCheck className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  id="auth-otp"
-                  type="text"
-                  inputMode="numeric"
-                  autoComplete="one-time-code"
-                  placeholder="000000"
-                  className="pl-8"
-                  maxLength={6}
-                  value={otp}
-                  onChange={(event) =>
-                    setOtp(event.target.value.replace(/\D/g, "").slice(0, 6))
-                  }
-                  disabled={saving}
-                  autoFocus
-                />
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Sent to {email}. The code expires in 10 minutes.
-              </p>
-            </div>
-
-            {error && (
-              <p role="alert" className="text-sm text-destructive">
-                {error}
-              </p>
+            {pending === "google" ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <GoogleIcon />
             )}
+            Continue with Google
+          </Button>
 
-            <Button type="submit" className="w-full" disabled={saving || !otpValid}>
-              {saving ? <Loader2 className="animate-spin" /> : <UserPlus />}
-              Finish creating account
-            </Button>
+        </div>
 
-            <div className="flex items-center justify-between text-sm">
-              <button
-                type="button"
-                onClick={() => setRegisterStep("form")}
-                className="font-medium text-primary underline-offset-4 hover:underline"
-              >
-                Edit email or password
-              </button>
-              <button
-                type="button"
-                onClick={handleResend}
-                disabled={saving}
-                className="font-medium text-primary underline-offset-4 hover:underline disabled:opacity-50"
-              >
-                <RefreshCw className="mr-1 inline size-3.5" />
-                Resend code
-              </button>
-            </div>
-          </form>
-        ) : (
-          <form
-            onSubmit={isRegister ? handleRegister : handleLogin}
-            className="space-y-4 rounded-xl border bg-card p-5 shadow-sm"
-          >
-            <div className="space-y-1.5">
-              <label htmlFor="auth-email" className="text-sm font-medium">
-                Email
-              </label>
-              <div className="relative">
-                <Mail className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  id="auth-email"
-                  type="email"
-                  autoComplete="email"
-                  placeholder="you@example.com"
-                  className="pl-8"
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
-                  disabled={saving}
-                  autoFocus
-                />
-              </div>
-              {email.length > 0 && !emailValid && (
-                <p className="text-xs text-destructive">Enter a valid email address.</p>
-              )}
-            </div>
-
-            <div className="space-y-1.5">
-              <label htmlFor="auth-password" className="text-sm font-medium">
-                Password
-              </label>
-              <div className="relative">
-                <LockKeyhole className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  id="auth-password"
-                  type="password"
-                  autoComplete={isRegister ? "new-password" : "current-password"}
-                  placeholder="••••••••"
-                  className="pl-8"
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
-                  disabled={saving}
-                />
-              </div>
-              {isRegister && password.length > 0 && !passwordValid && (
-                <p className="text-xs text-destructive">
-                  Password must be at least 8 characters long.
-                </p>
-              )}
-            </div>
-
-            {isRegister && (
-              <div className="space-y-1.5">
-                <label htmlFor="auth-confirm-password" className="text-sm font-medium">
-                  Confirm password
-                </label>
-                <div className="relative">
-                  <LockKeyhole className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    id="auth-confirm-password"
-                    type="password"
-                    autoComplete="new-password"
-                    placeholder="••••••••"
-                    className="pl-8"
-                    value={confirmPassword}
-                    onChange={(event) => setConfirmPassword(event.target.value)}
-                    disabled={saving}
-                  />
-                </div>
-                {confirmPassword.length > 0 && !passwordsMatch && (
-                  <p className="text-xs text-destructive">Passwords do not match.</p>
-                )}
-              </div>
-            )}
-
-            {error && (
-              <p role="alert" className="text-sm text-destructive">
-                {error}
-              </p>
-            )}
-
-            <Button type="submit" className="w-full" disabled={saving || !formValid}>
-              {saving ? <Loader2 className="animate-spin" /> : isRegister ? <UserPlus /> : <LogIn />}
-              {isRegister ? "Continue" : "Sign in"}
-            </Button>
-          </form>
+        {error && (
+          <p role="alert" className="mt-4 text-center text-sm text-destructive">
+            {error}
+          </p>
         )}
 
-        <p className="mt-4 text-center text-sm text-muted-foreground">
-          {isRegister ? (
-            <>
-              Already set up?{" "}
-              <button
-                type="button"
-                onClick={() => switchMode("login")}
-                className="font-medium text-primary underline-offset-4 hover:underline"
-              >
-                Sign in
-              </button>
-            </>
-          ) : (
-            <>
-              New to Finly?{" "}
-              <button
-                type="button"
-                onClick={() => switchMode("register")}
-                className="font-medium text-primary underline-offset-4 hover:underline"
-              >
-                Create an account
-              </button>
-            </>
-          )}
-        </p>
       </div>
     </div>
   );

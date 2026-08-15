@@ -1,7 +1,7 @@
 import { HttpStatus, INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
-import request from 'supertest';
 import { App } from 'supertest/types';
+import request from 'supertest';
 import { AppModule } from './../src/app.module';
 import { AllExceptionsFilter } from './../src/common/filters/all-exceptions.filter';
 import { DRIZZLE } from './../src/database/database.constants';
@@ -16,15 +16,10 @@ import {
   users,
   verification,
 } from './../src/database/schema';
-import { MailService } from './../src/mail/mail.service';
+import { createAuthenticatedAgent } from './helpers/auth.helper';
 
 interface AuthErrorBody {
   error: { message: string; code: string };
-}
-
-interface AuthUserBody {
-  id: string;
-  email: string;
 }
 
 interface SettingsBody {
@@ -63,30 +58,16 @@ interface SummaryBody {
   needsReviewCount: number;
 }
 
-class MailServiceStub {
-  lastOtp: string | null = null;
-  sendOtp = jest.fn((_to: string, otp: string) => {
-    this.lastOtp = otp;
-  });
-}
-
 describe('Settings & Summary (e2e)', () => {
   let app: INestApplication<App>;
   let db: Database;
   let agent: ReturnType<typeof request.agent>;
-  let mail: MailServiceStub;
-
-  const validPassword = 'super-secret-password';
-  const validEmail = 'settings@finly.local';
   let userId = '';
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
-    })
-      .overrideProvider(MailService)
-      .useClass(MailServiceStub)
-      .compile();
+    }).compile();
 
     app = moduleFixture.createNestApplication();
     app.setGlobalPrefix('api');
@@ -101,7 +82,6 @@ describe('Settings & Summary (e2e)', () => {
     await app.init();
 
     db = moduleFixture.get<Database>(DRIZZLE);
-    mail = moduleFixture.get(MailService);
     await db.delete(settings);
     await db.delete(recurring);
     await db.delete(subscriptions);
@@ -111,21 +91,11 @@ describe('Settings & Summary (e2e)', () => {
     await db.delete(sessions);
     await db.delete(users);
 
-    agent = request.agent(app.getHttpServer());
-    await agent
-      .post('/api/auth/register')
-      .send({ email: validEmail, password: validPassword })
-      .expect(202);
-    const verify = await agent
-      .post('/api/auth/register/verify')
-      .send({
-        email: validEmail,
-        otp: mail.lastOtp,
-        password: validPassword,
-        confirmPassword: validPassword,
-      })
-      .expect(201);
-    userId = (verify.body as { user: AuthUserBody }).user.id;
+    ({ agent, userId } = await createAuthenticatedAgent(
+      app,
+      db,
+      'settings@finly.local',
+    ));
   });
 
   afterAll(async () => {

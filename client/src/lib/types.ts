@@ -229,6 +229,7 @@ export interface AuthUser {
   image: string | null;
   country: string | null;
   timeZone: string | null;
+  onboardingComplete: boolean;
   createdAt: string;
 }
 

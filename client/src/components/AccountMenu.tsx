@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Camera, LogOut, Moon, Sun, Trash2, User } from "lucide-react";
+import Avatar from "@/components/Avatar";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -20,12 +21,9 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useSettings } from "@/contexts/SettingsContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import { api } from "@/lib/api";
+import { fileToAvatarDataUrl, MAX_UPLOAD_BYTES } from "@/lib/avatar";
 import { formatCurrency } from "@/lib/format";
 import type { Country } from "@/lib/types";
-import { cn } from "@/lib/utils";
-
-const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
-const AVATAR_MAX_SIZE = 256;
 
 let countriesPromise: Promise<Country[]> | null = null;
 
@@ -39,77 +37,9 @@ function loadCountries(): Promise<Country[]> {
   return countriesPromise;
 }
 
-function initials(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return "?";
-  if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
-  return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
-}
-
-function Avatar({
-  name,
-  image,
-  className,
-}: {
-  name: string;
-  image?: string | null;
-  className?: string;
-}) {
-  if (image) {
-    return (
-      <img
-        src={image}
-        alt=""
-        className={cn(
-          "shrink-0 rounded-full object-cover select-none",
-          className
-        )}
-      />
-    );
-  }
-  return (
-    <span
-      aria-hidden="true"
-      className={cn(
-        "inline-flex shrink-0 items-center justify-center rounded-full bg-primary font-semibold text-primary-foreground select-none",
-        className
-      )}
-    >
-      {initials(name)}
-    </span>
-  );
-}
-
 function message(error: unknown): string {
   if (error instanceof Error) return error.message;
   return "Something went wrong.";
-}
-
-async function fileToAvatarDataUrl(file: File): Promise<string> {
-  const raw = await new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result));
-    reader.onerror = () => reject(new Error("Could not read the image."));
-    reader.readAsDataURL(file);
-  });
-
-  const image = await new Promise<HTMLImageElement>((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => resolve(img);
-    img.onerror = () => reject(new Error("Could not load the image."));
-    img.src = raw;
-  });
-
-  const scale = Math.min(1, AVATAR_MAX_SIZE / Math.max(image.width, image.height));
-  const canvas = document.createElement("canvas");
-  canvas.width = Math.max(1, Math.round(image.width * scale));
-  canvas.height = Math.max(1, Math.round(image.height * scale));
-  const context = canvas.getContext("2d");
-  if (!context) throw new Error("Image processing is not supported.");
-  context.drawImage(image, 0, 0, canvas.width, canvas.height);
-
-  const type = file.type === "image/png" || file.type === "image/webp" ? file.type : "image/jpeg";
-  return canvas.toDataURL(type, 0.85);
 }
 
 export default function AccountMenu() {

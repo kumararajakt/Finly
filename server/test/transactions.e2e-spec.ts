@@ -13,7 +13,7 @@ import {
   users,
   verification,
 } from './../src/database/schema';
-import { MailService } from './../src/mail/mail.service';
+import { createAuthenticatedAgent } from './helpers/auth.helper';
 
 interface TransactionBody {
   id: string;
@@ -33,29 +33,15 @@ interface ErrorBody {
   error: { message: string; code: string };
 }
 
-class MailServiceStub {
-  lastOtp: string | null = null;
-  sendOtp = jest.fn((_to: string, otp: string) => {
-    this.lastOtp = otp;
-  });
-}
-
 describe('Transactions (e2e)', () => {
   let app: INestApplication<App>;
   let db: Database;
   let agent: ReturnType<typeof request.agent>;
-  let mail: MailServiceStub;
-
-  const validPassword = 'super-secret-password';
-  const validEmail = 'txn@finly.local';
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
-    })
-      .overrideProvider(MailService)
-      .useClass(MailServiceStub)
-      .compile();
+    }).compile();
 
     app = moduleFixture.createNestApplication();
     app.setGlobalPrefix('api');
@@ -70,27 +56,13 @@ describe('Transactions (e2e)', () => {
     await app.init();
 
     db = moduleFixture.get<Database>(DRIZZLE);
-    mail = moduleFixture.get(MailService);
     await db.delete(transactions);
     await db.delete(verification);
     await db.delete(account);
     await db.delete(sessions);
     await db.delete(users);
 
-    agent = request.agent(app.getHttpServer());
-    await agent
-      .post('/api/auth/register')
-      .send({ email: validEmail, password: validPassword })
-      .expect(202);
-    await agent
-      .post('/api/auth/register/verify')
-      .send({
-        email: validEmail,
-        otp: mail.lastOtp,
-        password: validPassword,
-        confirmPassword: validPassword,
-      })
-      .expect(201);
+    ({ agent } = await createAuthenticatedAgent(app, db, 'txn@finly.local'));
   });
 
   afterAll(async () => {

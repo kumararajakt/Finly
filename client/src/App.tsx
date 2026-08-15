@@ -4,6 +4,7 @@ import AppSidebar from "./Sidebar";
 import TopBar from "./components/TopBar";
 import MobileBottomNav from "./components/MobileBottomNav";
 import LoadingState from "./components/ui/loading-state";
+import OnboardingDialog from "./components/OnboardingDialog";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import { SettingsProvider } from "./contexts/SettingsContext";
 import { ThemeProvider } from "./contexts/ThemeContext";
@@ -69,7 +70,7 @@ function AppShell() {
 }
 
 function FinlyApp() {
-  const { status } = useAuth();
+  const { status, user } = useAuth();
 
   if (status === "loading") {
     return (
@@ -86,6 +87,7 @@ function FinlyApp() {
   return (
     <SettingsProvider>
       <AppShell />
+      {user && !user.onboardingComplete ? <OnboardingDialog /> : null}
     </SettingsProvider>
   );
 }

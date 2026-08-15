@@ -8,15 +8,12 @@ type AuthStatus = "loading" | "authenticated" | "unauthenticated";
 interface AuthContextValue {
   status: AuthStatus;
   user: AuthUser | null;
-  login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string) => Promise<{ pending: true; email: string }>;
-  verifyOtp: (email: string, otp: string, password: string) => Promise<void>;
-  resendOtp: (email: string) => Promise<void>;
   logout: () => Promise<void>;
   updateProfile: (patch: {
     name?: string;
     image?: string | null;
     country?: string | null;
+    onboardingComplete?: boolean;
   }) => Promise<AuthUser>;
 }
 
@@ -69,24 +66,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setAppTimeZone(user?.timeZone ?? null);
   }, [user]);
 
-  const login = useCallback(async (email: string, password: string) => {
-    const result = await api.auth.login(email, password);
-    applySession(result.user ?? null, setUser, setStatus);
-  }, []);
-
-  const register = useCallback(async (email: string, password: string) => {
-    return api.auth.register(email, password);
-  }, []);
-
-  const verifyOtp = useCallback(async (email: string, otp: string, password: string) => {
-    const result = await api.auth.verifyOtp(email, otp, password);
-    applySession(result.user ?? null, setUser, setStatus);
-  }, []);
-
-  const resendOtp = useCallback(async (email: string) => {
-    await api.auth.resendOtp(email);
-  }, []);
-
   const logout = useCallback(async () => {
     try {
       await api.auth.logout();
@@ -101,6 +80,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       name?: string;
       image?: string | null;
       country?: string | null;
+      onboardingComplete?: boolean;
     }): Promise<AuthUser> => {
       const updated = await api.auth.updateProfile(patch);
       setUser(updated);
@@ -110,8 +90,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 
   const value = useMemo<AuthContextValue>(
-    () => ({ status, user, login, register, verifyOtp, resendOtp, logout, updateProfile }),
-    [status, user, login, register, verifyOtp, resendOtp, logout, updateProfile]
+    () => ({ status, user, logout, updateProfile }),
+    [status, user, logout, updateProfile]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

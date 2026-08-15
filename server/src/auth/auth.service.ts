@@ -1,38 +1,28 @@
 import {
-  ConflictException,
   HttpException,
-  HttpStatus,
   Inject,
   Injectable,
   InternalServerErrorException,
   Logger,
   NotFoundException,
   OnModuleInit,
-  UnauthorizedException,
 } from '@nestjs/common';
-import { desc, eq } from 'drizzle-orm';
-import type { Request, Response } from 'express';
+import { eq } from 'drizzle-orm';
+import type {
+  Request as ExpressRequest,
+  Response as ExpressResponse,
+} from 'express';
 import type { isAPIError } from 'better-auth/api';
 import { DRIZZLE } from '../database/database.constants';
 import type { Database } from '../database/database.module';
 import { DatabaseSeedService } from '../database/database-seed.service';
-import { emailOtps, users } from '../database/schema';
+import { users } from '../database/schema';
 import { timeZoneForCountry } from '../countries/countries';
-import { MailService } from '../mail/mail.service';
 import {
   createAuthInstance,
   loadAuthModules,
   type AuthInstance,
 } from './auth.config';
-import {
-  generateOtp,
-  hashOtp,
-  normalizeEmail,
-  otpMatches,
-  OTP_MAX_ATTEMPTS,
-  OTP_RESEND_COOLDOWN_MS,
-  OTP_TTL_MS,
-} from './otp';
 
 export interface SessionUser {
   id: string;
@@ -41,6 +31,7 @@ export interface SessionUser {
   image: string | null;
   country: string | null;
   timeZone: string | null;
+  onboardingComplete: boolean;
   createdAt: Date;
 }
 
@@ -54,11 +45,6 @@ interface AuthCallResult {
   response?: { user?: unknown; success?: boolean };
 }
 
-function displayNameFromEmail(email: string): string {
-  const local = email.split('@')[0] ?? '';
-  return local.length > 0 ? local : email;
-}
-
 @Injectable()
 export class AuthService implements OnModuleInit {
   private readonly logger = new Logger(AuthService.name);
@@ -67,158 +53,40 @@ export class AuthService implements OnModuleInit {
 
   constructor(
     @Inject(DRIZZLE) private readonly db: Database,
-    private readonly mail: MailService,
     private readonly seed: DatabaseSeedService,
   ) {}
 
   async onModuleInit(): Promise<void> {
     const { isAPIError } = await loadAuthModules();
     this.isAPIError = isAPIError;
-    this.auth = await createAuthInstance(this.db);
+    this.auth = await createAuthInstance(this.db, (userId) =>
+      this.seed.seedUserDefaults(userId),
+    );
   }
 
-  async register(email: string): Promise<{ pending: true; email: string }> {
-    const normalized = normalizeEmail(email);
-    const otp = await this.issueOtp(normalized);
-    await this.mail.sendOtp(normalized, otp);
-    return { pending: true, email: normalized };
-  }
-
-  async verifyOtp(
-    email: string,
-    otp: string,
-    password: string,
-    response: Response,
-  ): Promise<{ user: unknown }> {
-    const normalized = normalizeEmail(email);
-    const [row] = await this.db
-      .select()
-      .from(emailOtps)
-      .where(eq(emailOtps.email, normalized))
-      .orderBy(desc(emailOtps.createdAt))
-      .limit(1);
-
-    if (!row || row.expiresAt.getTime() < Date.now()) {
-      if (row) {
-        await this.deleteOtp(row.id);
-      }
-      throw new HttpException(
-        {
-          message: 'This code has expired. Request a new one.',
-          code: 'OTP_EXPIRED',
-        },
-        HttpStatus.BAD_REQUEST,
-      );
-    }
-
-    if (row.attempts >= OTP_MAX_ATTEMPTS) {
-      await this.deleteOtp(row.id);
-      throw new HttpException(
-        {
-          message: 'Too many attempts. Request a new code.',
-          code: 'OTP_TOO_MANY_ATTEMPTS',
-        },
-        HttpStatus.BAD_REQUEST,
-      );
-    }
-
-    if (!otpMatches(normalized, otp, row.otpHash)) {
-      const attempts = row.attempts + 1;
-      if (attempts >= OTP_MAX_ATTEMPTS) {
-        await this.deleteOtp(row.id);
-      } else {
-        await this.db
-          .update(emailOtps)
-          .set({ attempts })
-          .where(eq(emailOtps.id, row.id));
-      }
-      throw new HttpException(
-        {
-          message: 'Incorrect code. Try again.',
-          code: 'INVALID_OTP',
-        },
-        HttpStatus.BAD_REQUEST,
-      );
-    }
-
-    const name = displayNameFromEmail(normalized);
-
+  async signInSocial(
+    provider: 'google' | 'github',
+    callbackURL: string,
+    request: ExpressRequest,
+    response: ExpressResponse,
+  ): Promise<{ url: string }> {
     try {
-      const result = (await this.auth.api.signUpEmail({
-        body: { email: normalized, password, name },
-        returnHeaders: true,
-      })) as AuthCallResult;
-      this.applyCookies(response, result.headers);
-      await this.db
-        .update(users)
-        .set({ emailVerified: true })
-        .where(eq(users.email, normalized));
-      await this.deleteOtp(row.id);
-
-      const userId = (result.response?.user as { id?: string } | undefined)?.id;
-      if (userId) {
-        await this.seed.seedUserDefaults(userId);
-      }
-
-      return { user: result.response?.user };
-    } catch (error) {
-      throw this.mapAuthError(error, 'Registration failed.');
-    }
-  }
-
-  async resendOtp(email: string): Promise<{ pending: true; email: string }> {
-    const normalized = normalizeEmail(email);
-    const [latest] = await this.db
-      .select()
-      .from(emailOtps)
-      .where(eq(emailOtps.email, normalized))
-      .orderBy(desc(emailOtps.createdAt))
-      .limit(1);
-
-    if (
-      latest &&
-      latest.createdAt.getTime() > Date.now() - OTP_RESEND_COOLDOWN_MS
-    ) {
-      throw new HttpException(
-        {
-          message: 'Please wait before requesting a new code.',
-          code: 'OTP_COOLDOWN',
-        },
-        HttpStatus.TOO_MANY_REQUESTS,
-      );
-    }
-
-    const otp = await this.issueOtp(normalized);
-    await this.mail.sendOtp(normalized, otp);
-    return { pending: true, email: normalized };
-  }
-
-  async login(
-    email: string,
-    password: string,
-    response: Response,
-  ): Promise<{ user: unknown }> {
-    try {
-      const result = (await this.auth.api.signInEmail({
-        body: { email: email.trim().toLowerCase(), password },
-        returnHeaders: true,
-      })) as AuthCallResult;
-      this.applyCookies(response, result.headers);
-      return { user: result.response?.user };
-    } catch (error) {
-      this.logger.warn(
-        `Login failed: ${error instanceof Error ? error.message : String(error)}`,
-      );
-      throw new UnauthorizedException({
-        message: 'Incorrect password.',
-        code: 'INVALID_CREDENTIALS',
+      const result = await this.auth.api.signInSocial({
+        body: { provider, callbackURL },
+        headers: this.headersFrom(request),
+        asResponse: true,
       });
+      this.applyCookies(response, result.headers);
+      const data = (await result.json()) as { url: string; redirect: boolean };
+      return { url: data.url };
+    } catch (error) {
+      throw this.mapAuthError(error, 'Sign in failed.');
     }
   }
 
   async logout(
-    request: Request,
-    response: Response,
+    request: ExpressRequest,
+    response: ExpressResponse,
   ): Promise<{ success: boolean }> {
     try {
       const result = (await this.auth.api.signOut({
@@ -233,8 +101,8 @@ export class AuthService implements OnModuleInit {
   }
 
   async getSession(
-    request: Request,
-    response?: Response,
+    request: ExpressRequest,
+    response?: ExpressResponse,
   ): Promise<SessionResult | null> {
     try {
       const result = (await this.auth.api.getSession({
@@ -244,9 +112,11 @@ export class AuthService implements OnModuleInit {
       if (response && result.headers) {
         this.applyCookies(response, result.headers);
       }
-      return result.response === null
-        ? { session: null, user: null }
-        : result.response;
+      if (result.response === null || !result.response.user) {
+        return { session: null, user: null };
+      }
+      const user = await this.fetchUser(result.response.user.id);
+      return { session: result.response.session, user };
     } catch (error) {
       throw this.mapAuthError(error, 'Session check failed.');
     }
@@ -254,9 +124,14 @@ export class AuthService implements OnModuleInit {
 
   async updateProfile(
     userId: string,
-    request: Request,
-    response: Response,
-    patch: { name?: string; image?: string | null; country?: string | null },
+    request: ExpressRequest,
+    response: ExpressResponse,
+    patch: {
+      name?: string;
+      image?: string | null;
+      country?: string | null;
+      onboardingComplete?: boolean;
+    },
   ): Promise<SessionUser> {
     const body: Record<string, string | null> = {};
     if (patch.name !== undefined) body.name = patch.name;
@@ -279,7 +154,18 @@ export class AuthService implements OnModuleInit {
       throw this.mapAuthError(error, 'Profile update failed.');
     }
 
+    if (patch.onboardingComplete) {
+      await this.db
+        .update(users)
+        .set({ onboardingComplete: true })
+        .where(eq(users.id, userId));
+    }
+
     return this.fetchUser(userId);
+  }
+
+  handler(request: Request): Promise<Response> {
+    return this.auth.handler(request);
   }
 
   private async fetchUser(userId: string): Promise<SessionUser> {
@@ -291,6 +177,7 @@ export class AuthService implements OnModuleInit {
         image: users.image,
         country: users.country,
         timeZone: users.timeZone,
+        onboardingComplete: users.onboardingComplete,
         createdAt: users.createdAt,
       })
       .from(users)
@@ -304,26 +191,11 @@ export class AuthService implements OnModuleInit {
     return user;
   }
 
-  private headersFrom(request: Request): Record<string, string> {
+  private headersFrom(request: ExpressRequest): Record<string, string> {
     return request.headers as Record<string, string>;
   }
 
-  private async issueOtp(email: string): Promise<string> {
-    await this.db.delete(emailOtps).where(eq(emailOtps.email, email));
-    const otp = generateOtp();
-    await this.db.insert(emailOtps).values({
-      email,
-      otpHash: hashOtp(email, otp),
-      expiresAt: new Date(Date.now() + OTP_TTL_MS),
-    });
-    return otp;
-  }
-
-  private async deleteOtp(id: string): Promise<void> {
-    await this.db.delete(emailOtps).where(eq(emailOtps.id, id));
-  }
-
-  private applyCookies(response: Response, headers?: Headers): void {
+  private applyCookies(response: ExpressResponse, headers?: Headers): void {
     if (!headers) {
       return;
     }
@@ -334,15 +206,12 @@ export class AuthService implements OnModuleInit {
   }
 
   private mapAuthError(error: unknown, fallback: string): HttpException {
+    if (error instanceof HttpException) {
+      return error;
+    }
     if (this.isAPIError(error)) {
-      const status = error.statusCode ?? HttpStatus.BAD_REQUEST;
+      const status = error.statusCode ?? 400;
       const message = error.body?.message ?? error.message ?? fallback;
-      if (status === 422) {
-        return new ConflictException({
-          message,
-          code: 'EMAIL_IN_USE',
-        });
-      }
       return new HttpException(
         { message, code: error.status ?? 'AUTH_FAILED' },
         status,

@@ -15,7 +15,7 @@ import {
   users,
   verification,
 } from './../src/database/schema';
-import { MailService } from './../src/mail/mail.service';
+import { createAuthenticatedAgent } from './helpers/auth.helper';
 
 interface CsvPreviewBody {
   headers: string[];
@@ -39,18 +39,6 @@ interface ErrorBody {
   error: { message: string; code: string };
 }
 
-interface AuthUserBody {
-  id: string;
-  email: string;
-}
-
-class MailServiceStub {
-  lastOtp: string | null = null;
-  sendOtp = jest.fn((_to: string, otp: string) => {
-    this.lastOtp = otp;
-  });
-}
-
 const STATEMENT = [
   'Date,Description,Amount,Category',
   '2024-01-05,Coffee,5.50,Dining',
@@ -64,19 +52,12 @@ describe('CSV Import (e2e)', () => {
   let app: INestApplication<App>;
   let db: Database;
   let agent: ReturnType<typeof request.agent>;
-  let mail: MailServiceStub;
-
-  const validPassword = 'super-secret-password';
-  const validEmail = 'import@finly.local';
   let userId = '';
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
-    })
-      .overrideProvider(MailService)
-      .useClass(MailServiceStub)
-      .compile();
+    }).compile();
 
     app = moduleFixture.createNestApplication();
     app.setGlobalPrefix('api');
@@ -91,7 +72,6 @@ describe('CSV Import (e2e)', () => {
     await app.init();
 
     db = moduleFixture.get<Database>(DRIZZLE);
-    mail = moduleFixture.get(MailService);
     await db.delete(transactions);
     await db.delete(accounts);
     await db.delete(verification);
@@ -99,21 +79,11 @@ describe('CSV Import (e2e)', () => {
     await db.delete(sessions);
     await db.delete(users);
 
-    agent = request.agent(app.getHttpServer());
-    await agent
-      .post('/api/auth/register')
-      .send({ email: validEmail, password: validPassword })
-      .expect(202);
-    const verify = await agent
-      .post('/api/auth/register/verify')
-      .send({
-        email: validEmail,
-        otp: mail.lastOtp,
-        password: validPassword,
-        confirmPassword: validPassword,
-      })
-      .expect(201);
-    userId = (verify.body as { user: AuthUserBody }).user.id;
+    ({ agent, userId } = await createAuthenticatedAgent(
+      app,
+      db,
+      'import@finly.local',
+    ));
   });
 
   afterAll(async () => {

@@ -88,29 +88,18 @@ function buildQuery(params: Record<string, string | number | boolean | undefined
 export const api = {
   auth: {
     me: () => apiFetch<AuthMe>("/auth/me"),
-    register: (email: string, password: string) =>
-      apiFetch<{ pending: true; email: string }>("/auth/register", {
+    socialSignIn: (provider: "google" | "github") =>
+      apiFetch<{ url: string }>("/auth/social", {
         method: "POST",
-        body: { email, password },
-      }),
-    verifyOtp: (email: string, otp: string, password: string) =>
-      apiFetch<{ user: AuthUser }>("/auth/register/verify", {
-        method: "POST",
-        body: { email, otp, password, confirmPassword: password },
-      }),
-    resendOtp: (email: string) =>
-      apiFetch<{ pending: true; email: string }>("/auth/register/resend", {
-        method: "POST",
-        body: { email },
-      }),
-    login: (email: string, password: string) =>
-      apiFetch<{ user: AuthUser }>("/auth/login", {
-        method: "POST",
-        body: { email, password },
+        body: { provider, callbackURL: window.location.origin },
       }),
     logout: () => apiFetch<{ success: true }>("/auth/logout", { method: "POST" }),
-    updateProfile: (patch: { name?: string; image?: string | null; country?: string | null }) =>
-      apiFetch<AuthUser>("/auth/profile", { method: "PATCH", body: patch }),
+    updateProfile: (patch: {
+      name?: string;
+      image?: string | null;
+      country?: string | null;
+      onboardingComplete?: boolean;
+    }) => apiFetch<AuthUser>("/auth/profile", { method: "PATCH", body: patch }),
   },
 
   countries: {
