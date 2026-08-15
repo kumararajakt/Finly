@@ -43,7 +43,7 @@ export class TransactionQueryDto {
   search?: string;
 
   @IsOptional()
-  @IsIn(['expense', 'income'])
+  @IsIn(['expense', 'income', 'transfer'])
   type?: TransactionType;
 
   @IsOptional()
@@ -93,7 +93,7 @@ export class CreateTransactionDto {
   @Max(100_000_000, { message: 'Amount is too large.' })
   amount: number;
 
-  @IsIn(['expense', 'income'])
+  @IsIn(['expense', 'income', 'transfer'])
   type: TransactionType;
 
   @IsOptional()
@@ -140,7 +140,7 @@ export class UpdateTransactionDto {
   amount?: number;
 
   @IsOptional()
-  @IsIn(['expense', 'income'])
+  @IsIn(['expense', 'income', 'transfer'])
   type?: TransactionType;
 
   @IsOptional()

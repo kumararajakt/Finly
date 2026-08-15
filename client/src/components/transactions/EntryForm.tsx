@@ -46,6 +46,14 @@ interface EntryFormProps {
   onSaved: () => void;
 }
 
+const TYPE_LABELS: Record<TransactionType, string> = {
+  expense: "Expense",
+  income: "Income",
+  transfer: "Transfer",
+};
+
+const TYPES = ["expense", "income", "transfer"] as const;
+
 export default function EntryForm({ categories, accounts, tags, initial, onSaved }: EntryFormProps) {
   const [form, setForm] = useState<EntryForm>(() => initialForm(initial ?? null));
   const [saving, setSaving] = useState(false);
@@ -116,12 +124,12 @@ export default function EntryForm({ categories, accounts, tags, initial, onSaved
       <SheetHeader>
         <SheetTitle>{initial ? "Edit entry" : "Add entry"}</SheetTitle>
         <SheetDescription>
-          {initial ? initial.merchant : "Record an expense or income transaction."}
+          {initial ? initial.merchant : "Record a transaction."}
         </SheetDescription>
       </SheetHeader>
       <div className="flex flex-col gap-4 px-4">
-        <div className="grid grid-cols-2 gap-1 rounded-lg border bg-muted/50 p-1" role="group" aria-label="Transaction type">
-          {(["expense", "income"] as const).map((type) => (
+        <div className="grid grid-cols-3 gap-1 rounded-lg border bg-muted/50 p-1" role="group" aria-label="Transaction type">
+          {TYPES.map((type) => (
             <button
               key={type}
               type="button"
@@ -134,7 +142,7 @@ export default function EntryForm({ categories, accounts, tags, initial, onSaved
                   : "text-muted-foreground hover:text-foreground"
               )}
             >
-              {type === "expense" ? "Expense" : "Income"}
+              {TYPE_LABELS[type]}
             </button>
           ))}
         </div>

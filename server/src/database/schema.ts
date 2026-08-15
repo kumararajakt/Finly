@@ -19,7 +19,7 @@ const isoDate = (name: string) => text(name).$type<IsoDate>();
 
 export type Cadence =
   'weekly' | 'biweekly' | 'monthly' | 'quarterly' | 'annual';
-export type TransactionType = 'expense' | 'income';
+export type TransactionType = 'expense' | 'income' | 'transfer';
 export type TransactionSource = 'manual' | 'csv' | 'document' | 'google-drive';
 
 export const users = pgTable('users', {
@@ -135,7 +135,7 @@ export const transactions = pgTable(
     index('transactions_tags_idx').using('gin', table.tags),
     check(
       'transactions_type_check',
-      sql`${table.type} in ('expense', 'income')`,
+      sql`${table.type} in ('expense', 'income', 'transfer')`,
     ),
   ],
 );

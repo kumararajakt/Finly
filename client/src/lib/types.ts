@@ -1,4 +1,4 @@
-export type TransactionType = "expense" | "income";
+export type TransactionType = "expense" | "income" | "transfer";
 export type TransactionSource = "manual" | "csv" | "document" | "google-drive";
 
 export interface Transaction {
@@ -142,7 +142,7 @@ export interface TransactionFilters {
   account?: string;
   category?: string;
   search?: string;
-  type?: "expense" | "income";
+  type?: TransactionType;
   tag?: string;
   dateFrom?: string;
   dateTo?: string;

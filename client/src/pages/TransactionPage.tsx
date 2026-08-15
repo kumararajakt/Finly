@@ -101,7 +101,7 @@ export default function TransactionPage() {
   const [accountFilter, setAccountFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [showMoreFilters, setShowMoreFilters] = useState(false);
-  const [typeFilter, setTypeFilter] = useState<"expense" | "income" | "all">("all");
+  const [typeFilter, setTypeFilter] = useState<"expense" | "income" | "transfer" | "all">("all");
   const [tagFilter, setTagFilter] = useState("all");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
@@ -319,13 +319,14 @@ export default function TransactionPage() {
         <div className="flex flex-wrap items-center gap-2">
           <select
             value={typeFilter}
-            onChange={(e) => setTypeFilter(e.target.value as "expense" | "income" | "all")}
+            onChange={(e) => setTypeFilter(e.target.value as "expense" | "income" | "transfer" | "all")}
             aria-label="Type filter"
             className="h-8 rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
           >
             <option value="all">All types</option>
             <option value="expense">Expenses</option>
             <option value="income">Income</option>
+            <option value="transfer">Transfers</option>
           </select>
           <select
             value={tagFilter}
@@ -505,7 +506,11 @@ export default function TransactionPage() {
                         <span
                           className={cn(
                             "text-sm font-medium tabular-nums",
-                            tx.type === "income" ? "text-emerald-600" : "text-foreground"
+                            tx.type === "income"
+                              ? "text-emerald-600"
+                              : tx.type === "transfer"
+                                ? "text-muted-foreground"
+                                : "text-foreground"
                           )}
                         >
                           {formatSignedAmount(tx.amount, tx.type, currency)}

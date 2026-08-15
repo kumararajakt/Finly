@@ -88,7 +88,6 @@ describe('Transactions (e2e)', () => {
     const cases = [
       { date: '2024-01-05', merchant: 'Shop', amount: 0, type: 'expense' },
       { date: '2024-01-05', merchant: 'Shop', amount: -5, type: 'expense' },
-      { date: '2024-01-05', merchant: 'Shop', amount: 10, type: 'transfer' },
       { date: '2024-13-99', merchant: 'Shop', amount: 10, type: 'expense' },
       { date: '2024-01-05', merchant: '', amount: 10, type: 'expense' },
     ];
@@ -127,6 +126,32 @@ describe('Transactions (e2e)', () => {
     expect(body.fingerprint).toHaveLength(64);
   });
 
+  it('creates a transfer transaction', async () => {
+    const res = await agent.post('/api/transactions').send({
+      date: '2024-01-06',
+      merchant: 'Credit Card Payment',
+      category: 'Transfer',
+      amount: 200,
+      type: 'transfer',
+      account: 'Checking',
+    });
+    expect(res.status).toBe(201);
+    const body = res.body as TransactionBody;
+    expect(body).toMatchObject({
+      date: '2024-01-06',
+      merchant: 'Credit Card Payment',
+      category: 'Transfer',
+      amount: 200,
+      type: 'transfer',
+      account: 'Checking',
+    });
+
+    const filtered = await agent.get('/api/transactions?type=transfer');
+    expect(filtered.status).toBe(200);
+    expect((filtered.body as TransactionBody[]).length).toBe(1);
+    expect((filtered.body as TransactionBody[])[0].type).toBe('transfer');
+  });
+
   it('rejects a duplicate transaction', async () => {
     const duplicate = {
       date: '2024-01-05',
@@ -151,7 +176,7 @@ describe('Transactions (e2e)', () => {
 
     const all = await agent.get('/api/transactions');
     expect(all.status).toBe(200);
-    expect((all.body as TransactionBody[]).length).toBe(2);
+    expect((all.body as TransactionBody[]).length).toBe(3);
 
     const search = await agent.get('/api/transactions?search=coffee');
     expect((search.body as TransactionBody[]).length).toBe(1);
@@ -161,7 +186,7 @@ describe('Transactions (e2e)', () => {
     expect((byCategory.body as TransactionBody[]).length).toBe(1);
 
     const byAccount = await agent.get('/api/transactions?account=Checking');
-    expect((byAccount.body as TransactionBody[]).length).toBe(2);
+    expect((byAccount.body as TransactionBody[]).length).toBe(3);
 
     const invalidPeriod = await agent.get(
       '/api/transactions?period=not-a-period',

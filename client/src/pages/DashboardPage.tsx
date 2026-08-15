@@ -261,7 +261,11 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
                       <span
                         className={cn(
                           "shrink-0 text-sm font-medium tabular-nums",
-                          tx.type === "income" ? "text-emerald-600" : "text-foreground"
+                          tx.type === "income"
+                            ? "text-emerald-600"
+                            : tx.type === "transfer"
+                              ? "text-muted-foreground"
+                              : "text-foreground"
                         )}
                       >
                         {formatSignedAmount(tx.amount, tx.type, currency)}

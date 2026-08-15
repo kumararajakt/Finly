@@ -12,6 +12,7 @@ import {
   categories,
   transactions,
   type NewTransaction,
+  type TransactionType,
 } from '../database/schema';
 import { computeFingerprint } from '../common/fingerprint';
 import {
@@ -55,7 +56,7 @@ export interface CsvRowPreview {
   date: string;
   merchant: string;
   amount: number;
-  type: 'expense' | 'income';
+  type: TransactionType;
   category: string;
   account: string;
   notes: string | null;
