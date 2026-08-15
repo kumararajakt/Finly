@@ -3,6 +3,7 @@ import {
   AlertTriangle,
   ArrowLeft,
   CheckCircle2,
+  Eye,
   FileSpreadsheet,
   FileUp,
   RotateCcw,
@@ -10,8 +11,12 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ApiError, api } from "@/lib/api";
+import { useSettings } from "@/contexts/SettingsContext";
+import { formatDate, formatSignedAmount } from "@/lib/format";
 import type {
   CsvColumnMapping,
+  CsvImportPreview,
+  CsvMapping,
   CsvPreview,
   ImportResult,
   SignConvention,
@@ -19,6 +24,7 @@ import type {
 import { cn } from "@/lib/utils";
 
 const MAX_CSV_BYTES = 10 * 1024 * 1024;
+const MAX_PREVIEW_ROWS = 500;
 
 const ROLE_LABELS: Record<string, string> = {
   date: "Date",
@@ -125,12 +131,18 @@ interface CsvImportCardProps {
 }
 
 export default function CsvImportCard({ onNavigate, onImported }: CsvImportCardProps) {
+  const { settings } = useSettings();
   const inputRef = useRef<HTMLInputElement>(null);
-  const [step, setStep] = useState<"pick" | "mapping" | "result">("pick");
+  const [step, setStep] = useState<"pick" | "mapping" | "preview" | "result">(
+    "pick"
+  );
   const [fileName, setFileName] = useState<string | null>(null);
   const [csvText, setCsvText] = useState<string>("");
   const [preview, setPreview] = useState<CsvPreview | null>(null);
   const [mapping, setMapping] = useState<CsvColumnMapping | null>(null);
+  const [importPreview, setImportPreview] = useState<CsvImportPreview | null>(
+    null
+  );
   const [hasHeader, setHasHeader] = useState(true);
   const [signConvention, setSignConvention] =
     useState<SignConvention>("negative-expense");
@@ -212,17 +224,16 @@ export default function CsvImportCard({ onNavigate, onImported }: CsvImportCardP
     return problems;
   }
 
-  async function handleImport() {
-    if (!mapping || !preview) return;
+  function importPayload(): CsvMapping | null {
+    if (!mapping) return null;
     const problems = mappingErrors();
     if (problems.length > 0) {
       setError(`Map these columns before importing: ${problems.join(", ")}.`);
-      return;
+      return null;
     }
-
-    const payload = {
-      date: mapping.date!,
-      merchant: mapping.merchant!,
+    return {
+      date: mapping.date,
+      merchant: mapping.merchant,
       amount: mapping.amount ?? undefined,
       debit: mapping.debit ?? undefined,
       credit: mapping.credit ?? undefined,
@@ -231,6 +242,32 @@ export default function CsvImportCard({ onNavigate, onImported }: CsvImportCardP
       notes: mapping.notes ?? undefined,
       hasHeader,
     };
+  }
+
+  async function handlePreviewImport() {
+    const payload = importPayload();
+    if (!payload) return;
+
+    setBusy(true);
+    setError(null);
+    try {
+      const data = await api.importCsv.previewRows(
+        csvText,
+        payload,
+        signConvention
+      );
+      setImportPreview(data);
+      setStep("preview");
+    } catch (err) {
+      setError(message(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleImport() {
+    const payload = importPayload();
+    if (!payload) return;
 
     setBusy(true);
     setError(null);
@@ -252,6 +289,7 @@ export default function CsvImportCard({ onNavigate, onImported }: CsvImportCardP
     setCsvText("");
     setPreview(null);
     setMapping(null);
+    setImportPreview(null);
     setError(null);
     setResult(null);
   }
@@ -420,12 +458,137 @@ export default function CsvImportCard({ onNavigate, onImported }: CsvImportCardP
         <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t pt-4">
           <p className="text-xs text-muted-foreground">
             {problems.length === 0
-              ? "Import runs duplicate detection — matching transactions are skipped."
+              ? "You'll review every row before anything is imported."
               : `Missing: ${problems.join(", ")}.`}
           </p>
-          <Button onClick={handleImport} disabled={busy || problems.length > 0}>
+          <Button
+            onClick={handlePreviewImport}
+            disabled={busy || problems.length > 0}
+          >
+            <Eye />
+            {busy ? "Preparing preview…" : "Preview import"}
+          </Button>
+        </div>
+      </section>
+    );
+  }
+
+  if (step === "preview" && importPreview) {
+    const { inserted, duplicates, skipped, needsReview, totalRows } =
+      importPreview;
+    const visible = importPreview.rows.slice(0, MAX_PREVIEW_ROWS);
+    const truncated = importPreview.rows.length > MAX_PREVIEW_ROWS;
+
+    return (
+      <section className="rounded-xl border bg-card p-4 sm:p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
+            <h3 className="flex items-center gap-2 text-sm font-medium">
+              <Eye className="size-4 text-muted-foreground" aria-hidden="true" />
+              Review before import
+            </h3>
+            <p className="mt-0.5 truncate text-xs text-muted-foreground">
+              {fileName} · {totalRows} data row{totalRows === 1 ? "" : "s"}
+            </p>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setStep("mapping")}
+            disabled={busy}
+          >
+            <ArrowLeft />
+            Back to mapping
+          </Button>
+        </div>
+
+        <div className="mt-4 grid gap-2 sm:grid-cols-4">
+          <ResultStat label="Will be imported" value={inserted} tone="default" />
+          <ResultStat label="Duplicates skipped" value={duplicates} tone="muted" />
+          <ResultStat label="Invalid rows" value={skipped} tone="muted" />
+          <ResultStat label="Needs review" value={needsReview} tone="warning" />
+        </div>
+
+        {needsReview > 0 && (
+          <p
+            role="alert"
+            className="mt-3 flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-400"
+          >
+            <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+            <span>
+              {needsReview} row{needsReview === 1 ? "" : "s"} won&apos;t have a
+              recognized category and will be marked “Needs review”.
+            </span>
+          </p>
+        )}
+
+        <div className="mt-4 overflow-auto rounded-lg border">
+          <table className="w-full min-w-[640px] text-left text-sm">
+            <thead className="sticky top-0 bg-muted/50">
+              <tr className="text-xs uppercase tracking-wide text-muted-foreground">
+                <th className="px-3 py-2 font-medium">Date</th>
+                <th className="px-3 py-2 font-medium">Merchant</th>
+                <th className="px-3 py-2 text-right font-medium">Amount</th>
+                <th className="px-3 py-2 font-medium">Category</th>
+                <th className="px-3 py-2 font-medium">Account</th>
+                <th className="px-3 py-2 font-medium">Status</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {visible.map((row, index) => (
+                <tr
+                  key={index}
+                  className={cn(
+                    row.status === "skipped" && "text-muted-foreground"
+                  )}
+                >
+                  <td className="whitespace-nowrap px-3 py-1.5 tabular-nums">
+                    {formatDate(row.date)}
+                  </td>
+                  <td className="max-w-[16rem] truncate px-3 py-1.5">
+                    {row.merchant || "—"}
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-1.5 text-right tabular-nums">
+                    {row.amount > 0
+                      ? formatSignedAmount(row.amount, row.type, settings.currency)
+                      : "—"}
+                  </td>
+                  <td className="max-w-[12rem] truncate px-3 py-1.5">
+                    {row.category || "—"}
+                  </td>
+                  <td className="max-w-[12rem] truncate px-3 py-1.5">
+                    {row.account || "—"}
+                  </td>
+                  <td className="px-3 py-1.5">
+                    <StatusBadge status={row.status} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {truncated && (
+          <p className="mt-2 text-xs text-muted-foreground">
+            Showing the first {MAX_PREVIEW_ROWS} of {importPreview.rows.length}{" "}
+            rows.
+          </p>
+        )}
+
+        {error && (
+          <p role="alert" className="mt-4 text-xs text-destructive">
+            {error}
+          </p>
+        )}
+
+        <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t pt-4">
+          <p className="text-xs text-muted-foreground">
+            Import runs duplicate detection — matching transactions are skipped.
+          </p>
+          <Button onClick={handleImport} disabled={busy || inserted === 0}>
             <UploadCloud />
-            {busy ? "Importing…" : "Import transactions"}
+            {busy
+              ? "Importing…"
+              : `Import ${inserted} transaction${inserted === 1 ? "" : "s"}`}
           </Button>
         </div>
       </section>
@@ -535,5 +698,28 @@ function ResultStat({
         {label}
       </p>
     </div>
+  );
+}
+
+function StatusBadge({ status }: { status: "insert" | "duplicate" | "skipped" }) {
+  const styles: Record<"insert" | "duplicate" | "skipped", string> = {
+    insert: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
+    duplicate: "bg-muted text-muted-foreground",
+    skipped: "bg-amber-500/10 text-amber-700 dark:text-amber-400",
+  };
+  const labels: Record<"insert" | "duplicate" | "skipped", string> = {
+    insert: "New",
+    duplicate: "Duplicate",
+    skipped: "Skipped",
+  };
+  return (
+    <span
+      className={cn(
+        "inline-flex rounded-full px-2 py-0.5 text-xs font-medium whitespace-nowrap",
+        styles[status]
+      )}
+    >
+      {labels[status]}
+    </span>
   );
 }

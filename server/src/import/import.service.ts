@@ -49,6 +49,28 @@ export interface CsvImportResult {
   totalRows: number;
 }
 
+export type CsvRowStatus = 'insert' | 'duplicate' | 'skipped';
+
+export interface CsvRowPreview {
+  date: string;
+  merchant: string;
+  amount: number;
+  type: 'expense' | 'income';
+  category: string;
+  account: string;
+  notes: string | null;
+  status: CsvRowStatus;
+}
+
+export interface CsvImportPreview {
+  rows: CsvRowPreview[];
+  inserted: number;
+  duplicates: number;
+  skipped: number;
+  needsReview: number;
+  totalRows: number;
+}
+
 interface ParsedRow {
   date: string;
   merchant: string;
@@ -104,67 +126,10 @@ export class ImportService {
   }
 
   async importCsv(userId: string, dto: CsvImportDto): Promise<CsvImportResult> {
-    if (dto.csv.length > MAX_CSV_CHARS) {
-      throw new BadRequestException({
-        message: 'The CSV file is too large.',
-        code: 'PAYLOAD_TOO_LARGE',
-      });
-    }
-
-    const rows = parseCsv(dto.csv);
-    if (rows.length === 0) {
-      throw new BadRequestException({
-        message: 'The CSV file has no rows.',
-        code: 'INVALID_CSV',
-      });
-    }
-
-    const { mapping, hasHeader } = this.resolveMapping(dto, rows);
-
-    const dataRows = hasHeader ? rows.slice(1) : rows;
-    if (dataRows.length > MAX_ROWS) {
-      throw new BadRequestException({
-        message: `The CSV file has too many rows (max ${MAX_ROWS}).`,
-        code: 'PAYLOAD_TOO_LARGE',
-      });
-    }
-
-    const signConvention: SignConvention =
-      dto.signConvention ?? 'negative-expense';
-    const [categoryMap, accountMap] = await Promise.all([
-      this.categoryLookup(userId),
-      this.accountLookup(userId),
-    ]);
-
-    const values: NewTransaction[] = [];
-    let skipped = 0;
-    for (const row of dataRows) {
-      const parsed = this.parseRow(
-        row,
-        mapping,
-        signConvention,
-        categoryMap,
-        accountMap,
-      );
-      if (parsed === null) {
-        skipped += 1;
-        continue;
-      }
-      values.push({
-        userId,
-        date: parsed.date,
-        merchant: parsed.merchant,
-        category: parsed.category,
-        amount: parsed.amount,
-        type: parsed.type,
-        account: parsed.account,
-        notes: parsed.notes,
-        tags: [],
-        receipt: false,
-        source: 'csv',
-        fingerprint: parsed.fingerprint,
-      });
-    }
+    const { values: planned, skipped } = await this.buildPlan(userId, dto);
+    const values = planned.filter(
+      (value): value is NewTransaction => value !== null,
+    );
 
     const plannedFingerprints = values.map((value) => value.fingerprint);
     const existingSet = await this.findExistingFingerprints(
@@ -220,8 +185,147 @@ export class ImportService {
       duplicates: duplicateCount + raceDuplicates,
       skipped,
       needsReview,
-      totalRows: dataRows.length,
+      totalRows: values.length + skipped,
     };
+  }
+
+  async previewRows(
+    userId: string,
+    dto: CsvImportDto,
+  ): Promise<CsvImportPreview> {
+    const { values, skipped } = await this.buildPlan(userId, dto);
+
+    const valid = values.filter(
+      (value): value is NewTransaction => value !== null,
+    );
+    const existingSet = await this.findExistingFingerprints(
+      userId,
+      valid.map((value) => value.fingerprint),
+    );
+
+    const seen = new Set<string>();
+    const rows: CsvRowPreview[] = [];
+    let inserted = 0;
+    let duplicates = 0;
+    let needsReview = 0;
+
+    for (const value of values) {
+      if (value === null) {
+        rows.push({
+          date: '',
+          merchant: '',
+          amount: 0,
+          type: 'expense',
+          category: '',
+          account: '',
+          notes: null,
+          status: 'skipped',
+        });
+        continue;
+      }
+
+      const isDuplicate =
+        existingSet.has(value.fingerprint) || seen.has(value.fingerprint);
+      seen.add(value.fingerprint);
+
+      const preview: CsvRowPreview = {
+        date: value.date,
+        merchant: value.merchant,
+        amount: value.amount,
+        type: value.type,
+        category: value.category ?? '',
+        account: value.account ?? '',
+        notes: value.notes ?? null,
+        status: isDuplicate ? 'duplicate' : 'insert',
+      };
+
+      if (isDuplicate) {
+        duplicates += 1;
+      } else {
+        inserted += 1;
+        if (value.category === 'Needs review') {
+          needsReview += 1;
+        }
+      }
+      rows.push(preview);
+    }
+
+    return {
+      rows,
+      inserted,
+      duplicates,
+      skipped,
+      needsReview,
+      totalRows: values.length,
+    };
+  }
+
+  private async buildPlan(
+    userId: string,
+    dto: CsvImportDto,
+  ): Promise<{ values: (NewTransaction | null)[]; skipped: number }> {
+    if (dto.csv.length > MAX_CSV_CHARS) {
+      throw new BadRequestException({
+        message: 'The CSV file is too large.',
+        code: 'PAYLOAD_TOO_LARGE',
+      });
+    }
+
+    const rows = parseCsv(dto.csv);
+    if (rows.length === 0) {
+      throw new BadRequestException({
+        message: 'The CSV file has no rows.',
+        code: 'INVALID_CSV',
+      });
+    }
+
+    const { mapping, hasHeader } = this.resolveMapping(dto, rows);
+
+    const dataRows = hasHeader ? rows.slice(1) : rows;
+    if (dataRows.length > MAX_ROWS) {
+      throw new BadRequestException({
+        message: `The CSV file has too many rows (max ${MAX_ROWS}).`,
+        code: 'PAYLOAD_TOO_LARGE',
+      });
+    }
+
+    const signConvention: SignConvention =
+      dto.signConvention ?? 'negative-expense';
+    const [categoryMap, accountMap] = await Promise.all([
+      this.categoryLookup(userId),
+      this.accountLookup(userId),
+    ]);
+
+    let skipped = 0;
+    const values = dataRows.map((row) => {
+      const parsed = this.parseRow(
+        row,
+        mapping,
+        signConvention,
+        categoryMap,
+        accountMap,
+      );
+      if (parsed === null) {
+        skipped += 1;
+        return null;
+      }
+      return {
+        userId,
+        date: parsed.date,
+        merchant: parsed.merchant,
+        category: parsed.category,
+        amount: parsed.amount,
+        type: parsed.type,
+        account: parsed.account,
+        notes: parsed.notes,
+        tags: [] as string[],
+        receipt: false,
+        source: 'csv',
+        fingerprint: parsed.fingerprint,
+      } satisfies NewTransaction;
+    });
+
+    return { values, skipped };
   }
 
   private resolveMapping(

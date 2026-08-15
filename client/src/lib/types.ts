@@ -113,6 +113,28 @@ export interface ImportResult {
   totalRows: number;
 }
 
+export type CsvRowStatus = "insert" | "duplicate" | "skipped";
+
+export interface CsvRowPreview {
+  date: string;
+  merchant: string;
+  amount: number;
+  type: TransactionType;
+  category: string;
+  account: string;
+  notes: string | null;
+  status: CsvRowStatus;
+}
+
+export interface CsvImportPreview {
+  rows: CsvRowPreview[];
+  inserted: number;
+  duplicates: number;
+  skipped: number;
+  needsReview: number;
+  totalRows: number;
+}
+
 export interface TransactionFilters {
   period?: Period;
   account?: string;

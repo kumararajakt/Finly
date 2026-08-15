@@ -5,6 +5,7 @@ import type {
   Budget,
   Category,
   Country,
+  CsvImportPreview,
   CsvMapping,
   CsvPreview,
   DetectionSuggestion,
@@ -226,6 +227,15 @@ export const api = {
   importCsv: {
     preview: (csv: string) =>
       apiFetch<CsvPreview>("/import/csv/preview", { method: "POST", body: { csv } }),
+    previewRows: (
+      csv: string,
+      mapping: CsvMapping,
+      signConvention: "negative-expense" | "negative-income"
+    ) =>
+      apiFetch<CsvImportPreview>("/import/csv/preview-rows", {
+        method: "POST",
+        body: { csv, mapping, signConvention },
+      }),
     run: (
       csv: string,
       mapping: CsvMapping,
