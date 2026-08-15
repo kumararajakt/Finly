@@ -118,6 +118,13 @@ export interface TransactionFilters {
   account?: string;
   category?: string;
   search?: string;
+  type?: "expense" | "income";
+  tag?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  minAmount?: number;
+  maxAmount?: number;
+  receipt?: boolean;
 }
 
 export interface NewTransaction {

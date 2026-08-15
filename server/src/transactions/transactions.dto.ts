@@ -11,6 +11,7 @@ import {
   MaxLength,
   Min,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 import type { TransactionType } from '../database/schema';
 import type { Period } from '../settings/settings.types';
 import { IsIsoDate } from '../common/validators/iso-date';
@@ -40,6 +41,38 @@ export class TransactionQueryDto {
   @IsOptional()
   @IsString()
   search?: string;
+
+  @IsOptional()
+  @IsIn(['expense', 'income'])
+  type?: TransactionType;
+
+  @IsOptional()
+  @IsString()
+  tag?: string;
+
+  @IsOptional()
+  @IsIsoDate()
+  dateFrom?: string;
+
+  @IsOptional()
+  @IsIsoDate()
+  dateTo?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  minAmount?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  maxAmount?: number;
+
+  @IsOptional()
+  @IsIn(['true', 'false'])
+  receipt?: string;
 }
 
 export class CreateTransactionDto {

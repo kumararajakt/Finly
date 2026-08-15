@@ -1,5 +1,5 @@
 import { Suspense, lazy, useEffect, useState } from "react";
-import { ChevronsUpDown, Paperclip, Pencil, Plus, Receipt, Search, Trash2, Upload, X } from "lucide-react";
+import { ChevronsUpDown, Paperclip, Pencil, Plus, Receipt, Search, SlidersHorizontal, Trash2, Upload, X } from "lucide-react";
 import PeriodSelector from "@/components/PeriodSelector";
 import { Button } from "@/components/ui/button";
 import EmptyState from "@/components/ui/empty-state";
@@ -100,6 +100,14 @@ export default function TransactionPage() {
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [accountFilter, setAccountFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
+  const [showMoreFilters, setShowMoreFilters] = useState(false);
+  const [typeFilter, setTypeFilter] = useState<"expense" | "income" | "all">("all");
+  const [tagFilter, setTagFilter] = useState("all");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [minAmount, setMinAmount] = useState("");
+  const [maxAmount, setMaxAmount] = useState("");
+  const [receiptFilter, setReceiptFilter] = useState<"all" | "yes" | "no">("all");
   const [addOpen, setAddOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [editorTx, setEditorTx] = useState<Transaction | null>(null);
@@ -121,8 +129,15 @@ export default function TransactionPage() {
         ...(accountFilter !== "all" ? { account: accountFilter } : {}),
         ...(categoryFilter !== "all" ? { category: categoryFilter } : {}),
         ...(debouncedSearch ? { search: debouncedSearch } : {}),
+        ...(typeFilter !== "all" ? { type: typeFilter } : {}),
+        ...(tagFilter !== "all" ? { tag: tagFilter } : {}),
+        ...(dateFrom ? { dateFrom } : {}),
+        ...(dateTo ? { dateTo } : {}),
+        ...(minAmount !== "" ? { minAmount: Number(minAmount) } : {}),
+        ...(maxAmount !== "" ? { maxAmount: Number(maxAmount) } : {}),
+        ...(receiptFilter !== "all" ? { receipt: receiptFilter === "yes" } : {}),
       }),
-    [period, accountFilter, categoryFilter, debouncedSearch]
+    [period, accountFilter, categoryFilter, debouncedSearch, typeFilter, tagFilter, dateFrom, dateTo, minAmount, maxAmount, receiptFilter]
   );
   const categories = useQuery<Category[]>(() => api.categories.list(), []);
   const accounts = useQuery<Account[]>(() => api.accounts.list(), []);
@@ -136,6 +151,13 @@ export default function TransactionPage() {
     setDebouncedSearch("");
     setAccountFilter("all");
     setCategoryFilter("all");
+    setTypeFilter("all");
+    setTagFilter("all");
+    setDateFrom("");
+    setDateTo("");
+    setMinAmount("");
+    setMaxAmount("");
+    setReceiptFilter("all");
   }
 
   async function handleCategoryChange(tx: Transaction, name: string) {
@@ -203,7 +225,17 @@ export default function TransactionPage() {
     setEditTx(null);
   }
 
-  const hasActiveFilters = debouncedSearch !== "" || accountFilter !== "all" || categoryFilter !== "all";
+  const hasActiveFilters =
+    debouncedSearch !== "" ||
+    accountFilter !== "all" ||
+    categoryFilter !== "all" ||
+    typeFilter !== "all" ||
+    tagFilter !== "all" ||
+    dateFrom !== "" ||
+    dateTo !== "" ||
+    minAmount !== "" ||
+    maxAmount !== "" ||
+    receiptFilter !== "all";
 
   return (
     <div className="space-y-4">
@@ -271,7 +303,89 @@ export default function TransactionPage() {
             </option>
           ))}
         </select>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setShowMoreFilters((value) => !value)}
+          aria-expanded={showMoreFilters}
+          className={cn(showMoreFilters && "border-ring bg-muted/50")}
+        >
+          <SlidersHorizontal />
+          <span>More filters</span>
+        </Button>
       </div>
+
+      {showMoreFilters && (
+        <div className="flex flex-wrap items-center gap-2">
+          <select
+            value={typeFilter}
+            onChange={(e) => setTypeFilter(e.target.value as "expense" | "income" | "all")}
+            aria-label="Type filter"
+            className="h-8 rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+          >
+            <option value="all">All types</option>
+            <option value="expense">Expenses</option>
+            <option value="income">Income</option>
+          </select>
+          <select
+            value={tagFilter}
+            onChange={(e) => setTagFilter(e.target.value)}
+            aria-label="Tag filter"
+            className="h-8 rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+          >
+            <option value="all">All tags</option>
+            {(tags.data ?? []).map((tag) => (
+              <option key={tag.name} value={tag.name}>
+                {tag.name}
+              </option>
+            ))}
+          </select>
+          <select
+            value={receiptFilter}
+            onChange={(e) => setReceiptFilter(e.target.value as "all" | "yes" | "no")}
+            aria-label="Receipt filter"
+            className="h-8 rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+          >
+            <option value="all">With or without receipts</option>
+            <option value="yes">With receipts</option>
+            <option value="no">Without receipts</option>
+          </select>
+          <Input
+            type="date"
+            value={dateFrom}
+            onChange={(e) => setDateFrom(e.target.value)}
+            aria-label="From date"
+            className="h-8 w-auto"
+          />
+          <Input
+            type="date"
+            value={dateTo}
+            onChange={(e) => setDateTo(e.target.value)}
+            aria-label="To date"
+            className="h-8 w-auto"
+          />
+          <Input
+            type="number"
+            min="0"
+            step="0.01"
+            value={minAmount}
+            onChange={(e) => setMinAmount(e.target.value)}
+            placeholder="Min amount"
+            aria-label="Minimum amount"
+            className="h-8 w-32"
+          />
+          <Input
+            type="number"
+            min="0"
+            step="0.01"
+            value={maxAmount}
+            onChange={(e) => setMaxAmount(e.target.value)}
+            placeholder="Max amount"
+            aria-label="Maximum amount"
+            className="h-8 w-32"
+          />
+        </div>
+      )}
 
       {mutationError && (
         <div

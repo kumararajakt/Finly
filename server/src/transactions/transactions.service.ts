@@ -4,7 +4,18 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { and, desc, eq, gte, ilike, lte, or, sql, type SQL } from 'drizzle-orm';
+import {
+  and,
+  arrayContains,
+  desc,
+  eq,
+  gte,
+  ilike,
+  lte,
+  or,
+  sql,
+  type SQL,
+} from 'drizzle-orm';
 import { DRIZZLE } from '../database/database.constants';
 import type { Database } from '../database/database.module';
 import {
@@ -86,6 +97,27 @@ export class TransactionsService {
           sql`${transactions.tags}::text ilike ${needle}`,
         )!,
       );
+    }
+    if (query.type) {
+      conditions.push(eq(transactions.type, query.type));
+    }
+    if (query.tag) {
+      conditions.push(arrayContains(transactions.tags, [query.tag]));
+    }
+    if (query.dateFrom) {
+      conditions.push(gte(transactions.date, query.dateFrom));
+    }
+    if (query.dateTo) {
+      conditions.push(lte(transactions.date, query.dateTo));
+    }
+    if (query.minAmount !== undefined) {
+      conditions.push(gte(transactions.amount, query.minAmount));
+    }
+    if (query.maxAmount !== undefined) {
+      conditions.push(lte(transactions.amount, query.maxAmount));
+    }
+    if (query.receipt) {
+      conditions.push(eq(transactions.receipt, query.receipt === 'true'));
     }
 
     return this.db
