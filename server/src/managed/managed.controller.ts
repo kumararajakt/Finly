@@ -6,6 +6,7 @@ import {
   HttpCode,
   Param,
   ParseUUIDPipe,
+  Patch,
   Post,
 } from '@nestjs/common';
 import { CurrentUser } from '../auth/current-user.decorator';
@@ -28,6 +29,15 @@ export class CategoriesController {
     @Body() body: NameDto,
   ): Promise<Category> {
     return this.managedService.createCategory(userId, body.name);
+  }
+
+  @Patch(':id')
+  rename(
+    @CurrentUser() userId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: NameDto,
+  ): Promise<Category> {
+    return this.managedService.renameCategory(userId, id, body.name);
   }
 
   @Delete(':id')

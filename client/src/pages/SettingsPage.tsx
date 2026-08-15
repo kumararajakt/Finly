@@ -1,13 +1,16 @@
 import { useEffect, useState, type ComponentType } from "react";
 import {
   AlertTriangle,
+  Check,
   FolderOpen,
   Landmark,
   LayoutGrid,
+  Pencil,
   RotateCcw,
   Tags,
   Trash2,
   Wallet,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -55,6 +58,7 @@ interface ManagedListProps {
   list: () => Promise<ManagedItem[]>;
   add: (name: string) => Promise<void>;
   remove: (item: ManagedItem) => Promise<void>;
+  rename?: (item: ManagedItem, name: string) => Promise<void>;
   addLabel: string;
   addPlaceholder: string;
   emptyTitle: string;
@@ -67,6 +71,7 @@ function ManagedList({
   list,
   add,
   remove,
+  rename,
   addLabel,
   addPlaceholder,
   emptyTitle,
@@ -77,6 +82,9 @@ function ManagedList({
   const [saving, setSaving] = useState(false);
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [renamingKey, setRenamingKey] = useState<string | null>(null);
+  const [renameDraft, setRenameDraft] = useState("");
+  const [renamingBusy, setRenamingBusy] = useState(false);
 
   async function handleAdd() {
     const name = draft.trim();
@@ -111,6 +119,34 @@ function ManagedList({
       setError(message(err));
     } finally {
       setBusyKey(null);
+    }
+  }
+
+  function startRename(item: ManagedItem) {
+    setRenamingKey(item.key);
+    setRenameDraft(item.label);
+    setError(null);
+  }
+
+  function cancelRename() {
+    setRenamingKey(null);
+    setRenameDraft("");
+  }
+
+  async function handleRename(item: ManagedItem) {
+    const name = renameDraft.trim();
+    if (!name) return;
+    setRenamingBusy(true);
+    setError(null);
+    try {
+      await rename?.(item, name);
+      setRenamingKey(null);
+      setRenameDraft("");
+      query.refetch();
+    } catch (err) {
+      setError(message(err));
+    } finally {
+      setRenamingBusy(false);
     }
   }
 
@@ -171,24 +207,75 @@ function ManagedList({
           <ul className="divide-y divide-border">
             {(query.data ?? []).map((item) => (
               <li key={item.key} className="flex items-center justify-between gap-3 py-3">
-                <span className="min-w-0 truncate text-sm">{item.label}</span>
-                <div className="flex shrink-0 items-center gap-3">
-                  {item.detail && (
-                    <span className="text-xs tabular-nums text-muted-foreground">
-                      {item.detail}
-                    </span>
-                  )}
-                  <Button
-                    size="icon-sm"
-                    variant="ghost"
-                    onClick={() => handleRemove(item)}
-                    disabled={busyKey === item.key}
-                    aria-label={`Delete ${item.label}`}
-                    className="text-destructive hover:text-destructive"
-                  >
-                    <Trash2 />
-                  </Button>
-                </div>
+                {renamingKey === item.key ? (
+                  <div className="flex w-full items-center gap-2">
+                    <Input
+                      value={renameDraft}
+                      onChange={(e) => setRenameDraft(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          void handleRename(item);
+                        } else if (e.key === "Escape") {
+                          cancelRename();
+                        }
+                      }}
+                      placeholder="New name"
+                      className="h-8 w-full"
+                      aria-label={`Rename ${item.label}`}
+                      autoFocus
+                    />
+                    <Button
+                      size="sm"
+                      onClick={() => void handleRename(item)}
+                      disabled={!renameDraft.trim() || renamingBusy}
+                      aria-label="Save rename"
+                    >
+                      <Check />
+                    </Button>
+                    <Button
+                      size="icon-sm"
+                      variant="ghost"
+                      onClick={cancelRename}
+                      disabled={renamingBusy}
+                      aria-label="Cancel rename"
+                    >
+                      <X />
+                    </Button>
+                  </div>
+                ) : (
+                  <>
+                    <span className="min-w-0 truncate text-sm">{item.label}</span>
+                    <div className="flex shrink-0 items-center gap-3">
+                      {item.detail && (
+                        <span className="text-xs tabular-nums text-muted-foreground">
+                          {item.detail}
+                        </span>
+                      )}
+                      {rename && (
+                        <Button
+                          size="icon-sm"
+                          variant="ghost"
+                          onClick={() => startRename(item)}
+                          disabled={busyKey === item.key}
+                          aria-label={`Rename ${item.label}`}
+                        >
+                          <Pencil />
+                        </Button>
+                      )}
+                      <Button
+                        size="icon-sm"
+                        variant="ghost"
+                        onClick={() => handleRemove(item)}
+                        disabled={busyKey === item.key}
+                        aria-label={`Delete ${item.label}`}
+                        className="text-destructive hover:text-destructive"
+                      >
+                        <Trash2 />
+                      </Button>
+                    </div>
+                  </>
+                )}
               </li>
             ))}
           </ul>
@@ -613,6 +700,9 @@ export default function SettingsPage() {
         }}
         remove={async (item) => {
           await api.categories.remove(item.key);
+        }}
+        rename={async (item, name) => {
+          await api.categories.rename(item.key, name);
         }}
         addLabel="Add"
         addPlaceholder="New category name"

@@ -22,12 +22,22 @@ const deleteChain = (rows: unknown[]) => ({
   })),
 });
 
+const updateChain = (rows: unknown[]) => ({
+  set: jest.fn(() => ({
+    where: jest.fn(() => ({
+      returning: jest.fn(() => Promise.resolve(rows)),
+    })),
+  })),
+});
+
 function dbMock() {
   return {
     select: jest.fn(),
     insert: jest.fn(),
+    update: jest.fn(),
     delete: jest.fn(),
     execute: jest.fn(),
+    transaction: jest.fn(),
   };
 }
 
@@ -68,6 +78,61 @@ describe('ManagedService', () => {
     await expect(
       service.deleteCategory(USER_ID, 'missing'),
     ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('renames a category and cascades the label across tables', async () => {
+    const category = {
+      id: 'c1',
+      name: 'Food',
+      createdAt: new Date('2026-01-01'),
+    };
+    const renamed = { ...category, name: 'Groceries' };
+    db.select.mockReturnValue(selectChain([category]));
+    db.transaction.mockImplementation(
+      async (callback: (tx: unknown) => Promise<unknown>) => callback(db),
+    );
+    const chain = updateChain([renamed]);
+    db.update.mockReturnValue(chain);
+    await expect(
+      service.renameCategory(USER_ID, 'c1', '  Groceries  '),
+    ).resolves.toEqual(renamed);
+    expect(chain.set.mock.calls[0][0]).toEqual({ category: 'Groceries' });
+    expect(chain.set.mock.calls[1][0]).toEqual({ category: 'Groceries' });
+    expect(chain.set.mock.calls[2][0]).toEqual({ category: 'Groceries' });
+    expect(chain.set.mock.calls[3][0]).toEqual({ category: 'Groceries' });
+    expect(chain.set.mock.calls[4][0]).toEqual({ name: 'Groceries' });
+  });
+
+  it('returns the category unchanged when renaming to the same name', async () => {
+    const category = {
+      id: 'c1',
+      name: 'Food',
+      createdAt: new Date('2026-01-01'),
+    };
+    db.select.mockReturnValue(selectChain([category]));
+    await expect(service.renameCategory(USER_ID, 'c1', 'Food')).resolves.toBe(
+      category,
+    );
+    expect(db.transaction).not.toHaveBeenCalled();
+  });
+
+  it('throws a 404 when renaming a missing category', async () => {
+    db.select.mockReturnValue(selectChain([]));
+    await expect(
+      service.renameCategory(USER_ID, 'missing', 'Groceries'),
+    ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('maps a unique violation on rename to a conflict', async () => {
+    db.select.mockReturnValue(
+      selectChain([
+        { id: 'c1', name: 'Food', createdAt: new Date('2026-01-01') },
+      ]),
+    );
+    db.transaction.mockImplementation(() => Promise.reject(uniqueViolation()));
+    await expect(
+      service.renameCategory(USER_ID, 'c1', 'Groceries'),
+    ).rejects.toBeInstanceOf(ConflictException);
   });
 
   it('creates an account', async () => {

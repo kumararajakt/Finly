@@ -9,7 +9,10 @@ import { DRIZZLE } from '../database/database.constants';
 import type { Database } from '../database/database.module';
 import {
   accounts,
+  budgets,
   categories,
+  recurring,
+  subscriptions,
   tags,
   transactions,
   type Account,
@@ -62,6 +65,83 @@ export class ManagedService {
         .values({ userId, name: trimmed })
         .returning();
       return row;
+    } catch (error) {
+      if (isUniqueViolation(error)) {
+        throw new ConflictException({
+          message: `A category named "${trimmed}" already exists.`,
+          code: 'DUPLICATE_CATEGORY',
+        });
+      }
+      throw error;
+    }
+  }
+
+  async renameCategory(
+    userId: string,
+    id: string,
+    name: string,
+  ): Promise<Category> {
+    const trimmed = name.trim();
+    const existing = await this.db
+      .select()
+      .from(categories)
+      .where(and(eq(categories.id, id), eq(categories.userId, userId)))
+      .limit(1);
+    if (existing.length === 0) {
+      throw notFound('Category');
+    }
+    const current = existing[0];
+    if (current.name === trimmed) {
+      return current;
+    }
+    try {
+      const renamed = await this.db.transaction(async (tx) => {
+        await Promise.all([
+          tx
+            .update(transactions)
+            .set({ category: trimmed })
+            .where(
+              and(
+                eq(transactions.userId, userId),
+                eq(transactions.category, current.name),
+              ),
+            ),
+          tx
+            .update(recurring)
+            .set({ category: trimmed })
+            .where(
+              and(
+                eq(recurring.userId, userId),
+                eq(recurring.category, current.name),
+              ),
+            ),
+          tx
+            .update(subscriptions)
+            .set({ category: trimmed })
+            .where(
+              and(
+                eq(subscriptions.userId, userId),
+                eq(subscriptions.category, current.name),
+              ),
+            ),
+          tx
+            .update(budgets)
+            .set({ category: trimmed })
+            .where(
+              and(
+                eq(budgets.userId, userId),
+                eq(budgets.category, current.name),
+              ),
+            ),
+        ]);
+        const [row] = await tx
+          .update(categories)
+          .set({ name: trimmed })
+          .where(and(eq(categories.id, id), eq(categories.userId, userId)))
+          .returning();
+        return row;
+      });
+      return renamed;
     } catch (error) {
       if (isUniqueViolation(error)) {
         throw new ConflictException({

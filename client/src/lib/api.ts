@@ -135,6 +135,11 @@ export const api = {
     list: () => apiFetch<Category[]>("/categories"),
     create: (name: string) =>
       apiFetch<Category>("/categories", { method: "POST", body: { name } }),
+    rename: (id: string, name: string) =>
+      apiFetch<Category>(`/categories/${encodeURIComponent(id)}`, {
+        method: "PATCH",
+        body: { name },
+      }),
     remove: (id: string) =>
       apiFetch<void>(`/categories/${encodeURIComponent(id)}`, { method: "DELETE" }),
   },
