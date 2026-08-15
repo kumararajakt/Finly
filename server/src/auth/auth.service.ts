@@ -16,7 +16,21 @@ import type { isAPIError } from 'better-auth/api';
 import { DRIZZLE } from '../database/database.constants';
 import type { Database } from '../database/database.module';
 import { DatabaseSeedService } from '../database/database-seed.service';
-import { users } from '../database/schema';
+import {
+  account,
+  accounts,
+  budgets,
+  categories,
+  goals,
+  recurring,
+  rules,
+  sessions,
+  settings,
+  subscriptions,
+  tags,
+  transactions,
+  users,
+} from '../database/schema';
 import { timeZoneForCountry } from '../countries/countries';
 import {
   createAuthInstance,
@@ -98,6 +112,44 @@ export class AuthService implements OnModuleInit {
     } catch (error) {
       throw this.mapAuthError(error, 'Sign out failed.');
     }
+  }
+
+  async deleteAccount(
+    userId: string,
+    request: ExpressRequest,
+    response: ExpressResponse,
+  ): Promise<{ success: boolean }> {
+    try {
+      const result = (await this.auth.api.signOut({
+        headers: this.headersFrom(request),
+        returnHeaders: true,
+      })) as AuthCallResult;
+      this.applyCookies(response, result.headers);
+    } catch (error) {
+      this.logger.warn(
+        `Sign-out during account deletion failed: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
+    await this.db.transaction(async (tx) => {
+      await Promise.all([
+        tx.delete(sessions).where(eq(sessions.userId, userId)),
+        tx.delete(account).where(eq(account.userId, userId)),
+        tx.delete(transactions).where(eq(transactions.userId, userId)),
+        tx.delete(categories).where(eq(categories.userId, userId)),
+        tx.delete(accounts).where(eq(accounts.userId, userId)),
+        tx.delete(tags).where(eq(tags.userId, userId)),
+        tx.delete(rules).where(eq(rules.userId, userId)),
+        tx.delete(recurring).where(eq(recurring.userId, userId)),
+        tx.delete(subscriptions).where(eq(subscriptions.userId, userId)),
+        tx.delete(budgets).where(eq(budgets.userId, userId)),
+        tx.delete(goals).where(eq(goals.userId, userId)),
+        tx.delete(settings).where(eq(settings.userId, userId)),
+      ]);
+      await tx.delete(users).where(eq(users.id, userId));
+    });
+    return { success: true };
   }
 
   async getSession(

@@ -9,6 +9,7 @@ interface AuthContextValue {
   status: AuthStatus;
   user: AuthUser | null;
   logout: () => Promise<void>;
+  deleteAccount: () => Promise<void>;
   updateProfile: (patch: {
     name?: string;
     image?: string | null;
@@ -75,6 +76,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  const deleteAccount = useCallback(async () => {
+    await api.auth.deleteAccount();
+    setUser(null);
+    setStatus("unauthenticated");
+  }, []);
+
   const updateProfile = useCallback(
     async (patch: {
       name?: string;
@@ -90,8 +97,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 
   const value = useMemo<AuthContextValue>(
-    () => ({ status, user, logout, updateProfile }),
-    [status, user, logout, updateProfile]
+    () => ({ status, user, logout, deleteAccount, updateProfile }),
+    [status, user, logout, deleteAccount, updateProfile]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

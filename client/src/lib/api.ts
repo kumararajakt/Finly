@@ -94,6 +94,8 @@ export const api = {
         body: { provider, callbackURL: window.location.origin },
       }),
     logout: () => apiFetch<{ success: true }>("/auth/logout", { method: "POST" }),
+    deleteAccount: () =>
+      apiFetch<{ success: true }>("/auth/account", { method: "DELETE" }),
     updateProfile: (patch: {
       name?: string;
       image?: string | null;

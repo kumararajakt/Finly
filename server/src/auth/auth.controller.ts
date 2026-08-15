@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   Patch,
@@ -49,6 +50,22 @@ export class AuthController {
   @Get('me')
   me(@Req() request: Request) {
     return this.authService.getSession(request);
+  }
+
+  @Delete('account')
+  @HttpCode(200)
+  deleteAccount(
+    @Req() request: AuthenticatedRequest,
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<{ success: boolean }> {
+    const userId = request.auth?.user?.id;
+    if (!userId) {
+      throw new UnauthorizedException({
+        message: 'Authentication required.',
+        code: 'UNAUTHORIZED',
+      });
+    }
+    return this.authService.deleteAccount(userId, request, response);
   }
 
   @Patch('profile')

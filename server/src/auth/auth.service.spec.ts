@@ -1,5 +1,20 @@
 import { HttpStatus } from '@nestjs/common';
 import type { Response } from 'express';
+import {
+  account,
+  accounts,
+  budgets,
+  categories,
+  goals,
+  recurring,
+  rules,
+  sessions,
+  settings,
+  subscriptions,
+  tags,
+  transactions,
+  users,
+} from '../database/schema';
 import { AuthService } from './auth.service';
 
 const EMAIL = 'owner@finly.local';
@@ -15,11 +30,18 @@ function makeDb() {
     select: jest.fn(),
     insert: jest.fn(),
     update: jest.fn(),
-    delete: jest.fn(),
+    delete: jest.fn<(table: unknown) => { where: jest.Mock }>(),
+    transaction: jest.fn(),
   };
   db.update.mockImplementation(() => ({
     set: jest.fn(() => ({ where: jest.fn().mockResolvedValue(undefined) })),
   }));
+  db.delete.mockImplementation(() => ({
+    where: jest.fn().mockResolvedValue(undefined),
+  }));
+  db.transaction.mockImplementation(
+    async (fn: (tx: ReturnType<typeof makeDb>) => Promise<unknown>) => fn(db),
+  );
   return db;
 }
 
@@ -207,6 +229,80 @@ describe('AuthService', () => {
       expect(setHeader).toHaveBeenCalledWith('Set-Cookie', [
         'finly.session_token=',
       ]);
+    });
+  });
+
+  describe('deleteAccount', () => {
+    it('signs out and deletes the user with all their data', async () => {
+      const db = makeDb();
+      const { service, auth } = makeService(db);
+      auth.api.signOut.mockResolvedValue({
+        headers: { getSetCookie: () => ['finly.session_token='] },
+        response: { success: true },
+      });
+      const { setHeader, response } = makeResponse();
+
+      const result = await service.deleteAccount(
+        'u1',
+        { headers: {} } as never,
+        response,
+      );
+
+      expect(result).toEqual({ success: true });
+      expect(auth.api.signOut).toHaveBeenCalled();
+      expect(db.transaction).toHaveBeenCalled();
+      expect(setHeader).toHaveBeenCalledWith('Set-Cookie', [
+        'finly.session_token=',
+      ]);
+    });
+
+    it('deletes every user-scoped table before the user', async () => {
+      const db = makeDb();
+      const { service, auth } = makeService(db);
+      auth.api.signOut.mockResolvedValue({
+        headers: undefined,
+        response: { success: true },
+      });
+
+      await service.deleteAccount(
+        'u1',
+        { headers: {} } as never,
+        {
+          setHeader: jest.fn(),
+        } as never,
+      );
+
+      const expected = [
+        sessions,
+        account,
+        transactions,
+        categories,
+        accounts,
+        tags,
+        rules,
+        recurring,
+        subscriptions,
+        budgets,
+        goals,
+        settings,
+        users,
+      ];
+      for (const table of expected) {
+        expect(db.delete).toHaveBeenCalledWith(table);
+      }
+    });
+
+    it('still deletes the user when sign-out fails', async () => {
+      const db = makeDb();
+      const { service, auth } = makeService(db);
+      auth.api.signOut.mockRejectedValue(new Error('session gone'));
+      const { response } = makeResponse();
+
+      await expect(
+        service.deleteAccount('u1', { headers: {} } as never, response),
+      ).resolves.toEqual({ success: true });
+
+      expect(db.transaction).toHaveBeenCalled();
     });
   });
 

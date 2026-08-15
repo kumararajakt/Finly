@@ -1,5 +1,6 @@
 import { useEffect, useState, type ComponentType } from "react";
 import {
+  AlertTriangle,
   FolderOpen,
   Landmark,
   LayoutGrid,
@@ -9,10 +10,19 @@ import {
   Wallet,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import EmptyState from "@/components/ui/empty-state";
 import ErrorState from "@/components/ui/error-state";
 import { Input } from "@/components/ui/input";
 import LoadingState from "@/components/ui/loading-state";
+import { useAuth } from "@/contexts/AuthContext";
 import { useSettings } from "@/contexts/SettingsContext";
 import { useQuery } from "@/hooks/use-query";
 import { ApiError, api } from "@/lib/api";
@@ -482,6 +492,99 @@ function IgnoredSuggestionsSection() {
   );
 }
 
+function DeleteAccountSection() {
+  const { deleteAccount } = useAuth();
+  const [open, setOpen] = useState(false);
+  const [confirm, setConfirm] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const matches = confirm.trim().toUpperCase() === "DELETE";
+
+  async function handleDelete() {
+    if (!matches || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await deleteAccount();
+    } catch (err) {
+      setError(message(err));
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="rounded-xl border border-destructive/30 bg-card p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <AlertTriangle className="size-4 text-destructive" aria-hidden="true" />
+          <h3 className="text-sm font-medium">Delete account</h3>
+        </div>
+        <Button type="button" variant="destructive" onClick={() => setOpen(true)}>
+          <Trash2 />
+          Delete account
+        </Button>
+      </div>
+      <p className="mt-2 max-w-xl text-sm text-muted-foreground">
+        Permanently deletes your account and every transaction, budget, goal, recurring
+        payment, and setting. This cannot be undone.
+      </p>
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete your account?</DialogTitle>
+            <DialogDescription>
+              This permanently removes all of your data, including your Google sign-in.
+              Type{" "}
+              <span className="font-semibold text-foreground">DELETE</span> to confirm.
+            </DialogDescription>
+          </DialogHeader>
+
+          <Input
+            value={confirm}
+            onChange={(event) => setConfirm(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                void handleDelete();
+              }
+            }}
+            placeholder="Type DELETE to confirm"
+            aria-label="Confirmation text"
+            autoFocus
+          />
+
+          {error && (
+            <p role="alert" className="text-xs text-destructive">
+              {error}
+            </p>
+          )}
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setOpen(false)}
+              disabled={busy}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={() => void handleDelete()}
+              disabled={!matches || busy}
+            >
+              {busy ? "Deleting…" : "Delete everything"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </section>
+  );
+}
+
 export default function SettingsPage() {
   return (
     <div className="space-y-6">
@@ -561,6 +664,8 @@ export default function SettingsPage() {
       />
 
       <IgnoredSuggestionsSection />
+
+      <DeleteAccountSection />
     </div>
   );
 }
