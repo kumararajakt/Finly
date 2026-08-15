@@ -15,6 +15,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useSettings } from "@/contexts/SettingsContext";
 import { api } from "@/lib/api";
 import { fileToAvatarDataUrl, MAX_UPLOAD_BYTES } from "@/lib/avatar";
+import { countryCodeFromTimeZone } from "@/lib/country";
 import type { Country } from "@/lib/types";
 
 let countriesPromise: Promise<Country[]> | null = null;
@@ -53,7 +54,10 @@ export default function OnboardingDialog() {
     setError(null);
     if (countries === null && !countriesError) {
       loadCountries()
-        .then(setCountries)
+        .then((list) => {
+          setCountries(list);
+          setCountry((current) => current ?? countryCodeFromTimeZone(list) ?? null);
+        })
         .catch(() => setCountriesError(true));
     }
   }, [user, countries, countriesError]);
