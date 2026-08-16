@@ -4,7 +4,8 @@ export type Period =
   | 'last-month'
   | 'last-3-months'
   | 'last-6-months'
-  | 'this-year';
+  | 'this-year'
+  | 'custom';
 
 export type Density = 'compact' | 'cozy' | 'comfortable' | 'roomy' | 'spacious';
 
@@ -17,6 +18,8 @@ export interface ImportResult {
 
 export interface Settings {
   selectedPeriod: Period;
+  customDateFrom: string | null;
+  customDateTo: string | null;
   netWorthConfigured: boolean;
   totalAssets: number;
   totalLiabilities: number;

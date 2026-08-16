@@ -24,7 +24,8 @@ import {
   type Transaction,
 } from '../database/schema';
 import { computeFingerprint } from '../common/fingerprint';
-import { periodRange } from '../summary/period';
+import { periodRange, type DateRange } from '../summary/period';
+import { SettingsService } from '../settings/settings.service';
 import {
   CreateTransactionDto,
   TransactionQueryDto,
@@ -68,7 +69,10 @@ function duplicateError(): ConflictException {
 
 @Injectable()
 export class TransactionsService {
-  constructor(@Inject(DRIZZLE) private readonly db: Database) {}
+  constructor(
+    @Inject(DRIZZLE) private readonly db: Database,
+    private readonly settingsService: SettingsService,
+  ) {}
 
   async list(
     userId: string,
@@ -76,7 +80,10 @@ export class TransactionsService {
   ): Promise<Transaction[]> {
     const conditions: SQL[] = [eq(transactions.userId, userId)];
     if (query.period) {
-      const range = periodRange(query.period);
+      const range =
+        query.period === 'custom'
+          ? await this.customRange(userId)
+          : periodRange(query.period);
       if (range.start) {
         conditions.push(gte(transactions.date, range.start));
       }
@@ -125,6 +132,14 @@ export class TransactionsService {
       .from(transactions)
       .where(conditions.length > 0 ? and(...conditions) : undefined)
       .orderBy(desc(transactions.date), desc(transactions.createdAt));
+  }
+
+  private async customRange(userId: string): Promise<DateRange> {
+    const settings = await this.settingsService.getAll(userId);
+    return periodRange('custom', new Date(), {
+      start: settings.customDateFrom,
+      end: settings.customDateTo,
+    });
   }
 
   async create(

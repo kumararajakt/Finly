@@ -52,6 +52,26 @@ describe('periodRange', () => {
       end: '2025-12-31',
     });
   });
+
+  it('custom period uses the provided dates', () => {
+    expect(
+      periodRange('custom', now, { start: '2026-03-01', end: '2026-04-15' }),
+    ).toEqual({ start: '2026-03-01', end: '2026-04-15' });
+  });
+
+  it('custom period defaults a missing end to today', () => {
+    expect(periodRange('custom', now, { start: '2026-01-01' })).toEqual({
+      start: '2026-01-01',
+      end: '2026-08-15',
+    });
+  });
+
+  it('custom period with no dates is unbounded', () => {
+    expect(periodRange('custom', now)).toEqual({
+      start: null,
+      end: '2026-08-15',
+    });
+  });
 });
 
 describe('buildBuckets', () => {

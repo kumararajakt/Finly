@@ -137,7 +137,7 @@ export default function TransactionPage() {
         ...(maxAmount !== "" ? { maxAmount: Number(maxAmount) } : {}),
         ...(receiptFilter !== "all" ? { receipt: receiptFilter === "yes" } : {}),
       }),
-    [period, accountFilter, categoryFilter, debouncedSearch, typeFilter, tagFilter, dateFrom, dateTo, minAmount, maxAmount, receiptFilter]
+    [period, settings.customDateFrom, settings.customDateTo, accountFilter, categoryFilter, debouncedSearch, typeFilter, tagFilter, dateFrom, dateTo, minAmount, maxAmount, receiptFilter]
   );
   const categories = useQuery<Category[]>(() => api.categories.list(), []);
   const accounts = useQuery<Account[]>(() => api.accounts.list(), []);

@@ -66,7 +66,10 @@ export class SummaryService {
   async getSummary(userId: string, period?: Period): Promise<Summary> {
     const allSettings = await this.settingsService.getAll(userId);
     const activePeriod = period ?? allSettings.selectedPeriod;
-    const range = periodRange(activePeriod);
+    const range = periodRange(activePeriod, new Date(), {
+      start: allSettings.customDateFrom,
+      end: allSettings.customDateTo,
+    });
 
     const conditions: SQL[] = [eq(transactions.userId, userId)];
     if (range.start) {

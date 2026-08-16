@@ -43,8 +43,15 @@ function lastOfMonth(year: number, monthIndex: number): string {
   return localDateISO(d);
 }
 
-export function periodRange(period: Period, now: Date = new Date()): DateRange {
+export function periodRange(
+  period: Period,
+  now: Date = new Date(),
+  custom: { start?: string | null; end?: string | null } = {},
+): DateRange {
   const today = localDateISO(now);
+  if (period === 'custom') {
+    return { start: custom.start ?? null, end: custom.end ?? today };
+  }
   const year = now.getFullYear();
   const month = now.getMonth();
 

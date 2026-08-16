@@ -111,7 +111,7 @@ export const api = {
 
   settings: {
     get: () => apiFetch<Settings>("/settings"),
-    set: (key: string, value: string | number | boolean | string[]) =>
+    set: (key: string, value: string | number | boolean | string[] | null) =>
       apiFetch<Settings>(`/settings/${encodeURIComponent(key)}`, {
         method: "PUT",
         body: { value },

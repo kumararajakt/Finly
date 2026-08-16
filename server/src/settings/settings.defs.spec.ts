@@ -8,6 +8,8 @@ import {
 describe('settings.defs', () => {
   it('exposes every Settings key', () => {
     expect(SETTING_KEYS).toContain('selectedPeriod');
+    expect(SETTING_KEYS).toContain('customDateFrom');
+    expect(SETTING_KEYS).toContain('customDateTo');
     expect(SETTING_KEYS).toContain('netWorthConfigured');
     expect(SETTING_KEYS).toContain('totalAssets');
     expect(SETTING_KEYS).toContain('totalLiabilities');
@@ -38,6 +40,14 @@ describe('settings.defs', () => {
         'this-month',
       );
       expect(parseSetting('selectedPeriod', 'this-month')).toBe('this-month');
+    });
+
+    it('round-trips custom range dates', () => {
+      expect(serializeSetting('customDateFrom', '2026-03-01')).toBe(
+        '2026-03-01',
+      );
+      expect(parseSetting('customDateFrom', '2026-03-01')).toBe('2026-03-01');
+      expect(parseSetting('customDateFrom', 'null')).toBeNull();
     });
 
     it('round-trips string arrays', () => {
@@ -71,6 +81,9 @@ describe('settings.defs', () => {
   describe('validateSetting', () => {
     it('accepts valid values', () => {
       expect(validateSetting('selectedPeriod', 'this-month')).toBe(true);
+      expect(validateSetting('selectedPeriod', 'custom')).toBe(true);
+      expect(validateSetting('customDateFrom', '2026-03-01')).toBe(true);
+      expect(validateSetting('customDateTo', null)).toBe(true);
       expect(validateSetting('density', 'cozy')).toBe(true);
       expect(validateSetting('netWorthConfigured', false)).toBe(true);
       expect(validateSetting('totalAssets', 0)).toBe(true);
@@ -80,6 +93,8 @@ describe('settings.defs', () => {
 
     it('rejects invalid values', () => {
       expect(validateSetting('selectedPeriod', 'next-week')).toBe(false);
+      expect(validateSetting('customDateFrom', 'not-a-date')).toBe(false);
+      expect(validateSetting('customDateTo', '2026-02-30')).toBe(false);
       expect(validateSetting('density', 'huge')).toBe(false);
       expect(validateSetting('netWorthConfigured', 'true')).toBe(false);
       expect(validateSetting('totalAssets', -5)).toBe(false);

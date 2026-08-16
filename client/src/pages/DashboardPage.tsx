@@ -127,7 +127,7 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
 
   const { status, data: summary, error, refetch } = useQuery<Summary>(
     () => api.summary.get(period),
-    [period]
+    [period, settings.customDateFrom, settings.customDateTo]
   );
 
   const netWorthConfigured = settings.netWorthConfigured;

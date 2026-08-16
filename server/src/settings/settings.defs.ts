@@ -7,6 +7,7 @@ export const PERIODS: Period[] = [
   'last-3-months',
   'last-6-months',
   'this-year',
+  'custom',
 ];
 
 export const DENSITIES: Density[] = [
@@ -32,6 +33,8 @@ interface SettingDef {
 
 export const SETTING_DEFS: Record<keyof Settings, SettingDef> = {
   selectedPeriod: { type: 'string', default: 'all-time' },
+  customDateFrom: { type: 'nullableString', default: null },
+  customDateTo: { type: 'nullableString', default: null },
   netWorthConfigured: { type: 'boolean', default: false },
   totalAssets: { type: 'number', default: 0 },
   totalLiabilities: { type: 'number', default: 0 },
@@ -115,6 +118,19 @@ export function parseSetting(key: keyof Settings, raw: string): unknown {
   }
 }
 
+function isIsoDate(value: unknown): boolean {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return false;
+  }
+  const [year, month, day] = value.split('-').map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return (
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day
+  );
+}
+
 export function validateSetting(key: keyof Settings, value: unknown): boolean {
   const def = SETTING_DEFS[key];
   switch (def.type) {
@@ -137,6 +153,9 @@ export function validateSetting(key: keyof Settings, value: unknown): boolean {
         Array.isArray(value) && value.every((item) => typeof item === 'string')
       );
     case 'nullableString':
+      if (key === 'customDateFrom' || key === 'customDateTo') {
+        return value === null || value === undefined || isIsoDate(value);
+      }
       return value === null || value === undefined || typeof value === 'string';
     case 'nullableObject':
       return (

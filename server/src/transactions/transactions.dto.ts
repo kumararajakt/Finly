@@ -13,21 +13,13 @@ import {
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import type { TransactionType } from '../database/schema';
+import { PERIODS } from '../settings/settings.defs';
 import type { Period } from '../settings/settings.types';
 import { IsIsoDate } from '../common/validators/iso-date';
 
-export const PERIOD_VALUES: Period[] = [
-  'all-time',
-  'this-month',
-  'last-month',
-  'last-3-months',
-  'last-6-months',
-  'this-year',
-];
-
 export class TransactionQueryDto {
   @IsOptional()
-  @IsIn(PERIOD_VALUES)
+  @IsIn(PERIODS)
   period?: Period;
 
   @IsOptional()

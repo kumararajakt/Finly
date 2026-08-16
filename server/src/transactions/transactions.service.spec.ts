@@ -59,7 +59,15 @@ describe('TransactionsService', () => {
 
   beforeEach(() => {
     db = dbMock();
-    service = new TransactionsService(db as never);
+    service = new TransactionsService(
+      db as never,
+      {
+        getAll: jest.fn().mockResolvedValue({
+          customDateFrom: '2026-01-01',
+          customDateTo: '2026-01-31',
+        }),
+      } as never,
+    );
   });
 
   it('lists transactions scoped to the user without filters', async () => {
@@ -80,6 +88,20 @@ describe('TransactionsService', () => {
     const sql = whereSql(chain);
     expect(sql.sql).toContain('"date" >=');
     expect(sql.sql).toContain('"date" <=');
+  });
+
+  it('applies custom period bounds from settings', async () => {
+    const chain = makeSelectChain([]);
+    db.select.mockReturnValue(chain);
+    await service.list(USER_ID, {
+      period: 'custom',
+    });
+    const sql = whereSql(chain);
+    expect(sql.sql).toContain('"date" >=');
+    expect(sql.sql).toContain('"date" <=');
+    expect(sql.params).toEqual(
+      expect.arrayContaining([USER_ID, '2026-01-01', '2026-01-31']),
+    );
   });
 
   it('applies type, tag, date, amount, and receipt filters', async () => {

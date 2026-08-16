@@ -4,6 +4,8 @@ import type { Period, Settings } from "@/lib/types";
 
 const DEFAULT_SETTINGS: Settings = {
   selectedPeriod: "all-time",
+  customDateFrom: null,
+  customDateTo: null,
   netWorthConfigured: false,
   totalAssets: 0,
   totalLiabilities: 0,
@@ -25,7 +27,10 @@ interface SettingsContextValue {
   error: ApiError | undefined;
   setPeriod: (period: Period) => Promise<void>;
   updateSettings: (patch: Partial<Settings>) => void;
-  saveSetting: (key: keyof Settings, value: string | number | boolean | string[]) => Promise<Settings>;
+  saveSetting: (
+    key: keyof Settings,
+    value: string | number | boolean | string[] | null
+  ) => Promise<Settings>;
   refetch: () => void;
 }
 
@@ -82,7 +87,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const saveSetting = useCallback(
-    async (key: keyof Settings, value: string | number | boolean | string[]) => {
+    async (key: keyof Settings, value: string | number | boolean | string[] | null) => {
       const data = await api.settings.set(key, value);
       setSettings({ ...DEFAULT_SETTINGS, ...data });
       return data;

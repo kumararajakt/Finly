@@ -147,6 +147,7 @@ const PERIOD_LABELS: Record<Period, string> = {
   "last-3-months": "Last 3 months",
   "last-6-months": "Last 6 months",
   "this-year": "This year",
+  custom: "Custom",
 };
 
 export const PERIODS: Period[] = [
@@ -156,6 +157,7 @@ export const PERIODS: Period[] = [
   "last-3-months",
   "last-6-months",
   "this-year",
+  "custom",
 ];
 
 export function periodLabel(period: Period): string {
@@ -169,6 +171,7 @@ export function periodStartDate(period: Period, now = new Date()): string | null
   let startYear = year;
   switch (period) {
     case "all-time":
+    case "custom":
       return null;
     case "this-month":
       break;

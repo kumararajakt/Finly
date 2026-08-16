@@ -86,12 +86,14 @@ export interface Goal {
   createdAt: string;
 }
 
-export type Period = "all-time" | "this-month" | "last-month" | "last-3-months" | "last-6-months" | "this-year";
+export type Period = "all-time" | "this-month" | "last-month" | "last-3-months" | "last-6-months" | "this-year" | "custom";
 
 export type Density = "compact" | "cozy" | "comfortable" | "roomy" | "spacious";
 
 export interface Settings {
   selectedPeriod: Period;
+  customDateFrom: string | null;
+  customDateTo: string | null;
   netWorthConfigured: boolean;
   totalAssets: number;
   totalLiabilities: number;
