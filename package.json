@@ -4,9 +4,10 @@
   "private": true,
   "description": "Finly — personal finance app (NestJS API + React client)",
   "scripts": {
-    "dev": "concurrently -n server,client -c blue,green \"pnpm --filter server start:dev\" \"pnpm --filter client dev\"",
+    "dev": "concurrently -n server,client,pdf -c blue,green,magenta \"pnpm --filter server start:dev\" \"pnpm --filter client dev\" \"pnpm --filter pdf-service dev\"",
     "dev:server": "pnpm --filter server start:dev",
     "dev:client": "pnpm --filter client dev",
+    "dev:pdf": "pnpm --filter pdf-service dev",
     "build": "pnpm -r build",
     "lint": "pnpm -r lint",
     "test": "pnpm -r test"

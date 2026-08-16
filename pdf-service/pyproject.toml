@@ -1,15 +1,22 @@
 [project]
 name = "pdf-service"
 version = "0.1.0"
-description = "Add your description here"
+description = "Extracts tabular rows from text-based PDF bank statements for Finly."
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
     "fastapi[standard]>=0.141.1",
+    "pdfplumber>=0.11.0",
 ]
 
-[project.scripts]
-pdf-service = "pdf_service:main"
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "reportlab>=4.0",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
 
 [build-system]
 requires = ["uv_build>=0.12.3,<0.13.0"]

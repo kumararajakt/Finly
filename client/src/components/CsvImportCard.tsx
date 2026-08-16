@@ -24,7 +24,7 @@ import type {
 } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-const MAX_CSV_BYTES = 10 * 1024 * 1024;
+const MAX_CSV_BYTES = 20 * 1024 * 1024;
 const MAX_PREVIEW_ROWS = 500;
 
 const ROLE_LABELS: Record<string, string> = {
@@ -156,11 +156,25 @@ export default function CsvImportCard({ onNavigate, onImported }: CsvImportCardP
     setError(null);
     setFileName(file.name);
     if (file.size > MAX_CSV_BYTES) {
-      setError("That file is larger than 10 MB. Try a smaller statement export.");
+      setError("That file is larger than 20 MB. Try a smaller statement export.");
       return;
     }
     setBusy(true);
     try {
+      if (file.name.toLowerCase().endsWith(".pdf")) {
+        const extracted = await api.importPdf.extract(file);
+        setCsvText(extracted.csv);
+        setFileName(extracted.filename);
+        const detected = await api.importCsv.preview(extracted.csv);
+        setPreview(detected);
+        setMapping(detected.mapping);
+        setHasHeader(detected.hasHeader);
+        setAmountMode(
+          detected.mapping.amount !== null ? "amount" : "split"
+        );
+        setStep("mapping");
+        return;
+      }
       const text = await file.text();
       const detected = await api.importCsv.preview(text);
       setCsvText(text);
@@ -659,19 +673,20 @@ export default function CsvImportCard({ onNavigate, onImported }: CsvImportCardP
     <section className="rounded-xl border bg-card p-4 sm:p-5">
       <h3 className="flex items-center gap-2 text-sm font-medium">
         <FileSpreadsheet className="size-4 text-muted-foreground" aria-hidden="true" />
-        Import a CSV statement
+        Import a CSV or PDF statement
       </h3>
       <p className="mt-1 text-sm text-muted-foreground">
-        Choose a bank statement export. We&apos;ll detect the columns first, then you confirm the
-        mapping before anything is imported — nothing is guessed silently.
+        Choose a bank statement export (CSV/TSV or a text-based PDF). We&apos;ll detect the columns
+        first, then you confirm the mapping before anything is imported — nothing is guessed
+        silently. Scanned/image-only PDFs aren&apos;t supported.
       </p>
 
       <input
         ref={inputRef}
         type="file"
-        accept=".csv,.tsv,.txt,text/csv,text/plain"
+        accept=".csv,.tsv,.txt,.pdf,text/csv,text/plain,application/pdf"
         className="hidden"
-        aria-label="Choose a CSV file"
+        aria-label="Choose a CSV or PDF file"
         onChange={(event) => {
           const file = event.target.files?.[0];
           if (file) void handleFile(file);

@@ -1,0 +1,12 @@
+{
+  "name": "pdf-service",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Python FastAPI service that extracts tabular rows from text-based PDF bank statements for Finly (managed with uv).",
+  "scripts": {
+    "setup": "uv sync",
+    "dev": "uv run uvicorn pdf_service.main:app --reload --port 8000",
+    "start": "uv run uvicorn pdf_service.main:app --port 8000",
+    "test": "[ -x .venv/bin/python ] && uv run pytest -q || echo \"pdf-service not set up; run: pnpm --filter pdf-service setup\""
+  }
+}

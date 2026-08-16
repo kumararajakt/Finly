@@ -139,6 +139,12 @@ export interface CsvImportPreview {
   newAccounts: string[];
 }
 
+export interface PdfExtractResult {
+  csv: string;
+  filename: string;
+  pageCount: number;
+}
+
 export interface TransactionFilters {
   period?: Period;
   account?: string;

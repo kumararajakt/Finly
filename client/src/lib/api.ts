@@ -13,6 +13,7 @@ import type {
   ImportResult,
   NewTransaction,
   Period,
+  PdfExtractResult,
   Recurring,
   Rule,
   Settings,
@@ -245,6 +246,17 @@ export const api = {
         method: "POST",
         body: { csv, mapping, signConvention },
       }),
+  },
+
+  importPdf: {
+    extract: (file: File) => {
+      const form = new FormData();
+      form.append("file", file);
+      return apiFetch<PdfExtractResult>("/import/pdf", {
+        method: "POST",
+        body: form,
+      });
+    },
   },
 
   summary: {

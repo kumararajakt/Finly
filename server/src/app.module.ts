@@ -9,6 +9,7 @@ import { GoalsModule } from './goals/goals.module';
 import { HealthModule } from './health/health.module';
 import { ImportModule } from './import/import.module';
 import { ManagedModule } from './managed/managed.module';
+import { PdfImportModule } from './pdf-import/pdf-import.module';
 import { RecurringModule } from './recurring/recurring.module';
 import { RulesModule } from './rules/rules.module';
 import { SettingsModule } from './settings/settings.module';
@@ -25,6 +26,7 @@ import { TransactionsModule } from './transactions/transactions.module';
     HealthModule,
     ImportModule,
     ManagedModule,
+    PdfImportModule,
     SettingsModule,
     SummaryModule,
     TransactionsModule,

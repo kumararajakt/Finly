@@ -1,5 +1,6 @@
 packages:
   - client
+  - pdf-service
   - server
 
 allowBuilds:
