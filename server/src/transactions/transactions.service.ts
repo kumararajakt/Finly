@@ -90,7 +90,7 @@ export class TransactionsService {
       conditions.push(lte(transactions.date, range.end));
     }
     if (query.account) {
-      conditions.push(eq(transactions.account, query.account));
+      conditions.push(eq(transactions.fromAccount, query.account));
     }
     if (query.category) {
       conditions.push(eq(transactions.category, query.category));
@@ -153,7 +153,9 @@ export class TransactionsService {
       category: dto.category?.trim() || 'Needs review',
       amount: round2(dto.amount),
       type: dto.type,
-      account: dto.account?.trim() || 'Imported account',
+      fromAccount: dto.fromAccount?.trim() || 'Imported account',
+      toAccount: dto.toAccount?.trim() || null,
+      side: (dto.side as Transaction['side']) ?? null,
       tags: normalizeTags(dto.tags),
       notes: dto.notes?.trim() || null,
       receipt: dto.receipt ?? false,
@@ -206,7 +208,18 @@ export class TransactionsService {
         dto.category !== undefined ? dto.category.trim() : current.category,
       amount: dto.amount !== undefined ? round2(dto.amount) : current.amount,
       type: dto.type ?? current.type,
-      account: dto.account !== undefined ? dto.account.trim() : current.account,
+      fromAccount:
+        dto.fromAccount !== undefined
+          ? dto.fromAccount.trim()
+          : current.fromAccount,
+      toAccount:
+        dto.toAccount !== undefined
+          ? dto.toAccount.trim() || null
+          : current.toAccount,
+      side:
+        dto.side !== undefined
+          ? ((dto.side as Transaction['side']) ?? null)
+          : current.side,
       tags: dto.tags !== undefined ? normalizeTags(dto.tags) : current.tags,
       notes: dto.notes !== undefined ? dto.notes.trim() || null : current.notes,
       receipt: current.receipt,

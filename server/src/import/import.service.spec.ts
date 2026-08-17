@@ -221,7 +221,7 @@ describe('ImportService', () => {
       expect(values.find((value) => value.merchant === 'Coffee')).toMatchObject(
         {
           category: 'Breakfast',
-          account: 'Main wallet',
+          fromAccount: 'Main wallet',
         },
       );
     });
@@ -421,7 +421,7 @@ describe('ImportService', () => {
       });
 
       const values = valuesCalls.flat();
-      expect(values[0].account).toBe('Checking');
+      expect(values[0].fromAccount).toBe('Checking');
     });
 
     it('reports partial status when the batch fails mid-insert', async () => {
@@ -470,7 +470,7 @@ describe('ImportService', () => {
             amount: 5.5,
             type: 'income',
             category: 'Needs review',
-            account: 'Imported account',
+            fromAccount: 'Imported account',
             notes: null,
             status: 'insert',
           },
@@ -480,7 +480,7 @@ describe('ImportService', () => {
             amount: 3000,
             type: 'expense',
             category: 'Needs review',
-            account: 'Imported account',
+            fromAccount: 'Imported account',
             notes: null,
             status: 'insert',
           },
@@ -608,7 +608,7 @@ describe('ImportService', () => {
           amount: 0,
           type: 'expense',
           category: '',
-          account: '',
+          fromAccount: '',
           notes: null,
           status: 'skipped',
         },
@@ -618,7 +618,7 @@ describe('ImportService', () => {
           amount: 0,
           type: 'expense',
           category: '',
-          account: '',
+          fromAccount: '',
           notes: null,
           status: 'skipped',
         },
@@ -628,7 +628,7 @@ describe('ImportService', () => {
           amount: 10,
           type: 'income',
           category: 'Needs review',
-          account: 'Imported account',
+          fromAccount: 'Imported account',
           notes: null,
           status: 'insert',
         },
@@ -653,7 +653,7 @@ describe('ImportService', () => {
 
       expect(result.rows[0]).toMatchObject({
         category: 'Dining',
-        account: 'Checking',
+        fromAccount: 'Checking',
       });
     });
   });

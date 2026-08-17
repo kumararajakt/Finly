@@ -483,7 +483,7 @@ export default function TransactionPage() {
                         />
                       </TableCell>
                       <TableCell className="hidden text-muted-foreground sm:table-cell">
-                        {tx.account}
+                        {tx.fromAccount}
                       </TableCell>
                       <TableCell className="hidden max-w-56 md:table-cell">
                         {tx.notes ? (

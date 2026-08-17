@@ -130,9 +130,7 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
     [period, settings.customDateFrom, settings.customDateTo]
   );
 
-  const netWorthConfigured = settings.netWorthConfigured;
-  const assets = settings.totalAssets;
-  const liabilities = settings.totalLiabilities;
+  const hasAdjustment = settings.netWorthAdjustment !== 0;
 
   return (
     <div className="space-y-6">
@@ -158,22 +156,20 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <SummaryCard
               label="Net Worth"
-              value={netWorthConfigured ? formatCurrency(assets - liabilities, currency) : "Not set"}
+              value={summary.netWorth !== null ? formatCurrency(summary.netWorth, currency) : "Not set"}
               valueClassName={
-                !netWorthConfigured
+                summary.netWorth === null
                   ? "text-muted-foreground"
-                  : assets - liabilities < 0
+                  : summary.netWorth < 0
                     ? "text-red-600"
                     : undefined
               }
-              stripLabel="Assets − Liabilities"
+              stripLabel={hasAdjustment ? `Adjustment: ${formatCurrency(settings.netWorthAdjustment, currency)}` : ""}
               stripValue={
-                netWorthConfigured
-                  ? `${formatCurrency(assets, currency)} − ${formatCurrency(liabilities, currency)}`
-                  : "Set in Settings"
+                summary.netWorth === null ? "Set in Settings" : ""
               }
               action={
-                !netWorthConfigured ? (
+                summary.netWorth === null ? (
                   <button
                     type="button"
                     onClick={() => onNavigate?.("settings")}
@@ -255,7 +251,7 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
                       <div className="min-w-0">
                         <p className="truncate text-sm font-medium">{tx.merchant}</p>
                         <p className="text-xs text-muted-foreground">
-                          {formatDate(tx.date)} · {tx.category} · {tx.account}
+                          {formatDate(tx.date)} · {tx.category} · {tx.fromAccount}
                         </p>
                       </div>
                       <span

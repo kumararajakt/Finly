@@ -1,5 +1,7 @@
-export type TransactionType = "expense" | "income" | "transfer";
+export type TransactionType = "expense" | "income" | "transfer" | "investment";
 export type TransactionSource = "manual" | "csv" | "document" | "google-drive";
+export type TradeSide = "buy" | "sell" | "dividend" | "interest";
+export type AccountType = "cash" | "credit" | "investment";
 
 export interface Transaction {
   id: string;
@@ -8,7 +10,9 @@ export interface Transaction {
   category: string;
   amount: number;
   type: TransactionType;
-  account: string;
+  fromAccount: string;
+  toAccount: string | null;
+  side: TradeSide | null;
   tags: string[];
   notes: string | null;
   receipt: boolean;
@@ -26,6 +30,7 @@ export interface Category {
 export interface Account {
   id: string;
   name: string;
+  type: AccountType;
   createdAt: string;
 }
 
@@ -94,9 +99,7 @@ export interface Settings {
   selectedPeriod: Period;
   customDateFrom: string | null;
   customDateTo: string | null;
-  netWorthConfigured: boolean;
-  totalAssets: number;
-  totalLiabilities: number;
+  netWorthAdjustment: number;
   currency: string;
   density: Density;
   dismissedPatterns: string[];
@@ -123,7 +126,7 @@ export interface CsvRowPreview {
   amount: number;
   type: TransactionType;
   category: string;
-  account: string;
+  fromAccount: string;
   notes: string | null;
   status: CsvRowStatus;
 }
@@ -165,7 +168,7 @@ export interface NewTransaction {
   category: string;
   amount: number;
   type: TransactionType;
-  account: string;
+  fromAccount: string;
   tags?: string[];
   notes?: string;
   receipt?: boolean;
@@ -174,7 +177,7 @@ export interface NewTransaction {
 export type TransactionPatch = Partial<
   Pick<
     NewTransaction,
-    "merchant" | "category" | "amount" | "date" | "type" | "account" | "tags" | "notes"
+    "merchant" | "category" | "amount" | "date" | "type" | "fromAccount" | "tags" | "notes"
   >
 >;
 

@@ -6,9 +6,7 @@ import { categories, settings } from './schema';
 
 const DEFAULT_SETTINGS: { key: string; value: string }[] = [
   { key: 'selectedPeriod', value: 'all-time' },
-  { key: 'netWorthConfigured', value: 'false' },
-  { key: 'totalAssets', value: '0' },
-  { key: 'totalLiabilities', value: '0' },
+  { key: 'netWorthAdjustment', value: '0' },
   { key: 'currency', value: 'USD' },
   { key: 'density', value: 'comfortable' },
   { key: 'dismissedPatterns', value: '[]' },

@@ -322,7 +322,7 @@ export function detectSuggestions(
     const lastDate = uniqueDates[uniqueDates.length - 1];
     const today = localDateISO(new Date());
     const accounts = group
-      .map((tx) => tx.account)
+      .map((tx) => tx.fromAccount)
       .filter((account) => account && account.length > 0);
 
     suggestions.push({

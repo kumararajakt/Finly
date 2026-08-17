@@ -19,8 +19,10 @@ const isoDate = (name: string) => text(name).$type<IsoDate>();
 
 export type Cadence =
   'weekly' | 'biweekly' | 'monthly' | 'quarterly' | 'annual';
-export type TransactionType = 'expense' | 'income' | 'transfer';
+export type TransactionType = 'expense' | 'income' | 'transfer' | 'investment';
 export type TransactionSource = 'manual' | 'csv' | 'document' | 'google-drive';
+export type TradeSide = 'buy' | 'sell' | 'dividend' | 'interest';
+export type AccountType = 'cash' | 'credit' | 'investment';
 
 export const users = pgTable('users', {
   id: text('id').primaryKey(),
@@ -107,7 +109,9 @@ export const transactions = pgTable(
     category: text('category').notNull().default('Needs review'),
     amount: real('amount').notNull(),
     type: text('type').notNull().$type<TransactionType>(),
-    account: text('account').notNull().default('Imported account'),
+    fromAccount: text('from_account').notNull().default('Imported account'),
+    toAccount: text('to_account'),
+    side: text('side').$type<TradeSide>(),
     tags: jsonb('tags')
       .$type<string[]>()
       .notNull()
@@ -130,12 +134,16 @@ export const transactions = pgTable(
     ),
     index('transactions_user_date_idx').on(table.userId, table.date),
     index('transactions_user_category_idx').on(table.userId, table.category),
-    index('transactions_user_account_idx').on(table.userId, table.account),
+    index('transactions_user_account_idx').on(table.userId, table.fromAccount),
     index('transactions_user_type_idx').on(table.userId, table.type),
     index('transactions_tags_idx').using('gin', table.tags),
     check(
       'transactions_type_check',
-      sql`${table.type} in ('expense', 'income', 'transfer')`,
+      sql`${table.type} in ('expense', 'income', 'transfer', 'investment')`,
+    ),
+    check(
+      'transactions_side_check',
+      sql`${table.side} is null or ${table.side} in ('buy', 'sell', 'dividend', 'interest')`,
     ),
   ],
 );
@@ -168,6 +176,7 @@ export const accounts = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
     name: text('name').notNull(),
+    type: text('type').notNull().default('cash').$type<AccountType>(),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -176,6 +185,10 @@ export const accounts = pgTable(
     uniqueIndex('accounts_name_unique').on(
       table.userId,
       sql`lower(trim(${table.name}))`,
+    ),
+    check(
+      'accounts_type_check',
+      sql`${table.type} in ('cash', 'credit', 'investment')`,
     ),
   ],
 );
@@ -289,6 +302,70 @@ export const goals = pgTable('goals', {
     .defaultNow(),
 });
 
+export const trades = pgTable(
+  'trades',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    accountId: uuid('account_id')
+      .notNull()
+      .references(() => accounts.id),
+    date: isoDate('date').notNull(),
+    security: text('security').notNull(),
+    side: text('side').notNull().$type<TradeSide>(),
+    units: real('units').notNull(),
+    price: real('price').notNull(),
+    amount: real('amount').notNull(),
+    fee: real('fee').notNull().default(0),
+    linkedTransactionId: uuid('linked_transaction_id').references(
+      () => transactions.id,
+    ),
+    notes: text('notes'),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index('trades_user_account_idx').on(table.userId, table.accountId),
+    index('trades_user_security_idx').on(table.userId, table.security),
+    check(
+      'trades_side_check',
+      sql`${table.side} in ('buy', 'sell', 'dividend', 'interest')`,
+    ),
+  ],
+);
+
+export const securities = pgTable(
+  'securities',
+  {
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    currentPrice: real('current_price'),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [primaryKey({ columns: [table.userId, table.name] })],
+);
+
+export const quotes = pgTable(
+  'quotes',
+  {
+    symbol: text('symbol').notNull(),
+    source: text('source').notNull(),
+    name: text('name'),
+    price: real('price').notNull(),
+    fetchedAt: timestamp('fetched_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [primaryKey({ columns: [table.symbol, table.source] })],
+);
+
 export const settings = pgTable(
   'settings',
   {
@@ -326,5 +403,11 @@ export type Budget = typeof budgets.$inferSelect;
 export type NewBudget = typeof budgets.$inferInsert;
 export type Goal = typeof goals.$inferSelect;
 export type NewGoal = typeof goals.$inferInsert;
+export type Trade = typeof trades.$inferSelect;
+export type NewTrade = typeof trades.$inferInsert;
+export type Security = typeof securities.$inferSelect;
+export type NewSecurity = typeof securities.$inferInsert;
+export type Quote = typeof quotes.$inferSelect;
+export type NewQuote = typeof quotes.$inferInsert;
 export type Setting = typeof settings.$inferSelect;
 export type NewSetting = typeof settings.$inferInsert;

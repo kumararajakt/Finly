@@ -58,7 +58,7 @@ export interface CsvRowPreview {
   amount: number;
   type: TransactionType;
   category: string;
-  account: string;
+  fromAccount: string;
   notes: string | null;
   status: CsvRowStatus;
 }
@@ -78,7 +78,7 @@ interface ParsedRow {
   date: string;
   merchant: string;
   category: string;
-  account: string;
+  fromAccount: string;
   notes: string | null;
   amount: number;
   type: 'expense' | 'income';
@@ -231,7 +231,7 @@ export class ImportService {
           amount: 0,
           type: 'expense',
           category: '',
-          account: '',
+          fromAccount: '',
           notes: null,
           status: 'skipped',
         });
@@ -248,7 +248,7 @@ export class ImportService {
         amount: value.amount,
         type: value.type,
         category: value.category ?? '',
-        account: value.account ?? '',
+        fromAccount: value.fromAccount ?? '',
         notes: value.notes ?? null,
         status: isDuplicate ? 'duplicate' : 'insert',
       };
@@ -281,7 +281,7 @@ export class ImportService {
       newAccounts: this.collectNewLabels(
         inserts,
         accountMap,
-        (value) => value.account ?? '',
+        (value) => value.fromAccount ?? '',
         'Imported account',
       ),
     };
@@ -348,7 +348,7 @@ export class ImportService {
         category: parsed.category,
         amount: parsed.amount,
         type: parsed.type,
-        account: parsed.account,
+        fromAccount: parsed.fromAccount,
         notes: parsed.notes,
         tags: [] as string[],
         receipt: false,
@@ -404,7 +404,7 @@ export class ImportService {
     const missingAccounts = this.collectNewLabels(
       values,
       accountMap,
-      (value) => value.account ?? '',
+      (value) => value.fromAccount ?? '',
       'Imported account',
     );
     if (missingAccounts.length > 0) {
@@ -511,7 +511,7 @@ export class ImportService {
 
     const rawAccount =
       mapping.account === null ? '' : (row[mapping.account] ?? '').trim();
-    const account =
+    const fromAccount =
       rawAccount.length > 0
         ? (accountMap.get(rawAccount.toLowerCase()) ?? rawAccount)
         : 'Imported account';
@@ -531,7 +531,7 @@ export class ImportService {
       date,
       merchant,
       category,
-      account,
+      fromAccount,
       notes,
       amount: resolved.amount,
       type: resolved.type,

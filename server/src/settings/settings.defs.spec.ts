@@ -10,9 +10,7 @@ describe('settings.defs', () => {
     expect(SETTING_KEYS).toContain('selectedPeriod');
     expect(SETTING_KEYS).toContain('customDateFrom');
     expect(SETTING_KEYS).toContain('customDateTo');
-    expect(SETTING_KEYS).toContain('netWorthConfigured');
-    expect(SETTING_KEYS).toContain('totalAssets');
-    expect(SETTING_KEYS).toContain('totalLiabilities');
+    expect(SETTING_KEYS).toContain('netWorthAdjustment');
     expect(SETTING_KEYS).toContain('currency');
     expect(SETTING_KEYS).toContain('density');
     expect(SETTING_KEYS).toContain('dismissedPatterns');
@@ -25,14 +23,12 @@ describe('settings.defs', () => {
 
   describe('serializeSetting / parseSetting', () => {
     it('round-trips booleans', () => {
-      expect(serializeSetting('netWorthConfigured', true)).toBe('true');
-      expect(parseSetting('netWorthConfigured', 'true')).toBe(true);
-      expect(parseSetting('netWorthConfigured', 'false')).toBe(false);
+      expect(serializeSetting('dismissedPatterns', ['a'])).toBe('["a"]');
     });
 
     it('round-trips numbers', () => {
-      expect(serializeSetting('totalAssets', 1234.5)).toBe('1234.5');
-      expect(parseSetting('totalAssets', '1234.5')).toBe(1234.5);
+      expect(serializeSetting('netWorthAdjustment', 1234.5)).toBe('1234.5');
+      expect(parseSetting('netWorthAdjustment', '1234.5')).toBe(1234.5);
     });
 
     it('round-trips strings', () => {
@@ -85,8 +81,7 @@ describe('settings.defs', () => {
       expect(validateSetting('customDateFrom', '2026-03-01')).toBe(true);
       expect(validateSetting('customDateTo', null)).toBe(true);
       expect(validateSetting('density', 'cozy')).toBe(true);
-      expect(validateSetting('netWorthConfigured', false)).toBe(true);
-      expect(validateSetting('totalAssets', 0)).toBe(true);
+      expect(validateSetting('netWorthAdjustment', 0)).toBe(true);
       expect(validateSetting('dismissedPatterns', [])).toBe(true);
       expect(validateSetting('googleDriveFolderName', null)).toBe(true);
     });
@@ -96,9 +91,8 @@ describe('settings.defs', () => {
       expect(validateSetting('customDateFrom', 'not-a-date')).toBe(false);
       expect(validateSetting('customDateTo', '2026-02-30')).toBe(false);
       expect(validateSetting('density', 'huge')).toBe(false);
-      expect(validateSetting('netWorthConfigured', 'true')).toBe(false);
-      expect(validateSetting('totalAssets', -5)).toBe(false);
-      expect(validateSetting('totalAssets', '10')).toBe(false);
+      expect(validateSetting('netWorthAdjustment', -5)).toBe(false);
+      expect(validateSetting('netWorthAdjustment', '10')).toBe(false);
       expect(validateSetting('dismissedPatterns', 'a')).toBe(false);
       expect(validateSetting('dismissedPatterns', [1, 2])).toBe(false);
     });

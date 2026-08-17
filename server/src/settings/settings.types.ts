@@ -20,9 +20,7 @@ export interface Settings {
   selectedPeriod: Period;
   customDateFrom: string | null;
   customDateTo: string | null;
-  netWorthConfigured: boolean;
-  totalAssets: number;
-  totalLiabilities: number;
+  netWorthAdjustment: number;
   currency: string;
   density: Density;
   dismissedPatterns: string[];

@@ -286,18 +286,16 @@ function ManagedList({
 
 function NetWorthSection() {
   const { settings, status, error, refetch, saveSetting } = useSettings();
-  const [assetsInput, setAssetsInput] = useState("");
-  const [liabilitiesInput, setLiabilitiesInput] = useState("");
+  const [adjustmentInput, setAdjustmentInput] = useState("");
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
     if (status === "success") {
-      setAssetsInput(settings.totalAssets ? String(settings.totalAssets) : "");
-      setLiabilitiesInput(settings.totalLiabilities ? String(settings.totalLiabilities) : "");
+      setAdjustmentInput(settings.netWorthAdjustment ? String(settings.netWorthAdjustment) : "");
     }
-  }, [status, settings.totalAssets, settings.totalLiabilities]);
+  }, [status, settings.netWorthAdjustment]);
 
   useEffect(() => {
     if (!saved) return;
@@ -305,30 +303,22 @@ function NetWorthSection() {
     return () => clearTimeout(timer);
   }, [saved]);
 
-  const assets = toAmount(assetsInput);
-  const liabilities = toAmount(liabilitiesInput);
+  const adjustment = toAmount(adjustmentInput);
   const preview =
-    assets !== null && liabilities !== null
-      ? formatCurrency(assets - liabilities, settings.currency)
+    adjustment !== null
+      ? formatCurrency(adjustment, settings.currency)
       : null;
 
   async function handleSave() {
-    const assetsValue = toAmount(assetsInput);
-    const liabilitiesValue = toAmount(liabilitiesInput);
-    if (assetsValue === null || liabilitiesValue === null) {
-      setSaveError("Enter valid numbers for assets and liabilities.");
-      return;
-    }
-    if (assetsValue < 0 || liabilitiesValue < 0) {
-      setSaveError("Assets and liabilities can't be negative.");
+    const adjustmentValue = toAmount(adjustmentInput);
+    if (adjustmentValue === null) {
+      setSaveError("Enter a valid number for the adjustment.");
       return;
     }
     setSaving(true);
     setSaveError(null);
     try {
-      await saveSetting("totalAssets", assetsValue);
-      await saveSetting("totalLiabilities", liabilitiesValue);
-      await saveSetting("netWorthConfigured", true);
+      await saveSetting("netWorthAdjustment", adjustmentValue);
       setSaved(true);
     } catch (err) {
       setSaveError(message(err));
@@ -342,15 +332,16 @@ function NetWorthSection() {
       <div className="flex items-center gap-2">
         <Wallet className="size-4 text-muted-foreground" aria-hidden="true" />
         <h3 className="text-sm font-medium">Net worth</h3>
-        {settings.netWorthConfigured && (
+        {settings.netWorthAdjustment !== 0 && (
           <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-600 dark:text-emerald-400">
             Set
           </span>
         )}
       </div>
       <p className="mt-2 max-w-xl text-sm text-muted-foreground">
-        Net worth is the total of your assets minus your liabilities. It isn't calculated from
-        income and expenses — update it here whenever you want it to change.
+        Net worth is computed from your account balances. Use this field to add an
+        adjustment for assets or liabilities you don't track as accounts (gold,
+        property, EPF, etc.).
       </p>
 
       {status === "loading" ? (
@@ -361,30 +352,17 @@ function NetWorthSection() {
           onRetry={refetch}
         />
       ) : (
-        <div className="mt-4 grid gap-4 sm:grid-cols-2">
-          <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium" htmlFor="total-assets">
-              Total assets
+        <div className="mt-4">
+          <div className="flex flex-col gap-1.5 max-w-sm">
+            <label className="text-xs font-medium" htmlFor="net-worth-adjustment">
+              Other assets/liabilities adjustment
             </label>
             <Input
-              id="total-assets"
+              id="net-worth-adjustment"
               type="text"
               inputMode="decimal"
-              value={assetsInput}
-              onChange={(e) => setAssetsInput(e.target.value)}
-              placeholder="0.00"
-            />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium" htmlFor="total-liabilities">
-              Total liabilities
-            </label>
-            <Input
-              id="total-liabilities"
-              type="text"
-              inputMode="decimal"
-              value={liabilitiesInput}
-              onChange={(e) => setLiabilitiesInput(e.target.value)}
+              value={adjustmentInput}
+              onChange={(e) => setAdjustmentInput(e.target.value)}
               placeholder="0.00"
             />
           </div>
@@ -393,7 +371,7 @@ function NetWorthSection() {
 
       <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-muted-foreground">
-          Assets <span aria-hidden="true">−</span> Liabilities ={" "}
+          Adjustment:{" "}
           <span className="font-semibold tabular-nums text-foreground">{preview ?? "—"}</span>
         </p>
         <div className="flex items-center gap-3">
@@ -412,7 +390,7 @@ function NetWorthSection() {
             onClick={handleSave}
             disabled={saving || status !== "success"}
           >
-            {saving ? "Saving…" : settings.netWorthConfigured ? "Update net worth" : "Save net worth"}
+            {saving ? "Saving…" : "Save adjustment"}
           </Button>
         </div>
       </div>

@@ -35,7 +35,7 @@ export class TransactionQueryDto {
   search?: string;
 
   @IsOptional()
-  @IsIn(['expense', 'income', 'transfer'])
+  @IsIn(['expense', 'income', 'transfer', 'investment'])
   type?: TransactionType;
 
   @IsOptional()
@@ -85,13 +85,22 @@ export class CreateTransactionDto {
   @Max(100_000_000, { message: 'Amount is too large.' })
   amount: number;
 
-  @IsIn(['expense', 'income', 'transfer'])
+  @IsIn(['expense', 'income', 'transfer', 'investment'])
   type: TransactionType;
 
   @IsOptional()
   @IsString()
   @IsNotEmpty()
-  account?: string;
+  fromAccount?: string;
+
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  toAccount?: string;
+
+  @IsOptional()
+  @IsIn(['buy', 'sell', 'dividend', 'interest'])
+  side?: string;
 
   @IsOptional()
   @IsArray()
@@ -132,13 +141,22 @@ export class UpdateTransactionDto {
   amount?: number;
 
   @IsOptional()
-  @IsIn(['expense', 'income', 'transfer'])
+  @IsIn(['expense', 'income', 'transfer', 'investment'])
   type?: TransactionType;
 
   @IsOptional()
   @IsString()
   @IsNotEmpty()
-  account?: string;
+  fromAccount?: string;
+
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  toAccount?: string;
+
+  @IsOptional()
+  @IsIn(['buy', 'sell', 'dividend', 'interest'])
+  side?: string;
 
   @IsOptional()
   @IsArray()

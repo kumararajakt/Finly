@@ -144,7 +144,7 @@ describe('detection.algorithm', () => {
       ...partial,
       type: 'expense',
       category: partial.category ?? 'Needs review',
-      account: partial.account ?? 'Checking',
+      fromAccount: partial.fromAccount ?? 'Checking',
       tags: partial.tags ?? [],
       receipt: false,
       source: 'manual',

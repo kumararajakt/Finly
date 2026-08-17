@@ -598,7 +598,7 @@ export default function CsvImportCard({ onNavigate, onImported }: CsvImportCardP
                     {row.category || "—"}
                   </td>
                   <td className="max-w-[12rem] truncate px-3 py-1.5">
-                    {row.account || "—"}
+                    {row.fromAccount || "—"}
                   </td>
                   <td className="px-3 py-1.5">
                     <StatusBadge status={row.status} />

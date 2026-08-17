@@ -96,9 +96,10 @@ export class SummaryService {
     const savingsRate =
       income > 0 ? round2(((income - spending) / income) * 100) : 0;
 
-    const netWorth = allSettings.netWorthConfigured
-      ? round2(allSettings.totalAssets - allSettings.totalLiabilities)
-      : null;
+    const netWorth =
+      allSettings.netWorthAdjustment !== 0
+        ? allSettings.netWorthAdjustment
+        : null;
 
     const buckets = buildBuckets(
       range,

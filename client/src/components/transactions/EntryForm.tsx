@@ -20,7 +20,7 @@ interface EntryForm {
   merchant: string;
   date: string;
   category: string;
-  account: string;
+  fromAccount: string;
   tags: string[];
   notes: string;
 }
@@ -32,7 +32,7 @@ function initialForm(initial: Transaction | null): EntryForm {
     merchant: initial?.merchant ?? "",
     date: initial?.date ?? todayISO(),
     category: initial?.category ?? "",
-    account: initial?.account ?? "",
+    fromAccount: initial?.fromAccount ?? "",
     tags: initial?.tags ?? [],
     notes: initial?.notes ?? "",
   };
@@ -50,6 +50,7 @@ const TYPE_LABELS: Record<TransactionType, string> = {
   expense: "Expense",
   income: "Income",
   transfer: "Transfer",
+  investment: "Investment",
 };
 
 const TYPES = ["expense", "income", "transfer"] as const;
@@ -66,10 +67,10 @@ export default function EntryForm({ categories, accounts, tags, initial, onSaved
   }, [categories, form.category]);
 
   useEffect(() => {
-    if (!form.account && accounts.length > 0) {
-      setForm((f) => ({ ...f, account: accounts[0].name }));
+    if (!form.fromAccount && accounts.length > 0) {
+      setForm((f) => ({ ...f, fromAccount: accounts[0].name }));
     }
-  }, [accounts, form.account]);
+  }, [accounts, form.fromAccount]);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -78,7 +79,7 @@ export default function EntryForm({ categories, accounts, tags, initial, onSaved
     if (!form.merchant.trim()) return setError("Please enter a merchant or source.");
     if (!Number.isFinite(amount) || amount <= 0) return setError("Please enter a positive amount.");
     if (!form.category) return setError("Please choose a category.");
-    if (!form.account) return setError("Please choose an account.");
+    if (!form.fromAccount) return setError("Please choose an account.");
 
     setSaving(true);
     setError(null);
@@ -90,7 +91,7 @@ export default function EntryForm({ categories, accounts, tags, initial, onSaved
           date: form.date,
           merchant: form.merchant.trim(),
           category: form.category,
-          account: form.account,
+          fromAccount: form.fromAccount,
           amount,
           type: form.type,
           tags: form.tags,
@@ -101,7 +102,7 @@ export default function EntryForm({ categories, accounts, tags, initial, onSaved
           date: form.date,
           merchant: form.merchant.trim(),
           category: form.category,
-          account: form.account,
+          fromAccount: form.fromAccount,
           amount,
           type: form.type,
           tags: form.tags,
@@ -117,7 +118,7 @@ export default function EntryForm({ categories, accounts, tags, initial, onSaved
   }
 
   const knownCategory = form.category && !categories.some((c) => c.name === form.category);
-  const knownAccount = form.account && !accounts.some((a) => a.name === form.account);
+  const knownAccount = form.fromAccount && !accounts.some((a) => a.name === form.fromAccount);
 
   return (
     <form onSubmit={handleSubmit}>
@@ -204,8 +205,8 @@ export default function EntryForm({ categories, accounts, tags, initial, onSaved
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-medium">Account</label>
             <select
-              value={form.account}
-              onChange={(e) => setForm((f) => ({ ...f, account: e.target.value }))}
+              value={form.fromAccount}
+              onChange={(e) => setForm((f) => ({ ...f, fromAccount: e.target.value }))}
               required
               className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
             >
@@ -214,7 +215,7 @@ export default function EntryForm({ categories, accounts, tags, initial, onSaved
                   No accounts yet
                 </option>
               )}
-              {knownAccount && <option value={form.account}>{form.account}</option>}
+              {knownAccount && <option value={form.fromAccount}>{form.fromAccount}</option>}
               {accounts.map((account) => (
                 <option key={account.id} value={account.name}>
                   {account.name}
