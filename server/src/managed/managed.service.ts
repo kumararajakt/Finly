@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { sql, eq, and } from 'drizzle-orm';
+import { count, sql, eq, and } from 'drizzle-orm';
 import { DRIZZLE } from '../database/database.constants';
 import type { Database } from '../database/database.module';
 import {
@@ -154,13 +154,34 @@ export class ManagedService {
   }
 
   async deleteCategory(userId: string, id: string): Promise<void> {
-    const result = await this.db
-      .delete(categories)
+    const [cat] = await this.db
+      .select()
+      .from(categories)
       .where(and(eq(categories.id, id), eq(categories.userId, userId)))
-      .returning({ id: categories.id });
-    if (result.length === 0) {
+      .limit(1);
+    if (!cat) {
       throw notFound('Category');
     }
+
+    const [{ n }] = await this.db
+      .select({ n: count() })
+      .from(transactions)
+      .where(
+        and(
+          eq(transactions.userId, userId),
+          eq(transactions.category, cat.name),
+        ),
+      );
+    if (n > 0) {
+      throw new ConflictException({
+        message: `Category "${cat.name}" is used by ${n} transaction${n === 1 ? '' : 's'} and cannot be deleted.`,
+        code: 'CATEGORY_IN_USE',
+      });
+    }
+
+    await this.db
+      .delete(categories)
+      .where(and(eq(categories.id, id), eq(categories.userId, userId)));
   }
 
   async listAccounts(userId: string): Promise<Account[]> {

@@ -105,7 +105,7 @@ function ManagedList({
   async function handleRemove(item: ManagedItem) {
     if (
       !window.confirm(
-        `Delete "${item.label}"? It will be removed from future selectors. Existing transactions keep the label.`
+        `Delete "${item.label}"? It will be removed from future selectors. Categories in use by transactions cannot be deleted.`
       )
     ) {
       return;

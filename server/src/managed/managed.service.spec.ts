@@ -6,7 +6,11 @@ const USER_ID = 'user-1';
 const selectChain = (rows: unknown[]) => ({
   from: jest.fn(() => ({
     orderBy: jest.fn(() => Promise.resolve(rows)),
-    where: jest.fn(() => ({ limit: jest.fn(() => Promise.resolve(rows)) })),
+    where: jest.fn(() => {
+      const chain = { limit: jest.fn(() => Promise.resolve(rows)) };
+      chain[Symbol.for('nodejs.util.promisify.custom')] = undefined;
+      return Object.assign(Promise.resolve(rows), chain);
+    }),
   })),
 });
 
@@ -74,10 +78,31 @@ describe('ManagedService', () => {
   });
 
   it('throws a 404 when deleting a missing category', async () => {
-    db.delete.mockReturnValue(deleteChain([]));
+    db.select.mockReturnValue(selectChain([]));
     await expect(
       service.deleteCategory(USER_ID, 'missing'),
     ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('throws a 409 when deleting a category in use', async () => {
+    const cat = { id: 'c1', name: 'Food', createdAt: new Date('2026-01-01') };
+    db.select
+      .mockReturnValueOnce(selectChain([cat]))
+      .mockReturnValueOnce(selectChain([{ n: 3 }]));
+    await expect(service.deleteCategory(USER_ID, 'c1')).rejects.toMatchObject({
+      response: { code: 'CATEGORY_IN_USE' },
+    });
+  });
+
+  it('deletes a category that is not in use', async () => {
+    const cat = { id: 'c1', name: 'Food', createdAt: new Date('2026-01-01') };
+    db.select
+      .mockReturnValueOnce(selectChain([cat]))
+      .mockReturnValueOnce(selectChain([{ n: 0 }]));
+    db.delete.mockReturnValue(deleteChain([cat]));
+    await expect(
+      service.deleteCategory(USER_ID, 'c1'),
+    ).resolves.toBeUndefined();
   });
 
   it('renames a category and cascades the label across tables', async () => {
