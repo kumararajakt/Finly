@@ -2,7 +2,6 @@ import { Suspense, lazy, useCallback } from "react";
 import { BrowserRouter, Navigate, Route, Routes, useNavigate } from "react-router";
 import AppSidebar from "./Sidebar";
 import TopBar from "./components/TopBar";
-import MobileBottomNav from "./components/MobileBottomNav";
 import LoadingState from "./components/ui/loading-state";
 import OnboardingDialog from "./components/OnboardingDialog";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
@@ -48,7 +47,7 @@ function AppShell() {
     <>
       <AppSidebar>
         <TopBar />
-        <div className="p-4 pb-24 md:p-6 md:pb-6">
+        <div className="p-4 md:p-6">
           <Suspense fallback={<LoadingState label="Loading…" />}>
             <Routes>
               <Route index element={<Navigate to={menuPath("dashboard")} replace />} />
@@ -64,7 +63,6 @@ function AppShell() {
           </Suspense>
         </div>
       </AppSidebar>
-      <MobileBottomNav />
     </>
   );
 }

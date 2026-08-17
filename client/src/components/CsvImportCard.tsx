@@ -564,14 +564,14 @@ export default function CsvImportCard({ onNavigate, onImported }: CsvImportCardP
         )}
 
         <div className="mt-4 overflow-auto rounded-lg border">
-          <table className="w-full min-w-[640px] text-left text-sm">
+          <table className="w-full text-left text-sm">
             <thead className="sticky top-0 bg-muted/50">
               <tr className="text-xs uppercase tracking-wide text-muted-foreground">
                 <th className="px-3 py-2 font-medium">Date</th>
                 <th className="px-3 py-2 font-medium">Merchant</th>
                 <th className="px-3 py-2 text-right font-medium">Amount</th>
-                <th className="px-3 py-2 font-medium">Category</th>
-                <th className="px-3 py-2 font-medium">Account</th>
+                <th className="hidden px-3 py-2 font-medium sm:table-cell">Category</th>
+                <th className="hidden px-3 py-2 font-medium sm:table-cell">Account</th>
                 <th className="px-3 py-2 font-medium">Status</th>
               </tr>
             </thead>
@@ -594,10 +594,10 @@ export default function CsvImportCard({ onNavigate, onImported }: CsvImportCardP
                       ? formatSignedAmount(row.amount, row.type, settings.currency)
                       : "—"}
                   </td>
-                  <td className="max-w-[12rem] truncate px-3 py-1.5">
+                  <td className="max-w-[12rem] truncate px-3 py-1.5 hidden sm:table-cell">
                     {row.category || "—"}
                   </td>
-                  <td className="max-w-[12rem] truncate px-3 py-1.5">
+                  <td className="max-w-[12rem] truncate px-3 py-1.5 hidden sm:table-cell">
                     {row.fromAccount || "—"}
                   </td>
                   <td className="px-3 py-1.5">

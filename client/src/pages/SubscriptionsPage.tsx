@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { CalendarClock, CreditCard, Pencil, Plus, ShieldCheck, Sparkles, Trash2 } from "lucide-react";
+import { CalendarClock, CreditCard, Pencil, Plus, ShieldCheck, Sparkles, Trash2, X } from "lucide-react";
 import ConfidenceBadge from "@/components/ConfidenceBadge";
 import SummaryCard from "@/components/SummaryCard";
 import { Button } from "@/components/ui/button";
@@ -39,7 +39,7 @@ interface SuggestionRowProps {
 
 function SuggestionRow({ suggestion, currency, busy, onKeep, onIgnore }: SuggestionRowProps) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 py-3">
+    <div className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
           <span className="font-medium">{suggestion.merchant}</span>
@@ -77,7 +77,7 @@ interface SubscriptionRowProps {
 
 function SubscriptionRow({ item, currency, busy, onToggleActive, onEdit, onDelete }: SubscriptionRowProps) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 py-3">
+    <div className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
           <span className="font-medium">{item.name}</span>
@@ -462,9 +462,9 @@ export default function SubscriptionsPage() {
             type="button"
             onClick={() => setMutationError(null)}
             aria-label="Dismiss"
-            className="rounded p-0.5 hover:bg-destructive/20"
+            className="inline-flex size-8 shrink-0 items-center justify-center rounded-md hover:bg-destructive/20"
           >
-            <span className="block size-4">×</span>
+            <X className="size-4" aria-hidden="true" />
           </button>
         </div>
       )}

@@ -9,7 +9,7 @@ export default function MobileBottomNav() {
   return (
     <nav
       aria-label="Primary navigation"
-      className="fixed inset-x-0 bottom-0 z-40 border-t bg-background md:hidden"
+      className="fixed inset-x-0 bottom-0 z-40 border-t bg-background pb-[env(safe-area-inset-bottom)] md:hidden"
     >
       <div className="no-scrollbar flex overflow-x-auto">
         {menus.map((menu) => {

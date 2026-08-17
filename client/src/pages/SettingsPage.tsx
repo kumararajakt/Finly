@@ -443,7 +443,7 @@ function DensitySection() {
         />
       ) : (
         <div
-          className="mt-4 flex flex-wrap gap-1 rounded-lg border bg-muted/50 p-1"
+          className="mt-4 flex flex-col gap-1 rounded-lg border bg-muted/50 p-1 sm:flex-row sm:flex-wrap"
           role="group"
           aria-label="Layout density"
         >
@@ -456,7 +456,7 @@ function DensitySection() {
               aria-pressed={settings.density === option.value}
               title={option.description}
               className={cn(
-                "h-7 rounded-md px-2.5 text-sm font-medium transition-colors disabled:opacity-50",
+                "h-8 rounded-md px-2.5 text-sm font-medium transition-colors sm:h-7 disabled:opacity-50",
                 settings.density === option.value
                   ? "bg-background text-foreground shadow-sm"
                   : "text-muted-foreground hover:text-foreground"

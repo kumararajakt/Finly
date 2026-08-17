@@ -6,9 +6,10 @@ import EmptyState from "@/components/ui/empty-state";
 import ErrorState from "@/components/ui/error-state";
 import { Input } from "@/components/ui/input";
 import LoadingState from "@/components/ui/loading-state";
-import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { message } from "@/components/transactions/shared";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { useSettings } from "@/contexts/SettingsContext";
 import { useQuery } from "@/hooks/use-query";
 import { api } from "@/lib/api";
@@ -91,16 +92,269 @@ function TagPills({ tags, removing, onRemove, onAdd }: TagPillsProps) {
   );
 }
 
+interface TransactionCardProps {
+  tx: Transaction;
+  categoryNames: string[];
+  currency: string;
+  savingCategory: string | null;
+  removingTag: string | null;
+  deletingId: string | null;
+  onCategoryChange: (tx: Transaction, name: string) => void;
+  onRemoveTag: (tx: Transaction, tag: string) => void;
+  onEdit: (tx: Transaction) => void;
+  onDelete: (tx: Transaction) => void;
+  onAddTag: (tx: Transaction) => void;
+}
+
+function TransactionCard({
+  tx,
+  categoryNames,
+  currency,
+  savingCategory,
+  removingTag,
+  deletingId,
+  onCategoryChange,
+  onRemoveTag,
+  onEdit,
+  onDelete,
+  onAddTag,
+}: TransactionCardProps) {
+  return (
+    <div className="rounded-xl border bg-card p-3">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="flex items-center gap-1.5">
+            <span className="font-medium">{tx.merchant}</span>
+            {tx.receipt && (
+              <span title="Has receipt attached">
+                <Paperclip className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+              </span>
+            )}
+          </div>
+          <p className="text-xs text-muted-foreground">{formatDate(tx.date)}</p>
+        </div>
+        <span
+          className={cn(
+            "shrink-0 text-sm font-medium tabular-nums",
+            tx.type === "income"
+              ? "text-emerald-600"
+              : tx.type === "transfer"
+                ? "text-muted-foreground"
+                : "text-foreground"
+          )}
+        >
+          {formatSignedAmount(tx.amount, tx.type, currency)}
+        </span>
+      </div>
+      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+        <CategoryCell
+          value={tx.category}
+          names={categoryNames}
+          disabled={savingCategory === tx.id}
+          onChange={(name) => onCategoryChange(tx, name)}
+        />
+        <span>{tx.fromAccount}</span>
+      </div>
+      {(tx.tags.length > 0 || true) && (
+        <div className="mt-1.5">
+          <TagPills
+            tags={tx.tags}
+            removing={removingTag}
+            onRemove={(tag) => onRemoveTag(tx, tag)}
+            onAdd={() => onAddTag(tx)}
+          />
+        </div>
+      )}
+      <div className="mt-2 flex items-center justify-end gap-0.5">
+        <Button
+          size="icon-sm"
+          variant="ghost"
+          onClick={() => onEdit(tx)}
+          aria-label={`Edit ${tx.merchant}`}
+        >
+          <Pencil />
+        </Button>
+        <Button
+          size="icon-sm"
+          variant="ghost"
+          onClick={() => onDelete(tx)}
+          disabled={deletingId === tx.id}
+          aria-label={`Delete ${tx.merchant}`}
+          className="text-destructive hover:text-destructive"
+        >
+          <Trash2 />
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+interface FilterSheetProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  typeFilter: string;
+  onTypeFilterChange: (value: string) => void;
+  tagFilter: string;
+  onTagFilterChange: (value: string) => void;
+  receiptFilter: string;
+  onReceiptFilterChange: (value: string) => void;
+  dateFrom: string;
+  onDateFromChange: (value: string) => void;
+  dateTo: string;
+  onDateToChange: (value: string) => void;
+  minAmount: string;
+  onMinAmountChange: (value: string) => void;
+  maxAmount: string;
+  onMaxAmountChange: (value: string) => void;
+  tags: Tag[];
+  onClear: () => void;
+}
+
+function FilterSheet({
+  open,
+  onOpenChange,
+  typeFilter,
+  onTypeFilterChange,
+  tagFilter,
+  onTagFilterChange,
+  receiptFilter,
+  onReceiptFilterChange,
+  dateFrom,
+  onDateFromChange,
+  dateTo,
+  onDateToChange,
+  minAmount,
+  onMinAmountChange,
+  maxAmount,
+  onMaxAmountChange,
+  tags,
+  onClear,
+}: FilterSheetProps) {
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent side="bottom" className="max-h-[85vh]">
+        <SheetHeader>
+          <SheetTitle>Filters</SheetTitle>
+          <SheetDescription>Refine which transactions are shown.</SheetDescription>
+        </SheetHeader>
+        <div className="flex flex-col gap-4 px-4">
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-medium">Type</label>
+            <select
+              value={typeFilter}
+              onChange={(e) => onTypeFilterChange(e.target.value)}
+              aria-label="Type filter"
+              className="h-9 w-full rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+            >
+              <option value="all">All types</option>
+              <option value="expense">Expenses</option>
+              <option value="income">Income</option>
+              <option value="transfer">Transfers</option>
+            </select>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-medium">Tag</label>
+            <select
+              value={tagFilter}
+              onChange={(e) => onTagFilterChange(e.target.value)}
+              aria-label="Tag filter"
+              className="h-9 w-full rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+            >
+              <option value="all">All tags</option>
+              {tags.map((tag) => (
+                <option key={tag.name} value={tag.name}>
+                  {tag.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-medium">Receipt</label>
+            <select
+              value={receiptFilter}
+              onChange={(e) => onReceiptFilterChange(e.target.value)}
+              aria-label="Receipt filter"
+              className="h-9 w-full rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+            >
+              <option value="all">With or without receipts</option>
+              <option value="yes">With receipts</option>
+              <option value="no">Without receipts</option>
+            </select>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-medium">From date</label>
+              <Input
+                type="date"
+                value={dateFrom}
+                onChange={(e) => onDateFromChange(e.target.value)}
+                aria-label="From date"
+                className="h-9"
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-medium">To date</label>
+              <Input
+                type="date"
+                value={dateTo}
+                onChange={(e) => onDateToChange(e.target.value)}
+                aria-label="To date"
+                className="h-9"
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-medium">Min amount</label>
+              <Input
+                type="number"
+                min="0"
+                step="0.01"
+                value={minAmount}
+                onChange={(e) => onMinAmountChange(e.target.value)}
+                placeholder="0.00"
+                aria-label="Minimum amount"
+                className="h-9"
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-medium">Max amount</label>
+              <Input
+                type="number"
+                min="0"
+                step="0.01"
+                value={maxAmount}
+                onChange={(e) => onMaxAmountChange(e.target.value)}
+                placeholder="0.00"
+                aria-label="Maximum amount"
+                className="h-9"
+              />
+            </div>
+          </div>
+        </div>
+        <SheetFooter className="flex-row justify-between">
+          <Button variant="ghost" onClick={onClear}>
+            Clear all
+          </Button>
+          <Button onClick={() => onOpenChange(false)}>Done</Button>
+        </SheetFooter>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
 export default function TransactionPage() {
   const { settings } = useSettings();
   const period = settings.selectedPeriod;
   const currency = settings.currency;
+  const isMobile = useIsMobile();
 
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [accountFilter, setAccountFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [showMoreFilters, setShowMoreFilters] = useState(false);
+  const [filterSheetOpen, setFilterSheetOpen] = useState(false);
   const [typeFilter, setTypeFilter] = useState<"expense" | "income" | "transfer" | "all">("all");
   const [tagFilter, setTagFilter] = useState("all");
   const [dateFrom, setDateFrom] = useState("");
@@ -237,6 +491,15 @@ export default function TransactionPage() {
     maxAmount !== "" ||
     receiptFilter !== "all";
 
+  const activeAdvancedFilterCount =
+    (typeFilter !== "all" ? 1 : 0) +
+    (tagFilter !== "all" ? 1 : 0) +
+    (receiptFilter !== "all" ? 1 : 0) +
+    (dateFrom !== "" ? 1 : 0) +
+    (dateTo !== "" ? 1 : 0) +
+    (minAmount !== "" ? 1 : 0) +
+    (maxAmount !== "" ? 1 : 0);
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -306,12 +569,17 @@ export default function TransactionPage() {
         <Button
           variant="outline"
           size="sm"
-          onClick={() => setShowMoreFilters((value) => !value)}
-          aria-expanded={showMoreFilters}
-          className={cn(showMoreFilters && "border-ring bg-muted/50")}
+          onClick={() => (isMobile ? setFilterSheetOpen(true) : setShowMoreFilters((v) => !v))}
+          aria-expanded={isMobile ? filterSheetOpen : showMoreFilters}
+          className={cn((isMobile ? filterSheetOpen : showMoreFilters) && "border-ring bg-muted/50")}
         >
           <SlidersHorizontal />
           <span>More filters</span>
+          {isMobile && activeAdvancedFilterCount > 0 && (
+            <span className="ml-1 inline-flex size-5 items-center justify-center rounded-full bg-primary text-[10px] font-medium text-primary-foreground">
+              {activeAdvancedFilterCount}
+            </span>
+          )}
         </Button>
       </div>
 
@@ -398,7 +666,7 @@ export default function TransactionPage() {
             type="button"
             onClick={() => setMutationError(null)}
             aria-label="Dismiss"
-            className="rounded p-0.5 hover:bg-destructive/20"
+            className="inline-flex size-8 shrink-0 items-center justify-center rounded-md hover:bg-destructive/20"
           >
             <X className="size-4" aria-hidden="true" />
           </button>
@@ -445,8 +713,29 @@ export default function TransactionPage() {
               />
             )
           ) : (
-            <div className="rounded-xl border bg-card">
-              <Table>
+            <>
+              <div className="rounded-xl border bg-card p-2 md:hidden">
+                <div className="flex flex-col gap-1.5">
+                  {transactions.data.map((tx) => (
+                    <TransactionCard
+                      key={tx.id}
+                      tx={tx}
+                      categoryNames={categoryNames}
+                      currency={currency}
+                      savingCategory={savingCategory}
+                      removingTag={removingTag}
+                      deletingId={deletingId}
+                      onCategoryChange={handleCategoryChange}
+                      onRemoveTag={handleRemoveTag}
+                      onEdit={setEditTx}
+                      onDelete={handleDeleteTransaction}
+                      onAddTag={setEditorTx}
+                    />
+                  ))}
+                </div>
+              </div>
+              <div className="hidden rounded-xl border bg-card md:block">
+                <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead>Merchant</TableHead>
@@ -542,7 +831,8 @@ export default function TransactionPage() {
                   ))}
                 </TableBody>
               </Table>
-            </div>
+              </div>
+            </>
           )}
         </>
       )}
@@ -599,6 +889,35 @@ export default function TransactionPage() {
           </div>
         </SheetContent>
       </Sheet>
+
+      <FilterSheet
+        open={filterSheetOpen}
+        onOpenChange={setFilterSheetOpen}
+        typeFilter={typeFilter}
+        onTypeFilterChange={setTypeFilter}
+        tagFilter={tagFilter}
+        onTagFilterChange={setTagFilter}
+        receiptFilter={receiptFilter}
+        onReceiptFilterChange={setReceiptFilter}
+        dateFrom={dateFrom}
+        onDateFromChange={setDateFrom}
+        dateTo={dateTo}
+        onDateToChange={setDateTo}
+        minAmount={minAmount}
+        onMinAmountChange={setMinAmount}
+        maxAmount={maxAmount}
+        onMaxAmountChange={setMaxAmount}
+        tags={tags.data ?? []}
+        onClear={() => {
+          setTypeFilter("all");
+          setTagFilter("all");
+          setReceiptFilter("all");
+          setDateFrom("");
+          setDateTo("");
+          setMinAmount("");
+          setMaxAmount("");
+        }}
+      />
     </div>
   );
 }

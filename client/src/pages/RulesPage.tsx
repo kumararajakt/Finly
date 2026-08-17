@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Pencil, Plus, SlidersHorizontal, Tag as TagIcon, Trash2 } from "lucide-react";
+import { Pencil, Plus, SlidersHorizontal, Tag as TagIcon, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import EmptyState from "@/components/ui/empty-state";
 import ErrorState from "@/components/ui/error-state";
@@ -265,9 +265,9 @@ export default function RulesPage() {
             type="button"
             onClick={() => setMutationError(null)}
             aria-label="Dismiss"
-            className="rounded p-0.5 hover:bg-destructive/20"
+            className="inline-flex size-8 shrink-0 items-center justify-center rounded-md hover:bg-destructive/20"
           >
-            <span className="block size-4">×</span>
+            <X className="size-4" aria-hidden="true" />
           </button>
         </div>
       )}
