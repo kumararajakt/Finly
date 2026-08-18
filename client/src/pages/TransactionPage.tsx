@@ -894,11 +894,11 @@ export default function TransactionPage() {
         open={filterSheetOpen}
         onOpenChange={setFilterSheetOpen}
         typeFilter={typeFilter}
-        onTypeFilterChange={setTypeFilter}
+        onTypeFilterChange={(v) => setTypeFilter(v as typeof typeFilter)}
         tagFilter={tagFilter}
         onTagFilterChange={setTagFilter}
         receiptFilter={receiptFilter}
-        onReceiptFilterChange={setReceiptFilter}
+        onReceiptFilterChange={(v) => setReceiptFilter(v as typeof receiptFilter)}
         dateFrom={dateFrom}
         onDateFromChange={setDateFrom}
         dateTo={dateTo}
