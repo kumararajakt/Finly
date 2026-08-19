@@ -280,6 +280,14 @@ export const api = {
       apiFetch<InvestmentSummary>(`/investments/summary${buildQuery({ accountId })}`),
     getQuote: (q: string) =>
       apiFetch<{ symbol: string; price: number; source: string }>(`/investments/quote${buildQuery({ q })}`),
+    refreshQuotes: () =>
+      apiFetch<Array<{ security: string; price: number; source: string }>>("/investments/quotes/refresh", { method: "POST" }),
+    getAccountBalances: () =>
+      apiFetch<Array<{ accountId: string; name: string; type: string; balance: number }>>("/investments/balances"),
+    getBackfillCandidates: () =>
+      apiFetch<Array<{ id: string; date: string; merchant: string; amount: number; fromAccount: string; category: string }>>("/investments/backfill/candidates"),
+    backfillTransaction: (transactionId: string, accountId: string) =>
+      apiFetch<void>("/investments/backfill", { method: "POST", body: { transactionId, accountId } }),
     updateSecurity: (name: string, currentPrice: number) =>
       apiFetch<{ name: string; currentPrice: number }>(`/investments/securities/${encodeURIComponent(name)}`, {
         method: "PATCH",

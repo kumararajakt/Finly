@@ -22,8 +22,10 @@ import {
 } from "@/components/ui/sheet";
 import { useQuery } from "@/hooks/use-query";
 import { ApiError, api } from "@/lib/api";
+import { formatCurrency } from "@/lib/format";
 import type { Account, AccountType } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { useSettings } from "@/contexts/SettingsContext";
 
 function message(error: unknown): string {
   if (error instanceof ApiError) return error.message;
@@ -53,12 +55,23 @@ const TYPE_CONFIG: Record<
 };
 
 export default function AccountPage() {
+  const { settings } = useSettings();
+  const currency = settings.currency;
   const accounts = useQuery<Account[]>(() => api.accounts.list(), []);
+  const balances = useQuery(
+    () => api.investments.getAccountBalances(),
+    [],
+  );
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ name: "", type: "cash" as AccountType });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const balanceMap = new Map<string, number>();
+  for (const b of balances.data ?? []) {
+    balanceMap.set(b.accountId, b.balance);
+  }
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -159,6 +172,20 @@ export default function AccountPage() {
                     <p className="text-xs capitalize text-muted-foreground">
                       {config.label}
                     </p>
+                    {balanceMap.has(account.id) && (
+                      <p className={cn(
+                        "mt-1 text-sm font-semibold tabular-nums",
+                        account.type === "credit"
+                          ? "text-red-600"
+                          : balanceMap.get(account.id)! >= 0
+                            ? "text-emerald-600"
+                            : "text-red-600"
+                      )}>
+                        {account.type === "credit"
+                          ? formatCurrency(Math.abs(balanceMap.get(account.id)!), currency) + " outstanding"
+                          : formatCurrency(balanceMap.get(account.id)!, currency)}
+                      </p>
+                    )}
                   </div>
                 </div>
                 <Button

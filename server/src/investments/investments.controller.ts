@@ -16,7 +16,11 @@ import {
   TradeQueryDto,
   UpdateSecurityDto,
 } from './investments.dto';
-import { InvestmentsService, type InvestmentSummary, type Position } from './investments.service';
+import {
+  InvestmentsService,
+  type InvestmentSummary,
+  type Position,
+} from './investments.service';
 
 @Controller('investments')
 export class InvestmentsController {
@@ -60,6 +64,48 @@ export class InvestmentsController {
     @Query() query: QuoteQueryDto,
   ): Promise<{ symbol: string; price: number; source: string }> {
     return this.investmentsService.getQuote(userId, query);
+  }
+
+  @Post('quotes/refresh')
+  refreshQuotes(
+    @CurrentUser() userId: string,
+  ): Promise<Array<{ security: string; price: number; source: string }>> {
+    return this.investmentsService.refreshAllQuotes(userId);
+  }
+
+  @Get('balances')
+  getAccountBalances(
+    @CurrentUser() userId: string,
+  ): Promise<
+    Array<{ accountId: string; name: string; type: string; balance: number }>
+  > {
+    return this.investmentsService.getAccountBalances(userId);
+  }
+
+  @Get('backfill/candidates')
+  getBackfillCandidates(@CurrentUser() userId: string): Promise<
+    Array<{
+      id: string;
+      date: string;
+      merchant: string;
+      amount: number;
+      fromAccount: string;
+      category: string;
+    }>
+  > {
+    return this.investmentsService.getBackfillCandidates(userId);
+  }
+
+  @Post('backfill')
+  backfillTransaction(
+    @CurrentUser() userId: string,
+    @Body() body: { transactionId: string; accountId: string },
+  ): Promise<void> {
+    return this.investmentsService.backfillTransaction(
+      userId,
+      body.transactionId,
+      body.accountId,
+    );
   }
 
   @Patch('securities/:name')

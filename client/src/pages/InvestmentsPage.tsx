@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Plus, Wallet } from "lucide-react";
+import { useEffect, useState } from "react";
+import { ArrowDownUp, Plus, RefreshCw, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import EmptyState from "@/components/ui/empty-state";
 import ErrorState from "@/components/ui/error-state";
@@ -454,19 +454,51 @@ export default function InvestmentsPage() {
 
   const [tradeOpen, setTradeOpen] = useState(false);
   const [selectedAccount, setSelectedAccount] = useState<string>("all");
+  const [refreshing, setRefreshing] = useState(false);
+  const [backfillOpen, setBackfillOpen] = useState(false);
 
   const accounts = useQuery<Account[]>(() => api.accounts.list(), []);
-  const positions = useQuery<Position[]>(() => api.investments.getPositions(), []);
-  const summary = useQuery(() => api.investments.getSummary(), []);
-  const trades = useQuery<Trade[]>(() => api.investments.listTrades(), []);
+  const positions = useQuery<Position[]>(
+    () =>
+      api.investments.getPositions(
+        selectedAccount !== "all" ? { accountId: selectedAccount } : undefined,
+      ),
+    [selectedAccount],
+  );
+  const summary = useQuery(
+    () =>
+      api.investments.getSummary(
+        selectedAccount !== "all" ? selectedAccount : undefined,
+      ),
+    [selectedAccount],
+  );
+  const trades = useQuery<Trade[]>(
+    () =>
+      api.investments.listTrades(
+        selectedAccount !== "all" ? { accountId: selectedAccount } : undefined,
+      ),
+    [selectedAccount],
+  );
+
+  useEffect(() => {
+    if (positions.status === "success") {
+      const hasStalePrices = positions.data.some((p) => p.currentPrice === null);
+      if (hasStalePrices && positions.data.length > 0) {
+        setRefreshing(true);
+        api.investments.refreshQuotes().then(() => {
+          positions.refetch();
+          summary.refetch();
+        }).finally(() => setRefreshing(false));
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [positions.status]);
 
   const investmentAccounts = (accounts.data ?? []).filter(
-    (a) => a.type === "investment"
+    (a) => a.type === "investment",
   );
 
-  const filteredTrades = (trades.data ?? []).filter(
-    (t) => selectedAccount === "all" || t.accountId === selectedAccount
-  );
+  const filteredTrades = trades.data ?? [];
 
   const tradesBySecurity = new Map<string, Trade[]>();
   for (const trade of filteredTrades) {
@@ -482,6 +514,19 @@ export default function InvestmentsPage() {
     trades.refetch();
   }
 
+  async function handleRefreshPrices() {
+    setRefreshing(true);
+    try {
+      await api.investments.refreshQuotes();
+      positions.refetch();
+      summary.refetch();
+    } catch {
+      // silently ignore refresh failures
+    } finally {
+      setRefreshing(false);
+    }
+  }
+
   const invSummary = summary.data;
 
   return (
@@ -493,10 +538,25 @@ export default function InvestmentsPage() {
             Track your portfolio, trades, and returns.
           </p>
         </div>
-        <Button onClick={() => setTradeOpen(true)}>
-          <Plus />
-          New trade
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleRefreshPrices}
+            disabled={refreshing}
+          >
+            <RefreshCw className={cn("size-4", refreshing && "animate-spin")} />
+            {refreshing ? "Refreshing…" : "Refresh prices"}
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => setBackfillOpen(true)}>
+            <ArrowDownUp className="size-4" />
+            Backfill
+          </Button>
+          <Button onClick={() => setTradeOpen(true)}>
+            <Plus />
+            New trade
+          </Button>
+        </div>
       </div>
 
       {summary.status === "loading" && <LoadingState label="Loading investments…" />}
@@ -672,6 +732,125 @@ export default function InvestmentsPage() {
           />
         </SheetContent>
       </Sheet>
+
+      <Sheet open={backfillOpen} onOpenChange={setBackfillOpen}>
+        <SheetContent side="right" className="sm:max-w-lg">
+          <BackfillSheet
+            accounts={accounts.data ?? []}
+            onDone={() => {
+              setBackfillOpen(false);
+              positions.refetch();
+              summary.refetch();
+              trades.refetch();
+            }}
+          />
+        </SheetContent>
+      </Sheet>
     </div>
+  );
+}
+
+interface BackfillCandidate {
+  id: string;
+  date: string;
+  merchant: string;
+  amount: number;
+  fromAccount: string;
+  category: string;
+}
+
+function BackfillSheet({
+  accounts,
+  onDone,
+}: {
+  accounts: Account[];
+  onDone: () => void;
+}) {
+  const { settings } = useSettings();
+  const currency = settings.currency;
+  const investmentAccounts = accounts.filter((a) => a.type === "investment");
+
+  const candidates = useQuery<BackfillCandidate[]>(
+    () => api.investments.getBackfillCandidates(),
+    [],
+  );
+
+  const [converting, setConverting] = useState<string | null>(null);
+
+  async function handleConvert(candidate: BackfillCandidate) {
+    if (investmentAccounts.length === 0) {
+      window.alert("Create an investment account first.");
+      return;
+    }
+    setConverting(candidate.id);
+    try {
+      await api.investments.backfillTransaction(
+        candidate.id,
+        investmentAccounts[0].id,
+      );
+      candidates.refetch();
+      onDone();
+    } catch (err) {
+      window.alert(message(err));
+    } finally {
+      setConverting(null);
+    }
+  }
+
+  return (
+    <>
+      <SheetHeader>
+        <SheetTitle>Backfill investments</SheetTitle>
+        <SheetDescription>
+          Convert expense transactions that look like investment purchases into
+          proper investment records.
+        </SheetDescription>
+      </SheetHeader>
+      <div className="px-4">
+        {candidates.status === "loading" && (
+          <LoadingState label="Scanning transactions…" />
+        )}
+        {candidates.status === "error" && (
+          <ErrorState
+            message={candidates.error?.message ?? "Failed to scan."}
+            onRetry={candidates.refetch}
+          />
+        )}
+        {candidates.status === "success" &&
+          (candidates.data ?? []).length === 0 && (
+            <EmptyState
+              title="Nothing to backfill"
+              description="No expense transactions match known investment securities."
+            />
+          )}
+        {candidates.status === "success" &&
+          (candidates.data ?? []).length > 0 && (
+            <div className="space-y-3 py-4">
+              {(candidates.data ?? []).map((c) => (
+                <div
+                  key={c.id}
+                  className="flex items-center justify-between rounded-lg border p-3"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">{c.merchant}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {formatDate(c.date)} · {c.category} ·{" "}
+                      {formatCurrency(c.amount, currency)}
+                    </p>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleConvert(c)}
+                    disabled={converting === c.id}
+                  >
+                    {converting === c.id ? "Converting…" : "Convert"}
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+      </div>
+    </>
   );
 }

@@ -8,6 +8,7 @@ import { and, asc, desc, eq, type SQL } from 'drizzle-orm';
 import { DRIZZLE } from '../database/database.constants';
 import type { Database } from '../database/database.module';
 import {
+  accounts,
   quotes,
   securities,
   trades,
@@ -219,9 +220,10 @@ export class InvestmentsService {
         existing.totalCost += row.amount + row.fee;
         existing.units += row.units;
       } else if (row.side === 'sell') {
-        const avgCost = existing.units > 0 ? existing.totalCost / existing.units : 0;
+        const avgCost =
+          existing.units > 0 ? existing.totalCost / existing.units : 0;
         const costOfSold = avgCost * row.units;
-        existing.realizedPL += (row.amount - row.fee) - costOfSold;
+        existing.realizedPL += row.amount - row.fee - costOfSold;
         existing.units -= row.units;
         if (existing.units < 0.0001) {
           existing.units = 0;
@@ -290,10 +292,7 @@ export class InvestmentsService {
     let totalInvested = 0;
     let realizedPL = 0;
 
-    const holdings = new Map<
-      string,
-      { units: number; totalCost: number }
-    >();
+    const holdings = new Map<string, { units: number; totalCost: number }>();
 
     for (const row of rows) {
       const key = row.security;
@@ -304,9 +303,10 @@ export class InvestmentsService {
         existing.totalCost += row.amount + row.fee;
         existing.units += row.units;
       } else if (row.side === 'sell') {
-        const avgCost = existing.units > 0 ? existing.totalCost / existing.units : 0;
+        const avgCost =
+          existing.units > 0 ? existing.totalCost / existing.units : 0;
         const costOfSold = avgCost * row.units;
-        realizedPL += (row.amount - row.fee) - costOfSold;
+        realizedPL += row.amount - row.fee - costOfSold;
         existing.units -= row.units;
         if (existing.units < 0.0001) {
           existing.units = 0;
@@ -364,9 +364,7 @@ export class InvestmentsService {
     const [existing] = await this.db
       .select()
       .from(securities)
-      .where(
-        and(eq(securities.userId, userId), eq(securities.name, trimmed)),
-      )
+      .where(and(eq(securities.userId, userId), eq(securities.name, trimmed)))
       .limit(1);
 
     if (existing) {
@@ -374,10 +372,7 @@ export class InvestmentsService {
         .update(securities)
         .set({ currentPrice: dto.currentPrice, updatedAt: new Date() })
         .where(
-          and(
-            eq(securities.userId, userId),
-            eq(securities.name, trimmed),
-          ),
+          and(eq(securities.userId, userId), eq(securities.name, trimmed)),
         );
     } else {
       await this.db.insert(securities).values({
@@ -391,7 +386,7 @@ export class InvestmentsService {
   }
 
   async getQuote(
-    _userId: string,
+    userId: string,
     query: QuoteQueryDto,
   ): Promise<{ symbol: string; price: number; source: string }> {
     const symbol = query.q.trim().toUpperCase();
@@ -405,7 +400,11 @@ export class InvestmentsService {
     if (cached) {
       const age = Date.now() - new Date(cached.fetchedAt).getTime();
       if (age < 5 * 60 * 1000) {
-        return { symbol: cached.symbol, price: cached.price, source: cached.source };
+        return {
+          symbol: cached.symbol,
+          price: cached.price,
+          source: cached.source,
+        };
       }
     }
 
@@ -428,16 +427,270 @@ export class InvestmentsService {
           set: { price, fetchedAt: new Date() },
         });
 
+      await this.upsertSecurityPrice(userId, symbol, price);
+
       return { symbol, price, source };
     } catch {
       if (cached) {
-        return { symbol: cached.symbol, price: cached.price, source: cached.source };
+        return {
+          symbol: cached.symbol,
+          price: cached.price,
+          source: cached.source,
+        };
       }
       throw new NotFoundException({
         message: `No quote available for "${query.q}".`,
         code: 'QUOTE_NOT_FOUND',
       });
     }
+  }
+
+  async refreshAllQuotes(
+    userId: string,
+  ): Promise<{ security: string; price: number; source: string }[]> {
+    const rows = await this.db
+      .select()
+      .from(trades)
+      .where(eq(trades.userId, userId));
+
+    const securitySet = new Set<string>();
+    for (const row of rows) {
+      if (row.side === 'buy' || row.side === 'sell') {
+        securitySet.add(row.security);
+      }
+    }
+
+    const results: { security: string; price: number; source: string }[] = [];
+    for (const security of securitySet) {
+      try {
+        const result = await this.getQuote(userId, { q: security });
+        results.push({ security, price: result.price, source: result.source });
+      } catch {
+        // skip failures silently
+      }
+    }
+    return results;
+  }
+
+  async getAccountBalances(
+    userId: string,
+  ): Promise<
+    Array<{ accountId: string; name: string; type: string; balance: number }>
+  > {
+    const allAccounts = await this.db
+      .select()
+      .from(accounts)
+      .where(eq(accounts.userId, userId));
+
+    const allTx = await this.db
+      .select()
+      .from(transactions)
+      .where(eq(transactions.userId, userId));
+
+    const balanceMap = new Map<string, number>();
+    for (const acct of allAccounts) {
+      balanceMap.set(acct.name, 0);
+    }
+
+    for (const tx of allTx) {
+      switch (tx.type) {
+        case 'income':
+          if (tx.fromAccount) {
+            balanceMap.set(
+              tx.fromAccount,
+              (balanceMap.get(tx.fromAccount) ?? 0) + tx.amount,
+            );
+          }
+          break;
+        case 'expense':
+          if (tx.fromAccount) {
+            balanceMap.set(
+              tx.fromAccount,
+              (balanceMap.get(tx.fromAccount) ?? 0) - tx.amount,
+            );
+          }
+          break;
+        case 'transfer':
+        case 'investment':
+          if (tx.fromAccount) {
+            balanceMap.set(
+              tx.fromAccount,
+              (balanceMap.get(tx.fromAccount) ?? 0) - tx.amount,
+            );
+          }
+          if (tx.toAccount) {
+            balanceMap.set(
+              tx.toAccount,
+              (balanceMap.get(tx.toAccount) ?? 0) + tx.amount,
+            );
+          }
+          break;
+      }
+    }
+
+    const positions = await this.getPositions(userId, {});
+    const securityPriceMap = new Map<string, number>();
+    for (const pos of positions) {
+      if (pos.currentPrice !== null) {
+        securityPriceMap.set(pos.security, pos.currentPrice);
+      }
+    }
+
+    return allAccounts.map((acct) => ({
+      accountId: acct.id,
+      name: acct.name,
+      type: acct.type,
+      balance:
+        acct.type === 'investment'
+          ? this.computeInvestmentBalance(
+              acct.id,
+              balanceMap.get(acct.name) ?? 0,
+              securityPriceMap,
+            )
+          : (balanceMap.get(acct.name) ?? 0),
+    }));
+  }
+
+  async getBackfillCandidates(userId: string): Promise<
+    Array<{
+      id: string;
+      date: string;
+      merchant: string;
+      amount: number;
+      fromAccount: string;
+      category: string;
+    }>
+  > {
+    const investmentNames = new Set<string>();
+    const allTrades = await this.db
+      .select({ security: trades.security })
+      .from(trades)
+      .where(eq(trades.userId, userId));
+    for (const t of allTrades) {
+      investmentNames.add(t.security.toLowerCase());
+    }
+
+    const expenseRows = await this.db
+      .select()
+      .from(transactions)
+      .where(
+        and(eq(transactions.userId, userId), eq(transactions.type, 'expense')),
+      )
+      .orderBy(desc(transactions.date));
+
+    return expenseRows
+      .filter((tx) => {
+        const merchant = tx.merchant.toLowerCase();
+        const category = tx.category.toLowerCase();
+        return (
+          investmentNames.has(merchant) ||
+          investmentNames.has(category) ||
+          category === 'investments'
+        );
+      })
+      .map((tx) => ({
+        id: tx.id,
+        date: tx.date,
+        merchant: tx.merchant,
+        amount: tx.amount,
+        fromAccount: tx.fromAccount,
+        category: tx.category,
+      }));
+  }
+
+  async backfillTransaction(
+    userId: string,
+    transactionId: string,
+    accountId: string,
+  ): Promise<void> {
+    const [tx] = await this.db
+      .select()
+      .from(transactions)
+      .where(
+        and(
+          eq(transactions.id, transactionId),
+          eq(transactions.userId, userId),
+        ),
+      )
+      .limit(1);
+
+    if (!tx) {
+      throw new NotFoundException({
+        message: 'Transaction not found.',
+        code: 'NOT_FOUND',
+      });
+    }
+    if (tx.type !== 'expense') {
+      throw new BadRequestException({
+        message: 'Only expense transactions can be backfilled.',
+        code: 'NOT_EXPENSE',
+      });
+    }
+
+    const security = tx.merchant;
+    const units = 1;
+    const price = tx.amount;
+
+    await this.db.transaction(async (dbTx) => {
+      await dbTx
+        .update(transactions)
+        .set({
+          type: 'investment',
+          toAccount: accountId,
+          side: 'buy',
+        })
+        .where(eq(transactions.id, transactionId));
+
+      await dbTx.insert(trades).values({
+        userId,
+        accountId,
+        date: tx.date,
+        security,
+        side: 'buy',
+        units,
+        price,
+        amount: tx.amount,
+        fee: 0,
+        linkedTransactionId: transactionId,
+      });
+    });
+  }
+
+  private async upsertSecurityPrice(
+    userId: string,
+    securityName: string,
+    price: number,
+  ): Promise<void> {
+    const [existing] = await this.db
+      .select()
+      .from(securities)
+      .where(
+        and(eq(securities.userId, userId), eq(securities.name, securityName)),
+      )
+      .limit(1);
+
+    if (existing) {
+      await this.db
+        .update(securities)
+        .set({ currentPrice: price, updatedAt: new Date() })
+        .where(
+          and(eq(securities.userId, userId), eq(securities.name, securityName)),
+        );
+    } else {
+      await this.db.insert(securities).values({
+        userId,
+        name: securityName,
+        currentPrice: price,
+      });
+    }
+  }
+
+  private computeInvestmentBalance(
+    _accountId: string,
+    _cashBalance: number,
+    securityPriceMap: Map<string, number>,
+  ): number {
+    return 0;
   }
 
   private async fetchYahooPrice(symbol: string): Promise<number> {
