@@ -1,25 +1,30 @@
 import type {
   Account,
+  AccountType,
   AuthMe,
   AuthUser,
   Budget,
   Category,
   Country,
+  CreateTrade,
   CsvImportPreview,
   CsvMapping,
   CsvPreview,
   DetectionSuggestion,
   Goal,
   ImportResult,
+  InvestmentSummary,
   NewTransaction,
   Period,
   PdfExtractResult,
+  Position,
   Recurring,
   Rule,
   Settings,
   Subscription,
   Summary,
   Tag,
+  Trade,
   Transaction,
   TransactionFilters,
   TransactionPatch,
@@ -148,7 +153,8 @@ export const api = {
 
   accounts: {
     list: () => apiFetch<Account[]>("/accounts"),
-    create: (name: string) => apiFetch<Account>("/accounts", { method: "POST", body: { name } }),
+    create: (name: string, type?: AccountType) =>
+      apiFetch<Account>("/accounts", { method: "POST", body: { name, type } }),
     remove: (id: string) =>
       apiFetch<void>(`/accounts/${encodeURIComponent(id)}`, { method: "DELETE" }),
   },
@@ -261,5 +267,23 @@ export const api = {
 
   summary: {
     get: (period: Period) => apiFetch<Summary>(`/summary${buildQuery({ period })}`),
+  },
+
+  investments: {
+    createTrade: (data: CreateTrade) =>
+      apiFetch<Trade>("/investments/trades", { method: "POST", body: data }),
+    listTrades: (params?: { accountId?: string; security?: string }) =>
+      apiFetch<Trade[]>(`/investments/trades${buildQuery(params ?? {})}`),
+    getPositions: (params?: { accountId?: string }) =>
+      apiFetch<Position[]>(`/investments/positions${buildQuery(params ?? {})}`),
+    getSummary: (accountId?: string) =>
+      apiFetch<InvestmentSummary>(`/investments/summary${buildQuery({ accountId })}`),
+    getQuote: (q: string) =>
+      apiFetch<{ symbol: string; price: number; source: string }>(`/investments/quote${buildQuery({ q })}`),
+    updateSecurity: (name: string, currentPrice: number) =>
+      apiFetch<{ name: string; currentPrice: number }>(`/investments/securities/${encodeURIComponent(name)}`, {
+        method: "PATCH",
+        body: { currentPrice },
+      }),
   },
 };

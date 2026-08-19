@@ -1,7 +1,17 @@
-import { useState } from "react"
-import { Building2, CreditCard, PiggyBank, Plus, Wallet } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
+import { useState } from "react";
+import {
+  Building2,
+  CreditCard,
+  Landmark,
+  Plus,
+  Trash2,
+  Wallet,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import EmptyState from "@/components/ui/empty-state";
+import ErrorState from "@/components/ui/error-state";
+import { Input } from "@/components/ui/input";
+import LoadingState from "@/components/ui/loading-state";
 import {
   Sheet,
   SheetContent,
@@ -9,120 +19,229 @@ import {
   SheetFooter,
   SheetHeader,
   SheetTitle,
-  SheetTrigger,
-} from "@/components/ui/sheet"
-import { cn } from "@/lib/utils"
+} from "@/components/ui/sheet";
+import { useQuery } from "@/hooks/use-query";
+import { ApiError, api } from "@/lib/api";
+import type { Account, AccountType } from "@/lib/types";
+import { cn } from "@/lib/utils";
 
-type Account = {
-  name: string
-  type: string
-  balance: number
-  description: string
+function message(error: unknown): string {
+  if (error instanceof ApiError) return error.message;
+  if (error instanceof Error) return error.message;
+  return "Something went wrong.";
 }
 
-const typeConfig: Record<string, { icon: typeof Wallet; color: string }> = {
-  checking: { icon: Wallet, color: "text-blue-600 bg-blue-100 dark:text-blue-400 dark:bg-blue-500/20" },
-  savings: { icon: PiggyBank, color: "text-emerald-600 bg-emerald-100 dark:text-emerald-400 dark:bg-emerald-500/20" },
-  credit: { icon: CreditCard, color: "text-red-600 bg-red-100 dark:text-red-400 dark:bg-red-500/20" },
-  investment: { icon: Building2, color: "text-purple-600 bg-purple-100 dark:text-purple-400 dark:bg-purple-500/20" },
-}
+const TYPE_CONFIG: Record<
+  AccountType,
+  { icon: typeof Wallet; color: string; label: string }
+> = {
+  cash: {
+    icon: Wallet,
+    color: "text-emerald-600 bg-emerald-100 dark:text-emerald-400 dark:bg-emerald-500/20",
+    label: "Cash",
+  },
+  credit: {
+    icon: CreditCard,
+    color: "text-red-600 bg-red-100 dark:text-red-400 dark:bg-red-500/20",
+    label: "Credit",
+  },
+  investment: {
+    icon: Building2,
+    color: "text-purple-600 bg-purple-100 dark:text-purple-400 dark:bg-purple-500/20",
+    label: "Investment",
+  },
+};
 
 export default function AccountPage() {
-  const [accounts, setAccounts] = useState<Account[]>([])
-  const [open, setOpen] = useState(false)
-  const [form, setForm] = useState<Account>({ name: "", type: "checking", balance: 0, description: "" })
+  const accounts = useQuery<Account[]>(() => api.accounts.list(), []);
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState({ name: "", type: "cash" as AccountType });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    if (!form.name || !form.type) return
-    setAccounts([form, ...accounts])
-    setForm({ name: "", type: "checking", balance: 0, description: "" })
-    setOpen(false)
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const name = form.name.trim();
+    if (!name) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await api.accounts.create(name, form.type);
+      setForm({ name: "", type: "cash" });
+      setOpen(false);
+      accounts.refetch();
+    } catch (err) {
+      setError(message(err));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDelete(account: Account) {
+    if (
+      !window.confirm(
+        `Delete "${account.name}"? Existing transactions keep the label.`
+      )
+    ) {
+      return;
+    }
+    setDeletingId(account.id);
+    try {
+      await api.accounts.remove(account.id);
+      accounts.refetch();
+    } catch (err) {
+      window.alert(message(err));
+    } finally {
+      setDeletingId(null);
+    }
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold">Accounts</h1>
-          <p className="text-sm text-muted-foreground">Manage your financial accounts</p>
-        </div>
-        <Sheet open={open} onOpenChange={setOpen}>
-          <SheetTrigger render={<Button><Plus /> Add Account</Button>} />
-          <SheetContent side="right" className="sm:max-w-md">
-            <form onSubmit={handleSubmit}>
-              <SheetHeader>
-                <SheetTitle>Add Account</SheetTitle>
-                <SheetDescription>Fill in the details to create a new account.</SheetDescription>
-              </SheetHeader>
-              <div className="flex flex-col gap-4 p-4">
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-medium">Account Name</label>
-                  <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. Checking" required />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-medium">Type</label>
-                  <select
-                    className="flex h-8 w-full min-w-0 rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm transition-colors outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-                    value={form.type}
-                    onChange={(e) => setForm({ ...form, type: e.target.value })}
-                  >
-                    <option value="checking">Checking</option>
-                    <option value="savings">Savings</option>
-                    <option value="credit">Credit</option>
-                    <option value="investment">Investment</option>
-                  </select>
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-medium">Balance</label>
-                  <Input type="number" step="0.01" value={form.balance || ""} onChange={(e) => setForm({ ...form, balance: parseFloat(e.target.value) || 0 })} placeholder="0.00" required />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-medium">Description</label>
-                  <Input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Optional description" />
-                </div>
-              </div>
-              <SheetFooter>
-                <Button type="submit">Save Account</Button>
-              </SheetFooter>
-            </form>
-          </SheetContent>
-        </Sheet>
-      </div>
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {accounts.length === 0 ? (
-          <p className="rounded-lg border p-8 text-center text-sm text-muted-foreground sm:col-span-2 lg:col-span-3">
-            No accounts yet. Add one to get started.
+          <h2 className="text-lg font-semibold">Accounts</h2>
+          <p className="text-sm text-muted-foreground">
+            Manage your cash, credit, and investment accounts.
           </p>
-        ) : (
-          accounts.map((account, i) => {
-          const config = typeConfig[account.type] ?? { icon: Wallet, color: "text-gray-600 bg-gray-100 dark:text-gray-400 dark:bg-gray-500/20" }
-          const Icon = config.icon
-          return (
-            <div key={i} className="rounded-lg border p-4">
-              <div className="flex items-start justify-between">
-                <div className={cn("flex size-10 items-center justify-center rounded-lg", config.color)}>
-                  <Icon className="size-5" />
+        </div>
+        <Button onClick={() => setOpen(true)}>
+          <Plus />
+          Add account
+        </Button>
+      </div>
+
+      {accounts.status === "loading" && <LoadingState label="Loading accounts…" />}
+      {accounts.status === "error" && (
+        <ErrorState
+          message={accounts.error?.message ?? "Failed to load accounts."}
+          onRetry={accounts.refetch}
+        />
+      )}
+      {accounts.status === "success" &&
+        (accounts.data ?? []).length === 0 && (
+          <EmptyState
+            icon={Landmark}
+            title="No accounts yet"
+            description="Add your first account to start tracking balances."
+            action={
+              <Button size="sm" onClick={() => setOpen(true)}>
+                <Plus />
+                Add account
+              </Button>
+            }
+          />
+        )}
+
+      {accounts.status === "success" && (accounts.data ?? []).length > 0 && (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {(accounts.data ?? []).map((account) => {
+            const config =
+              TYPE_CONFIG[account.type] ?? TYPE_CONFIG.cash;
+            const Icon = config.icon;
+            return (
+              <div
+                key={account.id}
+                className="flex items-start justify-between rounded-xl border bg-card p-4 shadow-sm"
+              >
+                <div className="flex items-start gap-3">
+                  <div
+                    className={cn(
+                      "flex size-10 items-center justify-center rounded-lg",
+                      config.color
+                    )}
+                  >
+                    <Icon className="size-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-medium">{account.name}</h3>
+                    <p className="text-xs capitalize text-muted-foreground">
+                      {config.label}
+                    </p>
+                  </div>
                 </div>
-                <span className={cn(
-                  "font-mono text-lg font-semibold",
-                  account.balance >= 0 ? "text-foreground" : "text-red-600 dark:text-red-400"
-                )}>
-                  ${account.balance.toFixed(2)}
-                </span>
+                <Button
+                  size="icon-sm"
+                  variant="ghost"
+                  onClick={() => handleDelete(account)}
+                  disabled={deletingId === account.id}
+                  aria-label={`Delete ${account.name}`}
+                  className="text-destructive hover:text-destructive"
+                >
+                  <Trash2 />
+                </Button>
               </div>
-              <div className="mt-3">
-                <h3 className="font-medium">{account.name}</h3>
-                <p className="text-xs capitalize text-muted-foreground">{account.type}</p>
+            );
+          })}
+        </div>
+      )}
+
+      <Sheet open={open} onOpenChange={setOpen}>
+        <SheetContent side="right" className="sm:max-w-md">
+          <form onSubmit={handleSubmit}>
+            <SheetHeader>
+              <SheetTitle>Add account</SheetTitle>
+              <SheetDescription>
+                Create a new cash, credit, or investment account.
+              </SheetDescription>
+            </SheetHeader>
+            <div className="flex flex-col gap-4 px-4">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-medium">Account name</label>
+                <Input
+                  value={form.name}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, name: e.target.value }))
+                  }
+                  placeholder="e.g. Savings, Credit Card, Zerodha"
+                  required
+                />
               </div>
-              {account.description && (
-                <p className="mt-2 text-sm text-muted-foreground">{account.description}</p>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-medium">Type</label>
+                <div
+                  className="grid grid-cols-3 gap-1 rounded-lg border bg-muted/50 p-1"
+                  role="group"
+                  aria-label="Account type"
+                >
+                  {(Object.keys(TYPE_CONFIG) as AccountType[]).map((type) => {
+                    const cfg = TYPE_CONFIG[type];
+                    const TypeIcon = cfg.icon;
+                    return (
+                      <button
+                        key={type}
+                        type="button"
+                        onClick={() => setForm((f) => ({ ...f, type }))}
+                        aria-pressed={form.type === type}
+                        className={cn(
+                          "flex h-8 items-center justify-center gap-1.5 rounded-md text-sm font-medium transition-colors",
+                          form.type === type
+                            ? "bg-background text-foreground shadow-sm"
+                            : "text-muted-foreground hover:text-foreground"
+                        )}
+                      >
+                        <TypeIcon className="size-3.5" />
+                        {cfg.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              {error && (
+                <p role="alert" className="text-xs text-destructive">
+                  {error}
+                </p>
               )}
             </div>
-          )
-        })
-        )}
-      </div>
+            <SheetFooter>
+              <Button type="submit" disabled={saving}>
+                {saving ? "Creating…" : "Create account"}
+              </Button>
+            </SheetFooter>
+          </form>
+        </SheetContent>
+      </Sheet>
     </div>
-  )
+  );
 }

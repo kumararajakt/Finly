@@ -138,7 +138,7 @@ function TransactionCard({
             "shrink-0 text-sm font-medium tabular-nums",
             tx.type === "income"
               ? "text-emerald-600"
-              : tx.type === "transfer"
+              : tx.type === "transfer" || tx.type === "investment"
                 ? "text-muted-foreground"
                 : "text-foreground"
           )}
@@ -154,6 +154,16 @@ function TransactionCard({
           onChange={(name) => onCategoryChange(tx, name)}
         />
         <span>{tx.fromAccount}</span>
+        {tx.type === "investment" && tx.side && (
+          <span className="inline-flex items-center rounded-full bg-purple-500/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-purple-600">
+            {tx.side}
+          </span>
+        )}
+        {tx.type === "transfer" && tx.toAccount && (
+          <span className="text-muted-foreground">
+            → {tx.toAccount}
+          </span>
+        )}
       </div>
       {(tx.tags.length > 0 || true) && (
         <div className="mt-1.5">
@@ -250,6 +260,7 @@ function FilterSheet({
               <option value="expense">Expenses</option>
               <option value="income">Income</option>
               <option value="transfer">Transfers</option>
+              <option value="investment">Investments</option>
             </select>
           </div>
           <div className="flex flex-col gap-1.5">
@@ -355,7 +366,7 @@ export default function TransactionPage() {
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [showMoreFilters, setShowMoreFilters] = useState(false);
   const [filterSheetOpen, setFilterSheetOpen] = useState(false);
-  const [typeFilter, setTypeFilter] = useState<"expense" | "income" | "transfer" | "all">("all");
+  const [typeFilter, setTypeFilter] = useState<"expense" | "income" | "transfer" | "investment" | "all">("all");
   const [tagFilter, setTagFilter] = useState("all");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
@@ -587,7 +598,7 @@ export default function TransactionPage() {
         <div className="flex flex-wrap items-center gap-2">
           <select
             value={typeFilter}
-            onChange={(e) => setTypeFilter(e.target.value as "expense" | "income" | "transfer" | "all")}
+            onChange={(e) => setTypeFilter(e.target.value as typeof typeFilter)}
             aria-label="Type filter"
             className="h-8 rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
           >
@@ -595,6 +606,7 @@ export default function TransactionPage() {
             <option value="expense">Expenses</option>
             <option value="income">Income</option>
             <option value="transfer">Transfers</option>
+            <option value="investment">Investments</option>
           </select>
           <select
             value={tagFilter}
@@ -760,6 +772,11 @@ export default function TransactionPage() {
                               <Paperclip className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
                             </span>
                           )}
+                          {tx.type === "investment" && tx.side && (
+                            <span className="inline-flex items-center rounded-full bg-purple-500/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-purple-600">
+                              {tx.side}
+                            </span>
+                          )}
                         </div>
                         <p className="text-xs text-muted-foreground">{formatDate(tx.date)}</p>
                       </TableCell>
@@ -773,6 +790,9 @@ export default function TransactionPage() {
                       </TableCell>
                       <TableCell className="hidden text-muted-foreground sm:table-cell">
                         {tx.fromAccount}
+                        {tx.type === "transfer" && tx.toAccount && (
+                          <span> → {tx.toAccount}</span>
+                        )}
                       </TableCell>
                       <TableCell className="hidden max-w-56 md:table-cell">
                         {tx.notes ? (
@@ -797,7 +817,7 @@ export default function TransactionPage() {
                             "text-sm font-medium tabular-nums",
                             tx.type === "income"
                               ? "text-emerald-600"
-                              : tx.type === "transfer"
+                              : tx.type === "transfer" || tx.type === "investment"
                                 ? "text-muted-foreground"
                                 : "text-foreground"
                           )}
@@ -856,6 +876,10 @@ export default function TransactionPage() {
               accounts={accounts.data ?? []}
               tags={tags.data ?? []}
               onSaved={handleEntrySaved}
+              onInvestmentShortcut={() => {
+                setAddOpen(false);
+                window.location.href = "/investments";
+              }}
             />
           </Suspense>
         </SheetContent>
@@ -871,6 +895,10 @@ export default function TransactionPage() {
                 accounts={accounts.data ?? []}
                 tags={tags.data ?? []}
                 onSaved={handleEntrySaved}
+                onInvestmentShortcut={() => {
+                  setEditTx(null);
+                  window.location.href = "/investments";
+                }}
               />
             )}
           </Suspense>

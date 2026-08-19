@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { TrendingUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -9,7 +10,13 @@ import {
 } from "@/components/ui/sheet";
 import { api } from "@/lib/api";
 import { todayISO } from "@/lib/format";
-import type { Account, Category, Tag, Transaction, TransactionType } from "@/lib/types";
+import type {
+  Account,
+  Category,
+  Tag,
+  Transaction,
+  TransactionType,
+} from "@/lib/types";
 import { cn } from "@/lib/utils";
 import TagPicker from "./TagPicker";
 import { ensureTags, message } from "./shared";
@@ -21,6 +28,7 @@ interface EntryForm {
   date: string;
   category: string;
   fromAccount: string;
+  toAccount: string;
   tags: string[];
   notes: string;
 }
@@ -33,6 +41,7 @@ function initialForm(initial: Transaction | null): EntryForm {
     date: initial?.date ?? todayISO(),
     category: initial?.category ?? "",
     fromAccount: initial?.fromAccount ?? "",
+    toAccount: initial?.toAccount ?? "",
     tags: initial?.tags ?? [],
     notes: initial?.notes ?? "",
   };
@@ -44,6 +53,7 @@ interface EntryFormProps {
   tags: Tag[];
   initial?: Transaction | null;
   onSaved: () => void;
+  onInvestmentShortcut?: () => void;
 }
 
 const TYPE_LABELS: Record<TransactionType, string> = {
@@ -55,7 +65,14 @@ const TYPE_LABELS: Record<TransactionType, string> = {
 
 const TYPES = ["expense", "income", "transfer"] as const;
 
-export default function EntryForm({ categories, accounts, tags, initial, onSaved }: EntryFormProps) {
+export default function EntryForm({
+  categories,
+  accounts,
+  tags,
+  initial,
+  onSaved,
+  onInvestmentShortcut,
+}: EntryFormProps) {
   const [form, setForm] = useState<EntryForm>(() => initialForm(initial ?? null));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -78,8 +95,11 @@ export default function EntryForm({ categories, accounts, tags, initial, onSaved
     if (!form.date) return setError("Please choose a date.");
     if (!form.merchant.trim()) return setError("Please enter a merchant or source.");
     if (!Number.isFinite(amount) || amount <= 0) return setError("Please enter a positive amount.");
-    if (!form.category) return setError("Please choose a category.");
     if (!form.fromAccount) return setError("Please choose an account.");
+
+    if (form.type === "transfer" && !form.toAccount) {
+      return setError("Please choose a destination account for the transfer.");
+    }
 
     setSaving(true);
     setError(null);
@@ -90,7 +110,7 @@ export default function EntryForm({ categories, accounts, tags, initial, onSaved
         await api.transactions.update(initial.id, {
           date: form.date,
           merchant: form.merchant.trim(),
-          category: form.category,
+          category: form.type === "transfer" ? "Transfers" : form.category,
           fromAccount: form.fromAccount,
           amount,
           type: form.type,
@@ -101,7 +121,7 @@ export default function EntryForm({ categories, accounts, tags, initial, onSaved
         await api.transactions.create({
           date: form.date,
           merchant: form.merchant.trim(),
-          category: form.category,
+          category: form.type === "transfer" ? "Transfers" : form.category,
           fromAccount: form.fromAccount,
           amount,
           type: form.type,
@@ -119,6 +139,7 @@ export default function EntryForm({ categories, accounts, tags, initial, onSaved
 
   const knownCategory = form.category && !categories.some((c) => c.name === form.category);
   const knownAccount = form.fromAccount && !accounts.some((a) => a.name === form.fromAccount);
+  const isTransfer = form.type === "transfer";
 
   return (
     <form onSubmit={handleSubmit}>
@@ -129,7 +150,7 @@ export default function EntryForm({ categories, accounts, tags, initial, onSaved
         </SheetDescription>
       </SheetHeader>
       <div className="flex flex-col gap-4 px-4">
-        <div className="grid grid-cols-3 gap-1 rounded-lg border bg-muted/50 p-1" role="group" aria-label="Transaction type">
+        <div className="grid grid-cols-4 gap-1 rounded-lg border bg-muted/50 p-1" role="group" aria-label="Transaction type">
           {TYPES.map((type) => (
             <button
               key={type}
@@ -147,6 +168,18 @@ export default function EntryForm({ categories, accounts, tags, initial, onSaved
             </button>
           ))}
         </div>
+
+        {isTransfer && (
+          <button
+            type="button"
+            onClick={onInvestmentShortcut}
+            className="inline-flex items-center gap-1.5 self-start rounded-full border bg-muted/50 px-3 py-1 text-xs font-medium text-muted-foreground transition-colors hover:border-foreground hover:text-foreground"
+          >
+            <TrendingUp className="size-3.5" />
+            Transfer to investment
+          </button>
+        )}
+
         <div className="grid grid-cols-2 gap-3">
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-medium">Amount</label>
@@ -171,39 +204,47 @@ export default function EntryForm({ categories, accounts, tags, initial, onSaved
             />
           </div>
         </div>
-        <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-medium">Merchant / source</label>
-          <Input
-            value={form.merchant}
-            onChange={(e) => setForm((f) => ({ ...f, merchant: e.target.value }))}
-            placeholder="e.g. Grocery Store"
-            required
-          />
-        </div>
-        <div className="grid grid-cols-2 gap-3">
+
+        {!isTransfer && (
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium">Category</label>
-            <select
-              value={form.category}
-              onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
+            <label className="text-xs font-medium">Merchant / source</label>
+            <Input
+              value={form.merchant}
+              onChange={(e) => setForm((f) => ({ ...f, merchant: e.target.value }))}
+              placeholder="e.g. Grocery Store"
               required
-              className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
-            >
-              {categories.length === 0 && (
-                <option value="" disabled>
-                  No categories yet
-                </option>
-              )}
-              {knownCategory && <option value={form.category}>{form.category}</option>}
-              {categories.map((category) => (
-                <option key={category.id} value={category.name}>
-                  {category.name}
-                </option>
-              ))}
-            </select>
+            />
           </div>
+        )}
+
+        <div className="grid grid-cols-2 gap-3">
+          {!isTransfer && (
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-medium">Category</label>
+              <select
+                value={form.category}
+                onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
+                required
+                className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
+              >
+                {categories.length === 0 && (
+                  <option value="" disabled>
+                    No categories yet
+                  </option>
+                )}
+                {knownCategory && <option value={form.category}>{form.category}</option>}
+                {categories.map((category) => (
+                  <option key={category.id} value={category.name}>
+                    {category.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium">Account</label>
+            <label className="text-xs font-medium">
+              {isTransfer ? "From account" : "Account"}
+            </label>
             <select
               value={form.fromAccount}
               onChange={(e) => setForm((f) => ({ ...f, fromAccount: e.target.value }))}
@@ -223,7 +264,30 @@ export default function EntryForm({ categories, accounts, tags, initial, onSaved
               ))}
             </select>
           </div>
+          {isTransfer && (
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-medium">To account</label>
+              <select
+                value={form.toAccount}
+                onChange={(e) => setForm((f) => ({ ...f, toAccount: e.target.value }))}
+                required
+                className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
+              >
+                <option value="" disabled>
+                  Select destination
+                </option>
+                {accounts
+                  .filter((a) => a.name !== form.fromAccount)
+                  .map((account) => (
+                    <option key={account.id} value={account.name}>
+                      {account.name}
+                    </option>
+                  ))}
+              </select>
+            </div>
+          )}
         </div>
+
         <div className="flex flex-col gap-1.5">
           <label className="text-xs font-medium">Tags</label>
           <TagPicker
@@ -232,6 +296,7 @@ export default function EntryForm({ categories, accounts, tags, initial, onSaved
             onChange={(next) => setForm((f) => ({ ...f, tags: next }))}
           />
         </div>
+
         <div className="flex flex-col gap-1.5">
           <label className="text-xs font-medium">Notes</label>
           <textarea
@@ -243,6 +308,7 @@ export default function EntryForm({ categories, accounts, tags, initial, onSaved
             className="min-h-20 w-full resize-y rounded-lg border border-input bg-transparent px-2.5 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
           />
         </div>
+
         {error && (
           <p role="alert" className="text-xs text-destructive">
             {error}

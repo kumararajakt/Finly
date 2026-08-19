@@ -4,13 +4,17 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { and, asc, eq, sql } from 'drizzle-orm';
+import { and, asc, count, eq, sql } from 'drizzle-orm';
 import { DRIZZLE } from '../database/database.constants';
 import type { Database } from '../database/database.module';
 import {
   accounts,
+  budgets,
   categories,
+  recurring,
+  subscriptions,
   tags,
+  transactions,
   type Account,
   type AccountType,
   type Category,

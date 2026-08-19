@@ -12,6 +12,7 @@ import { menuPath } from "./utils/menu";
 
 const DashboardPage = lazy(() => import("./pages/DashboardPage"));
 const TransactionPage = lazy(() => import("./pages/TransactionPage"));
+const InvestmentsPage = lazy(() => import("./pages/InvestmentsPage"));
 const RecurringPage = lazy(() => import("./pages/RecurringPage"));
 const SubscriptionsPage = lazy(() => import("./pages/SubscriptionsPage"));
 const BudgetsPage = lazy(() => import("./pages/BudgetsPage"));
@@ -27,6 +28,7 @@ interface PageProps {
 const pages: Record<string, React.ComponentType<PageProps>> = {
   dashboard: DashboardPage,
   transactions: TransactionPage,
+  investments: InvestmentsPage,
   recurring: RecurringPage,
   subscriptions: SubscriptionsPage,
   budgets: BudgetsPage,

@@ -7,6 +7,7 @@ import {
   Target,
   ListChecks,
   Settings,
+  TrendingUp,
 } from "lucide-react";
 
 export const menus = [
@@ -21,6 +22,12 @@ export const menus = [
     value: "transactions",
     path: "/transactions",
     icon: ArrowRightLeft,
+  },
+  {
+    label: "Investments",
+    value: "investments",
+    path: "/investments",
+    icon: TrendingUp,
   },
   {
     label: "Recurring",

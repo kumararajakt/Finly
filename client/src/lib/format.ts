@@ -62,7 +62,7 @@ export function formatCurrency(amount: number, currency = DEFAULT_CURRENCY): str
 export function formatSignedAmount(amount: number, type: TransactionType, currency = DEFAULT_CURRENCY): string {
   const formatted = formatCurrency(amount, currency);
   if (type === "income") return `+${formatted}`;
-  if (type === "transfer") return formatted;
+  if (type === "transfer" || type === "investment") return formatted;
   return `-${formatted}`;
 }
 

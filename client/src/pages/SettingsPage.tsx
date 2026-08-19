@@ -695,6 +695,7 @@ export default function SettingsPage() {
           (await api.accounts.list()).map((account: Account) => ({
             key: account.id,
             label: account.name,
+            detail: account.type,
           }))
         }
         add={async (name) => {

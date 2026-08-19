@@ -1,5 +1,5 @@
 import { Suspense, lazy, useMemo } from "react";
-import { CheckCircle2, Flag, Sparkles, Upload, ArrowRight } from "lucide-react";
+import { CheckCircle2, Flag, Sparkles, TrendingUp, Upload, ArrowRight } from "lucide-react";
 import PeriodSelector from "@/components/PeriodSelector";
 import SummaryCard from "@/components/SummaryCard";
 import EmptyState from "@/components/ui/empty-state";
@@ -75,6 +75,33 @@ function InsightList({ summary }: { summary: Summary }) {
   );
 }
 
+function NetWorthBreakdownStrip({
+  breakdown,
+  currency,
+}: {
+  breakdown: Summary["netWorthBreakdown"];
+  currency: string;
+}) {
+  const segments: { label: string; value: number; color: string }[] = [
+    { label: "Cash", value: breakdown.cash, color: "text-emerald-600" },
+    { label: "Investments", value: breakdown.investments, color: "text-purple-600" },
+    { label: "Credit", value: breakdown.credit, color: "text-red-600" },
+    { label: "Other", value: breakdown.other, color: "text-blue-600" },
+  ].filter((s) => s.value !== 0);
+
+  if (segments.length === 0) return null;
+
+  return (
+    <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs">
+      {segments.map((s) => (
+        <span key={s.label} className={cn("tabular-nums", s.color)}>
+          {s.label}: {formatCurrency(s.value, currency)}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 function ComingUp({
   summary,
   currency,
@@ -130,8 +157,6 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
     [period, settings.customDateFrom, settings.customDateTo]
   );
 
-  const hasAdjustment = settings.netWorthAdjustment !== 0;
-
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -156,28 +181,17 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <SummaryCard
               label="Net Worth"
-              value={summary.netWorth !== null ? formatCurrency(summary.netWorth, currency) : "Not set"}
+              value={formatCurrency(summary.netWorth, currency)}
               valueClassName={
-                summary.netWorth === null
-                  ? "text-muted-foreground"
-                  : summary.netWorth < 0
-                    ? "text-red-600"
-                    : undefined
+                summary.netWorth < 0 ? "text-red-600" : undefined
               }
-              stripLabel={hasAdjustment ? `Adjustment: ${formatCurrency(settings.netWorthAdjustment, currency)}` : ""}
-              stripValue={
-                summary.netWorth === null ? "Set in Settings" : ""
-              }
+              stripLabel="Cash + Investments − Credit + Other"
+              stripValue={formatCurrency(summary.netWorth, currency)}
               action={
-                summary.netWorth === null ? (
-                  <button
-                    type="button"
-                    onClick={() => onNavigate?.("settings")}
-                    className="mt-1.5 self-start text-xs font-medium text-primary underline-offset-4 hover:underline"
-                  >
-                    Set up net worth in Settings
-                  </button>
-                ) : undefined
+                <NetWorthBreakdownStrip
+                  breakdown={summary.netWorthBreakdown}
+                  currency={currency}
+                />
               }
             />
             <SummaryCard
@@ -210,6 +224,31 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
               }
             />
           </div>
+
+          {summary.netWorthBreakdown.investments !== 0 && (
+            <section className="rounded-xl border bg-card p-4 shadow-sm">
+              <div className="flex items-center gap-2">
+                <TrendingUp className="size-4 text-purple-600" aria-hidden="true" />
+                <h3 className="text-sm font-medium">Investments</h3>
+              </div>
+              <div className="mt-2 flex flex-wrap items-center gap-4 text-sm">
+                <span className="text-muted-foreground">
+                  Market value:{" "}
+                  <span className="font-semibold tabular-nums text-foreground">
+                    {formatCurrency(summary.netWorthBreakdown.investments, currency)}
+                  </span>
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => onNavigate?.("investments")}
+                className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-primary underline-offset-4 hover:underline"
+              >
+                View investments
+                <ArrowRight className="size-3.5" />
+              </button>
+            </section>
+          )}
 
           <div className="grid gap-4 lg:grid-cols-2">
             <section className="rounded-xl border bg-card p-4 shadow-sm">

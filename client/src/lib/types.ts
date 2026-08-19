@@ -3,6 +3,57 @@ export type TransactionSource = "manual" | "csv" | "document" | "google-drive";
 export type TradeSide = "buy" | "sell" | "dividend" | "interest";
 export type AccountType = "cash" | "credit" | "investment";
 
+export interface Trade {
+  id: string;
+  accountId: string;
+  date: string;
+  security: string;
+  side: TradeSide;
+  units: number;
+  price: number;
+  amount: number;
+  fee: number;
+  linkedTransactionId: string | null;
+  notes: string | null;
+  createdAt: string;
+}
+
+export interface Position {
+  security: string;
+  units: number;
+  avgCost: number;
+  costBasis: number;
+  currentPrice: number | null;
+  marketValue: number | null;
+  unrealizedPL: number | null;
+}
+
+export interface InvestmentSummary {
+  totalInvested: number;
+  realizedPL: number;
+  marketValue: number | null;
+  unrealizedPL: number | null;
+}
+
+export interface NetWorthBreakdown {
+  cash: number;
+  investments: number;
+  credit: number;
+  other: number;
+}
+
+export interface CreateTrade {
+  accountId: string;
+  date: string;
+  security: string;
+  side: TradeSide;
+  units: number;
+  price: number;
+  fee?: number;
+  fundingAccountId: string;
+  notes?: string;
+}
+
 export interface Transaction {
   id: string;
   date: string;
@@ -216,7 +267,8 @@ export interface ComingUpItem {
 
 export interface Summary {
   period: Period;
-  netWorth: number | null;
+  netWorth: number;
+  netWorthBreakdown: NetWorthBreakdown;
   income: number;
   spending: number;
   savingsRate: number;
