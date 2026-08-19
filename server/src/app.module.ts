@@ -8,6 +8,7 @@ import { DetectionModule } from './detection/detection.module';
 import { GoalsModule } from './goals/goals.module';
 import { HealthModule } from './health/health.module';
 import { ImportModule } from './import/import.module';
+import { InvestmentsModule } from './investments/investments.module';
 import { ManagedModule } from './managed/managed.module';
 import { PdfImportModule } from './pdf-import/pdf-import.module';
 import { RecurringModule } from './recurring/recurring.module';
@@ -36,6 +37,7 @@ import { TransactionsModule } from './transactions/transactions.module';
     GoalsModule,
     RulesModule,
     DetectionModule,
+    InvestmentsModule,
   ],
 })
 export class AppModule {}

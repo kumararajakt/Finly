@@ -2,8 +2,14 @@ import { Inject, Injectable } from '@nestjs/common';
 import { and, asc, desc, eq, gte, lte, type SQL } from 'drizzle-orm';
 import { DRIZZLE } from '../database/database.constants';
 import type { Database } from '../database/database.module';
-import { recurring, subscriptions, transactions } from '../database/schema';
+import {
+  accounts,
+  recurring,
+  subscriptions,
+  transactions,
+} from '../database/schema';
 import { DetectionService } from '../detection/detection.service';
+import { InvestmentsService } from '../investments/investments.service';
 import type { Period } from '../settings/settings.types';
 import { SettingsService } from '../settings/settings.service';
 import { buildBuckets, periodRange, localDateISO } from './period';
@@ -36,9 +42,17 @@ export interface ImportResult {
   totalRows: number;
 }
 
+export interface NetWorthBreakdown {
+  cash: number;
+  investments: number;
+  credit: number;
+  other: number;
+}
+
 export interface Summary {
   period: Period;
-  netWorth: number | null;
+  netWorth: number;
+  netWorthBreakdown: NetWorthBreakdown;
   income: number;
   spending: number;
   savingsRate: number;
@@ -61,6 +75,7 @@ export class SummaryService {
     @Inject(DRIZZLE) private readonly db: Database,
     private readonly settingsService: SettingsService,
     private readonly detectionService: DetectionService,
+    private readonly investmentsService: InvestmentsService,
   ) {}
 
   async getSummary(userId: string, period?: Period): Promise<Summary> {
@@ -96,10 +111,13 @@ export class SummaryService {
     const savingsRate =
       income > 0 ? round2(((income - spending) / income) * 100) : 0;
 
-    const netWorth =
-      allSettings.netWorthAdjustment !== 0
-        ? allSettings.netWorthAdjustment
-        : null;
+    const netWorthBreakdown = await this.computeNetWorth(userId, allSettings.netWorthAdjustment);
+    const netWorth = round2(
+      netWorthBreakdown.cash +
+        netWorthBreakdown.investments +
+        netWorthBreakdown.credit +
+        netWorthBreakdown.other,
+    );
 
     const buckets = buildBuckets(
       range,
@@ -206,6 +224,7 @@ export class SummaryService {
     return {
       period: activePeriod,
       netWorth,
+      netWorthBreakdown,
       income,
       spending,
       savingsRate,
@@ -217,5 +236,69 @@ export class SummaryService {
       pendingSuggestions,
       lastImport,
     };
+  }
+
+  private async computeNetWorth(userId: string, netWorthAdjustment: number): Promise<NetWorthBreakdown> {
+    const allAccounts = await this.db
+      .select()
+      .from(accounts)
+      .where(eq(accounts.userId, userId));
+
+    const allTx = await this.db
+      .select()
+      .from(transactions)
+      .where(eq(transactions.userId, userId));
+
+    const balanceMap = new Map<string, number>();
+    for (const acct of allAccounts) {
+      balanceMap.set(acct.name, 0);
+    }
+
+    for (const tx of allTx) {
+      const applyToAccount = (acctName: string, delta: number) => {
+        balanceMap.set(acctName, (balanceMap.get(acctName) ?? 0) + delta);
+      };
+
+      switch (tx.type) {
+        case 'income':
+          applyToAccount(tx.fromAccount, tx.amount);
+          break;
+        case 'expense':
+          applyToAccount(tx.fromAccount, -tx.amount);
+          break;
+        case 'transfer':
+        case 'investment':
+          if (tx.fromAccount) {
+            applyToAccount(tx.fromAccount, -tx.amount);
+          }
+          if (tx.toAccount) {
+            applyToAccount(tx.toAccount, tx.amount);
+          }
+          break;
+      }
+    }
+
+    const accountTypeMap = new Map(allAccounts.map((a) => [a.name, a.type]));
+    let cash = 0;
+    let credit = 0;
+
+    for (const [acctName, balance] of balanceMap) {
+      const type = accountTypeMap.get(acctName) ?? 'cash';
+      if (type === 'credit') {
+        credit += Math.max(0, -balance);
+      } else if (type !== 'investment') {
+        cash += balance;
+      }
+    }
+
+    const positions = await this.investmentsService.getPositions(userId, {});
+    const investments = positions.reduce(
+      (sum, p) => sum + (p.marketValue ?? p.costBasis),
+      0,
+    );
+
+    const other = netWorthAdjustment;
+
+    return { cash, investments, credit, other };
   }
 }

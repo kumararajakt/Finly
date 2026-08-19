@@ -24,6 +24,7 @@ const STARTER_CATEGORIES = [
   'Health',
   'Entertainment',
   'Income',
+  'Investments',
   'Needs review',
   'Other',
 ];

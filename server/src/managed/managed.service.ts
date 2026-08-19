@@ -4,18 +4,15 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { count, sql, eq, and } from 'drizzle-orm';
+import { and, asc, eq, sql } from 'drizzle-orm';
 import { DRIZZLE } from '../database/database.constants';
 import type { Database } from '../database/database.module';
 import {
   accounts,
-  budgets,
   categories,
-  recurring,
-  subscriptions,
   tags,
-  transactions,
   type Account,
+  type AccountType,
   type Category,
 } from '../database/schema';
 
@@ -192,12 +189,16 @@ export class ManagedService {
       .orderBy(accounts.name);
   }
 
-  async createAccount(userId: string, name: string): Promise<Account> {
+  async createAccount(
+    userId: string,
+    name: string,
+    type?: AccountType,
+  ): Promise<Account> {
     const trimmed = name.trim();
     try {
       const [row] = await this.db
         .insert(accounts)
-        .values({ userId, name: trimmed })
+        .values({ userId, name: trimmed, type: type ?? 'cash' })
         .returning();
       return row;
     } catch (error) {

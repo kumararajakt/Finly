@@ -11,7 +11,7 @@ import {
 } from '@nestjs/common';
 import { CurrentUser } from '../auth/current-user.decorator';
 import type { Account, Category } from '../database/schema';
-import { NameDto } from './managed.dto';
+import { AccountDto, NameDto } from './managed.dto';
 import { ManagedService, type TagWithCount } from './managed.service';
 
 @Controller('categories')
@@ -62,9 +62,9 @@ export class AccountsController {
   @Post()
   create(
     @CurrentUser() userId: string,
-    @Body() body: NameDto,
+    @Body() body: AccountDto,
   ): Promise<Account> {
-    return this.managedService.createAccount(userId, body.name);
+    return this.managedService.createAccount(userId, body.name, body.type);
   }
 
   @Delete(':id')
