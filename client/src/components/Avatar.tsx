@@ -1,5 +1,6 @@
+import { User } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { initials } from "@/lib/avatar";
+import { AVATAR_ICON, initials } from "@/lib/avatar";
 
 function Avatar({
   name,
@@ -10,6 +11,19 @@ function Avatar({
   image?: string | null;
   className?: string;
 }) {
+  if (image === AVATAR_ICON) {
+    return (
+      <span
+        aria-hidden="true"
+        className={cn(
+          "inline-flex shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground select-none",
+          className
+        )}
+      >
+        <User className="size-[0.6em]" />
+      </span>
+    );
+  }
   if (image) {
     return (
       <img

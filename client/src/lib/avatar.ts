@@ -1,11 +1,28 @@
 export const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
 export const AVATAR_MAX_SIZE = 256;
+export const AVATAR_ICON = "icon";
+
+export type AvatarValue = string | null;
 
 export function initials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
   if (parts.length === 0) return "?";
   if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
   return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
+}
+
+export function isAvatarUploaded(value: AvatarValue): boolean {
+  return value !== null && value !== AVATAR_ICON;
+}
+
+export function validateFile(file: File): string | null {
+  if (!file.type.startsWith("image/")) {
+    return "Please choose an image file.";
+  }
+  if (file.size > MAX_UPLOAD_BYTES) {
+    return "The image must be smaller than 5 MB.";
+  }
+  return null;
 }
 
 export async function fileToAvatarDataUrl(file: File): Promise<string> {

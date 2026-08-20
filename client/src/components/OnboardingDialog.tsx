@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from "react";
-import { Camera, Loader2, Trash2 } from "lucide-react";
-import Avatar from "@/components/Avatar";
+import { useEffect, useState } from "react";
+import { Loader2 } from "lucide-react";
+import { AvatarPicker } from "@/components/AvatarPicker";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -14,7 +14,8 @@ import { Input } from "@/components/ui/input";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSettings } from "@/contexts/SettingsContext";
 import { api } from "@/lib/api";
-import { fileToAvatarDataUrl, MAX_UPLOAD_BYTES } from "@/lib/avatar";
+import { fileToAvatarDataUrl, validateFile } from "@/lib/avatar";
+import type { AvatarValue } from "@/lib/avatar";
 import { countryCodeFromTimeZone } from "@/lib/country";
 import type { Country } from "@/lib/types";
 
@@ -39,13 +40,12 @@ export default function OnboardingDialog() {
   const { user, updateProfile } = useAuth();
   const { saveSetting } = useSettings();
   const [name, setName] = useState("");
-  const [image, setImage] = useState<string | null>(null);
+  const [image, setImage] = useState<AvatarValue>(null);
   const [country, setCountry] = useState<string | null>(null);
   const [countries, setCountries] = useState<Country[] | null>(null);
   const [countriesError, setCountriesError] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setName(user?.name ?? "");
@@ -63,12 +63,9 @@ export default function OnboardingDialog() {
   }, [user, countries, countriesError]);
 
   async function handleFile(file: File) {
-    if (!file.type.startsWith("image/")) {
-      setError("Please choose an image file.");
-      return;
-    }
-    if (file.size > MAX_UPLOAD_BYTES) {
-      setError("The image must be smaller than 5 MB.");
+    const fileError = validateFile(file);
+    if (fileError) {
+      setError(fileError);
       return;
     }
     setError(null);
@@ -127,44 +124,13 @@ export default function OnboardingDialog() {
         </DialogHeader>
 
         <div className="flex flex-col items-center gap-3">
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
+          <AvatarPicker
+            value={image}
+            onChange={setImage}
+            onFile={handleFile}
+            name={name.trim() || "Account"}
             disabled={saving}
-            aria-label="Choose a profile picture"
-            title="Choose a profile picture"
-            className="group relative overflow-hidden rounded-full focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none disabled:opacity-50"
-          >
-            <Avatar name={name.trim() || "Account"} image={image} className="size-20 text-2xl" />
-            <span className="absolute inset-0 flex items-center justify-center gap-1 bg-black/40 text-xs font-medium text-white opacity-0 transition-opacity group-hover:opacity-100">
-              <Camera className="size-3.5" aria-hidden="true" />
-              Upload
-            </span>
-          </button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            className="hidden"
-            aria-label="Choose a profile picture"
-            onChange={(event) => {
-              const file = event.target.files?.[0];
-              if (file) void handleFile(file);
-              event.target.value = "";
-            }}
           />
-          {image && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="xs"
-              onClick={() => setImage(null)}
-              disabled={saving}
-            >
-              <Trash2 />
-              Remove picture
-            </Button>
-          )}
 
           <div className="flex w-full flex-col gap-1.5">
             <label htmlFor="onboarding-name" className="text-xs font-medium">
