@@ -12,6 +12,13 @@ import {
   Wallet,
   X,
 } from "lucide-react";
+import {
+  Accordion,
+  AccordionItem,
+  AccordionHeader,
+  AccordionTrigger,
+  AccordionPanel,
+} from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -151,44 +158,43 @@ function ManagedList({
   }
 
   return (
-    <section className="rounded-xl border bg-card p-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <Icon className="size-4 text-muted-foreground" aria-hidden="true" />
-          <h3 className="text-sm font-medium">{title}</h3>
-          {query.status === "success" && (
-            <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
-              {(query.data ?? []).length}
-            </span>
-          )}
-        </div>
-        <div className="flex gap-1.5">
-          <Input
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                handleAdd();
-              }
-            }}
-            placeholder={addPlaceholder}
-            className="w-40 sm:w-48"
-            aria-label={`${title} name`}
-          />
-          <Button
-            type="button"
-            variant="outline"
-            onClick={handleAdd}
-            disabled={!draft.trim() || saving}
-          >
-            {saving ? "Adding…" : addLabel}
-          </Button>
-        </div>
+    <div className="flex flex-col gap-3 p-1">
+      <div className="flex items-center gap-1.5">
+        <Icon className="size-4 text-muted-foreground" aria-hidden="true" />
+        <span className="text-sm font-medium text-muted-foreground">{title}</span>
+        {query.status === "success" && (
+          <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+            {(query.data ?? []).length}
+          </span>
+        )}
+      </div>
+
+      <div className="flex gap-1.5">
+        <Input
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              handleAdd();
+            }
+          }}
+          placeholder={addPlaceholder}
+          className="w-40 sm:w-48"
+          aria-label={`${title} name`}
+        />
+        <Button
+          type="button"
+          variant="outline"
+          onClick={handleAdd}
+          disabled={!draft.trim() || saving}
+        >
+          {saving ? "Adding…" : addLabel}
+        </Button>
       </div>
 
       {error && (
-        <p role="alert" className="mt-3 text-xs text-destructive">
+        <p role="alert" className="text-xs text-destructive">
           {error}
         </p>
       )}
@@ -280,7 +286,7 @@ function ManagedList({
             ))}
           </ul>
         ))}
-    </section>
+    </div>
   );
 }
 
@@ -328,17 +334,8 @@ function NetWorthSection() {
   }
 
   return (
-    <section className="rounded-xl border bg-card p-4">
-      <div className="flex items-center gap-2">
-        <Wallet className="size-4 text-muted-foreground" aria-hidden="true" />
-        <h3 className="text-sm font-medium">Net worth</h3>
-        {settings.netWorthAdjustment !== 0 && (
-          <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-600 dark:text-emerald-400">
-            Set
-          </span>
-        )}
-      </div>
-      <p className="mt-2 max-w-xl text-sm text-muted-foreground">
+    <div className="flex flex-col gap-3 p-1">
+      <p className="max-w-xl text-sm text-muted-foreground">
         Net worth is computed from your account balances. Use this field to add an
         adjustment for assets or liabilities you don't track as accounts (gold,
         property, EPF, etc.).
@@ -352,7 +349,7 @@ function NetWorthSection() {
           onRetry={refetch}
         />
       ) : (
-        <div className="mt-4">
+        <div>
           <div className="flex flex-col gap-1.5 max-w-sm">
             <label className="text-xs font-medium" htmlFor="net-worth-adjustment">
               Other assets/liabilities adjustment
@@ -369,7 +366,7 @@ function NetWorthSection() {
         </div>
       )}
 
-      <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-muted-foreground">
           Adjustment:{" "}
           <span className="font-semibold tabular-nums text-foreground">{preview ?? "—"}</span>
@@ -394,7 +391,7 @@ function NetWorthSection() {
           </Button>
         </div>
       </div>
-    </section>
+    </div>
   );
 }
 
@@ -425,12 +422,8 @@ function DensitySection() {
   }
 
   return (
-    <section className="rounded-xl border bg-card p-4">
-      <div className="flex items-center gap-2">
-        <LayoutGrid className="size-4 text-muted-foreground" aria-hidden="true" />
-        <h3 className="text-sm font-medium">Layout density</h3>
-      </div>
-      <p className="mt-2 max-w-xl text-sm text-muted-foreground">
+    <div className="flex flex-col gap-3 p-1">
+      <p className="max-w-xl text-sm text-muted-foreground">
         Control how tightly content is packed across the app. Changes apply immediately.
       </p>
 
@@ -443,7 +436,7 @@ function DensitySection() {
         />
       ) : (
         <div
-          className="mt-4 flex flex-col gap-1 rounded-lg border bg-muted/50 p-1 sm:flex-row sm:flex-wrap"
+          className="flex flex-col gap-1 rounded-lg border bg-muted/50 p-1 sm:flex-row sm:flex-wrap"
           role="group"
           aria-label="Layout density"
         >
@@ -469,11 +462,11 @@ function DensitySection() {
       )}
 
       {saveError && (
-        <p role="alert" className="mt-3 text-xs text-destructive">
+        <p role="alert" className="text-xs text-destructive">
           {saveError}
         </p>
       )}
-    </section>
+    </div>
   );
 }
 
@@ -512,16 +505,12 @@ function IgnoredSuggestionsSection() {
   }
 
   return (
-    <section className="rounded-xl border bg-card p-4">
-      <div className="flex items-center gap-2">
-        <RotateCcw className="size-4 text-muted-foreground" aria-hidden="true" />
-        <h3 className="text-sm font-medium">Recovery</h3>
-      </div>
-      <p className="mt-2 max-w-xl text-sm text-muted-foreground">
+    <div className="flex flex-col gap-3 p-1">
+      <p className="max-w-xl text-sm text-muted-foreground">
         Patterns you've ignored on the Recurring and Subscriptions pages stay hidden until you
         restore them.
       </p>
-      <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <span className="text-sm">
           {count === 0 ? (
             "No ignored suggestions."
@@ -553,7 +542,7 @@ function IgnoredSuggestionsSection() {
           </Button>
         </div>
       </div>
-    </section>
+    </div>
   );
 }
 
@@ -579,21 +568,17 @@ function DeleteAccountSection() {
   }
 
   return (
-    <section className="rounded-xl border border-destructive/30 bg-card p-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <AlertTriangle className="size-4 text-destructive" aria-hidden="true" />
-          <h3 className="text-sm font-medium">Delete account</h3>
-        </div>
+    <div className="flex flex-col gap-3 p-1">
+      <p className="max-w-xl text-sm text-muted-foreground">
+        Permanently deletes your account and every transaction, budget, goal, recurring
+        payment, and setting. This cannot be undone.
+      </p>
+      <div>
         <Button type="button" variant="destructive" onClick={() => setOpen(true)}>
           <Trash2 />
           Delete account
         </Button>
       </div>
-      <p className="mt-2 max-w-xl text-sm text-muted-foreground">
-        Permanently deletes your account and every transaction, budget, goal, recurring
-        payment, and setting. This cannot be undone.
-      </p>
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>
@@ -646,7 +631,7 @@ function DeleteAccountSection() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </section>
+    </div>
   );
 }
 
@@ -660,81 +645,167 @@ export default function SettingsPage() {
         </p>
       </div>
 
-      <NetWorthSection />
+      <Accordion>
+        <AccordionItem value="net-worth">
+          <AccordionHeader>
+            <AccordionTrigger>
+              <span className="flex items-center gap-2">
+                <Wallet className="size-4 text-muted-foreground" aria-hidden="true" />
+                Net worth
+              </span>
+            </AccordionTrigger>
+          </AccordionHeader>
+          <AccordionPanel>
+            <NetWorthSection />
+          </AccordionPanel>
+        </AccordionItem>
 
-      <DensitySection />
+        <AccordionItem value="density">
+          <AccordionHeader>
+            <AccordionTrigger>
+              <span className="flex items-center gap-2">
+                <LayoutGrid className="size-4 text-muted-foreground" aria-hidden="true" />
+                Layout density
+              </span>
+            </AccordionTrigger>
+          </AccordionHeader>
+          <AccordionPanel>
+            <DensitySection />
+          </AccordionPanel>
+        </AccordionItem>
 
-      <ManagedList
-        icon={FolderOpen}
-        title="Categories"
-        list={async (): Promise<ManagedItem[]> =>
-          (await api.categories.list()).map((category: Category) => ({
-            key: category.id,
-            label: category.name,
-          }))
-        }
-        add={async (name) => {
-          await api.categories.create(name);
-        }}
-        remove={async (item) => {
-          await api.categories.remove(item.key);
-        }}
-        rename={async (item, name) => {
-          await api.categories.rename(item.key, name);
-        }}
-        addLabel="Add"
-        addPlaceholder="New category name"
-        emptyTitle="No categories yet"
-        emptyDescription="Categories drive the pickers used across the app."
-      />
+        <AccordionItem value="categories">
+          <AccordionHeader>
+            <AccordionTrigger>
+              <span className="flex items-center gap-2">
+                <FolderOpen className="size-4 text-muted-foreground" aria-hidden="true" />
+                Categories
+              </span>
+            </AccordionTrigger>
+          </AccordionHeader>
+          <AccordionPanel>
+            <ManagedList
+              icon={FolderOpen}
+              title="Categories"
+              list={async (): Promise<ManagedItem[]> =>
+                (await api.categories.list()).map((category: Category) => ({
+                  key: category.id,
+                  label: category.name,
+                }))
+              }
+              add={async (name) => {
+                await api.categories.create(name);
+              }}
+              remove={async (item) => {
+                await api.categories.remove(item.key);
+              }}
+              rename={async (item, name) => {
+                await api.categories.rename(item.key, name);
+              }}
+              addLabel="Add"
+              addPlaceholder="New category name"
+              emptyTitle="No categories yet"
+              emptyDescription="Categories drive the pickers used across the app."
+            />
+          </AccordionPanel>
+        </AccordionItem>
 
-      <ManagedList
-        icon={Landmark}
-        title="Accounts"
-        list={async (): Promise<ManagedItem[]> =>
-          (await api.accounts.list()).map((account: Account) => ({
-            key: account.id,
-            label: account.name,
-            detail: account.type,
-          }))
-        }
-        add={async (name) => {
-          await api.accounts.create(name);
-        }}
-        remove={async (item) => {
-          await api.accounts.remove(item.key);
-        }}
-        addLabel="Add"
-        addPlaceholder="New account name"
-        emptyTitle="No accounts yet"
-        emptyDescription="Accounts label where money lives. Existing transactions keep the label after deletion."
-      />
+        <AccordionItem value="accounts">
+          <AccordionHeader>
+            <AccordionTrigger>
+              <span className="flex items-center gap-2">
+                <Landmark className="size-4 text-muted-foreground" aria-hidden="true" />
+                Accounts
+              </span>
+            </AccordionTrigger>
+          </AccordionHeader>
+          <AccordionPanel>
+            <ManagedList
+              icon={Landmark}
+              title="Accounts"
+              list={async (): Promise<ManagedItem[]> =>
+                (await api.accounts.list()).map((account: Account) => ({
+                  key: account.id,
+                  label: account.name,
+                  detail: account.type,
+                }))
+              }
+              add={async (name) => {
+                await api.accounts.create(name);
+              }}
+              remove={async (item) => {
+                await api.accounts.remove(item.key);
+              }}
+              addLabel="Add"
+              addPlaceholder="New account name"
+              emptyTitle="No accounts yet"
+              emptyDescription="Accounts label where money lives. Existing transactions keep the label after deletion."
+            />
+          </AccordionPanel>
+        </AccordionItem>
 
-      <ManagedList
-        icon={Tags}
-        title="Tags"
-        list={async (): Promise<ManagedItem[]> =>
-          (await api.tags.list()).map((tag: Tag) => ({
-            key: tag.name,
-            label: tag.name,
-            detail: `${tag.count} transaction${tag.count === 1 ? "" : "s"}`,
-          }))
-        }
-        add={async (name) => {
-          await api.tags.create(name);
-        }}
-        remove={async (item) => {
-          await api.tags.remove(item.label);
-        }}
-        addLabel="Add tag"
-        addPlaceholder="New tag name"
-        emptyTitle="No tags yet"
-        emptyDescription="Add a tag by name to attach it to transactions."
-      />
+        <AccordionItem value="tags">
+          <AccordionHeader>
+            <AccordionTrigger>
+              <span className="flex items-center gap-2">
+                <Tags className="size-4 text-muted-foreground" aria-hidden="true" />
+                Tags
+              </span>
+            </AccordionTrigger>
+          </AccordionHeader>
+          <AccordionPanel>
+            <ManagedList
+              icon={Tags}
+              title="Tags"
+              list={async (): Promise<ManagedItem[]> =>
+                (await api.tags.list()).map((tag: Tag) => ({
+                  key: tag.name,
+                  label: tag.name,
+                  detail: `${tag.count} transaction${tag.count === 1 ? "" : "s"}`,
+                }))
+              }
+              add={async (name) => {
+                await api.tags.create(name);
+              }}
+              remove={async (item) => {
+                await api.tags.remove(item.label);
+              }}
+              addLabel="Add tag"
+              addPlaceholder="New tag name"
+              emptyTitle="No tags yet"
+              emptyDescription="Add a tag by name to attach it to transactions."
+            />
+          </AccordionPanel>
+        </AccordionItem>
 
-      <IgnoredSuggestionsSection />
+        <AccordionItem value="recovery">
+          <AccordionHeader>
+            <AccordionTrigger>
+              <span className="flex items-center gap-2">
+                <RotateCcw className="size-4 text-muted-foreground" aria-hidden="true" />
+                Recovery
+              </span>
+            </AccordionTrigger>
+          </AccordionHeader>
+          <AccordionPanel>
+            <IgnoredSuggestionsSection />
+          </AccordionPanel>
+        </AccordionItem>
 
-      <DeleteAccountSection />
+        <AccordionItem value="delete">
+          <AccordionHeader>
+            <AccordionTrigger>
+              <span className="flex items-center gap-2">
+                <AlertTriangle className="size-4 text-destructive" aria-hidden="true" />
+                Delete account
+              </span>
+            </AccordionTrigger>
+          </AccordionHeader>
+          <AccordionPanel>
+            <DeleteAccountSection />
+          </AccordionPanel>
+        </AccordionItem>
+      </Accordion>
     </div>
   );
 }
