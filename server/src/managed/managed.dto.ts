@@ -31,3 +31,21 @@ export class AccountDto {
   @IsIn(['cash', 'credit', 'investment'])
   type?: AccountType;
 }
+
+export class UpdateAccountDto {
+  @IsOptional()
+  @Transform(({ value }: TransformFnParams) => {
+    if (typeof value === 'string') {
+      return value.trim();
+    }
+    return value as unknown;
+  })
+  @IsString()
+  @IsNotEmpty({ message: 'Name cannot be empty.' })
+  @MaxLength(100, { message: 'Name must be 100 characters or fewer.' })
+  name?: string;
+
+  @IsOptional()
+  @IsIn(['cash', 'credit', 'investment'])
+  type?: AccountType;
+}

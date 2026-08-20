@@ -226,6 +226,47 @@ export class ManagedService {
     }
   }
 
+  async updateAccount(
+    userId: string,
+    id: string,
+    patch: { name?: string; type?: AccountType },
+  ): Promise<Account> {
+    const existing = await this.db
+      .select()
+      .from(accounts)
+      .where(and(eq(accounts.id, id), eq(accounts.userId, userId)))
+      .limit(1);
+    if (existing.length === 0) {
+      throw notFound('Account');
+    }
+
+    const current = existing[0];
+    const trimmed = patch.name?.trim();
+    const newName = trimmed ?? current.name;
+    const newType = patch.type ?? current.type;
+
+    if (current.name === newName && current.type === newType) {
+      return current;
+    }
+
+    try {
+      const [row] = await this.db
+        .update(accounts)
+        .set({ name: newName, type: newType })
+        .where(and(eq(accounts.id, id), eq(accounts.userId, userId)))
+        .returning();
+      return row;
+    } catch (error) {
+      if (isUniqueViolation(error)) {
+        throw new ConflictException({
+          message: `An account named "${newName}" already exists.`,
+          code: 'DUPLICATE_ACCOUNT',
+        });
+      }
+      throw error;
+    }
+  }
+
   async listTags(userId: string): Promise<TagWithCount[]> {
     const result = await this.db.execute(
       sql`

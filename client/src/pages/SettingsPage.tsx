@@ -1,7 +1,9 @@
 import { useEffect, useState, type ComponentType } from "react";
 import {
   AlertTriangle,
+  Building2,
   Check,
+  CreditCard,
   FolderOpen,
   Landmark,
   LayoutGrid,
@@ -37,7 +39,7 @@ import { useSettings } from "@/contexts/SettingsContext";
 import { useQuery } from "@/hooks/use-query";
 import { ApiError, api } from "@/lib/api";
 import { formatCurrency } from "@/lib/format";
-import type { Account, Category, Density, Tag } from "@/lib/types";
+import type { Account, AccountType, Category, Density, Tag } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 function message(error: unknown): string {
@@ -635,6 +637,273 @@ function DeleteAccountSection() {
   );
 }
 
+const ACCOUNT_TYPE_CONFIG: Record<AccountType, { icon: ComponentType<{ className?: string }>; color: string; label: string }> = {
+  cash: { icon: Wallet, color: "text-emerald-600 bg-emerald-100 dark:text-emerald-400 dark:bg-emerald-500/20", label: "Cash" },
+  credit: { icon: CreditCard, color: "text-red-600 bg-red-100 dark:text-red-400 dark:bg-red-500/20", label: "Credit" },
+  investment: { icon: Building2, color: "text-purple-600 bg-purple-100 dark:text-purple-400 dark:bg-purple-500/20", label: "Investment" },
+};
+
+function AccountsSection() {
+  const query = useQuery<Account[]>(() => api.accounts.list(), []);
+  const [draft, setDraft] = useState("");
+  const [draftType, setDraftType] = useState<AccountType>("cash");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [busyKey, setBusyKey] = useState<string | null>(null);
+  const [editing, setEditing] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editType, setEditType] = useState<AccountType>("cash");
+  const [editBusy, setEditBusy] = useState(false);
+
+  async function handleAdd() {
+    const name = draft.trim();
+    if (!name) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await api.accounts.create(name, draftType);
+      setDraft("");
+      setDraftType("cash");
+      query.refetch();
+    } catch (err) {
+      setError(message(err));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleRemove(account: Account) {
+    if (
+      !window.confirm(
+        `Delete "${account.name}"? It will be removed from future selectors.`
+      )
+    ) {
+      return;
+    }
+    setBusyKey(account.id);
+    setError(null);
+    try {
+      await api.accounts.remove(account.id);
+      query.refetch();
+    } catch (err) {
+      setError(message(err));
+    } finally {
+      setBusyKey(null);
+    }
+  }
+
+  function startEdit(account: Account) {
+    setEditing(account.id);
+    setEditName(account.name);
+    setEditType(account.type);
+    setError(null);
+  }
+
+  function cancelEdit() {
+    setEditing(null);
+    setEditName("");
+    setEditType("cash");
+  }
+
+  async function handleUpdate(account: Account) {
+    const name = editName.trim();
+    if (!name) return;
+    setEditBusy(true);
+    setError(null);
+    try {
+      await api.accounts.update(account.id, { name, type: editType });
+      setEditing(null);
+      setEditName("");
+      query.refetch();
+    } catch (err) {
+      setError(message(err));
+    } finally {
+      setEditBusy(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-3 p-1">
+      <div className="flex items-center gap-1.5">
+        <Landmark className="size-4 text-muted-foreground" aria-hidden="true" />
+        <span className="text-sm font-medium text-muted-foreground">Accounts</span>
+        {query.status === "success" && (
+          <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+            {(query.data ?? []).length}
+          </span>
+        )}
+      </div>
+
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+        <Input
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              handleAdd();
+            }
+          }}
+          placeholder="New account name"
+          className="w-40 sm:w-48"
+          aria-label="Account name"
+        />
+        <div className="flex gap-1" role="group" aria-label="Account type">
+          {(Object.keys(ACCOUNT_TYPE_CONFIG) as AccountType[]).map((t) => {
+            const cfg = ACCOUNT_TYPE_CONFIG[t];
+            return (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setDraftType(t)}
+                className={cn(
+                  "h-8 rounded-md px-2 text-xs font-medium transition-colors",
+                  draftType === t
+                    ? "bg-background text-foreground shadow-sm ring-1 ring-border"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                {cfg.label}
+              </button>
+            );
+          })}
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={handleAdd}
+          disabled={!draft.trim() || saving}
+        >
+          {saving ? "Adding…" : "Add"}
+        </Button>
+      </div>
+
+      {error && (
+        <p role="alert" className="text-xs text-destructive">
+          {error}
+        </p>
+      )}
+
+      {query.status === "loading" && <LoadingState label="Loading accounts…" />}
+      {query.status === "error" && (
+        <ErrorState
+          message={query.error?.message ?? "Failed to load accounts."}
+          onRetry={query.refetch}
+        />
+      )}
+      {query.status === "success" &&
+        ((query.data ?? []).length === 0 ? (
+          <EmptyState
+            icon={Landmark}
+            title="No accounts yet"
+            description="Accounts label where money lives. Existing transactions keep the label after deletion."
+          />
+        ) : (
+          <ul className="divide-y divide-border">
+            {(query.data ?? []).map((account) => {
+              const cfg = ACCOUNT_TYPE_CONFIG[account.type] ?? ACCOUNT_TYPE_CONFIG.cash;
+              const Icon = cfg.icon;
+              return (
+                <li key={account.id} className="flex items-center justify-between gap-3 py-3">
+                  {editing === account.id ? (
+                    <div className="flex w-full flex-col gap-2">
+                      <div className="flex items-center gap-2">
+                        <Input
+                          value={editName}
+                          onChange={(e) => setEditName(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              void handleUpdate(account);
+                            } else if (e.key === "Escape") {
+                              cancelEdit();
+                            }
+                          }}
+                          placeholder="Account name"
+                          className="h-8 w-full"
+                          aria-label="Account name"
+                          autoFocus
+                        />
+                        <Button
+                          size="sm"
+                          onClick={() => void handleUpdate(account)}
+                          disabled={!editName.trim() || editBusy}
+                          aria-label="Save changes"
+                        >
+                          <Check />
+                        </Button>
+                        <Button
+                          size="icon-sm"
+                          variant="ghost"
+                          onClick={cancelEdit}
+                          disabled={editBusy}
+                          aria-label="Cancel edit"
+                        >
+                          <X />
+                        </Button>
+                      </div>
+                      <div className="flex gap-1" role="group" aria-label="Account type">
+                        {(Object.keys(ACCOUNT_TYPE_CONFIG) as AccountType[]).map((t) => {
+                          const tCfg = ACCOUNT_TYPE_CONFIG[t];
+                          return (
+                            <button
+                              key={t}
+                              type="button"
+                              onClick={() => setEditType(t)}
+                              className={cn(
+                                "h-8 rounded-md px-2 text-xs font-medium transition-colors",
+                                editType === t
+                                  ? "bg-background text-foreground shadow-sm ring-1 ring-border"
+                                  : "text-muted-foreground hover:text-foreground"
+                              )}
+                            >
+                              {tCfg.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex items-center gap-3 min-w-0">
+                        <span className={cn("flex size-8 shrink-0 items-center justify-center rounded-full", cfg.color)}>
+                          <Icon className="size-4" aria-hidden="true" />
+                        </span>
+                        <span className="min-w-0 truncate text-sm">{account.name}</span>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-3">
+                        <span className="text-xs tabular-nums text-muted-foreground">{cfg.label}</span>
+                        <Button
+                          size="icon-sm"
+                          variant="ghost"
+                          onClick={() => startEdit(account)}
+                          disabled={busyKey === account.id}
+                          aria-label={`Edit ${account.name}`}
+                        >
+                          <Pencil />
+                        </Button>
+                        <Button
+                          size="icon-sm"
+                          variant="ghost"
+                          onClick={() => handleRemove(account)}
+                          disabled={busyKey === account.id}
+                          aria-label={`Delete ${account.name}`}
+                          className="text-destructive hover:text-destructive"
+                        >
+                          <Trash2 />
+                        </Button>
+                      </div>
+                    </>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        ))}
+    </div>
+  );
+}
+
 export default function SettingsPage() {
   return (
     <div className="space-y-6">
@@ -720,27 +989,7 @@ export default function SettingsPage() {
             </AccordionTrigger>
           </AccordionHeader>
           <AccordionPanel>
-            <ManagedList
-              icon={Landmark}
-              title="Accounts"
-              list={async (): Promise<ManagedItem[]> =>
-                (await api.accounts.list()).map((account: Account) => ({
-                  key: account.id,
-                  label: account.name,
-                  detail: account.type,
-                }))
-              }
-              add={async (name) => {
-                await api.accounts.create(name);
-              }}
-              remove={async (item) => {
-                await api.accounts.remove(item.key);
-              }}
-              addLabel="Add"
-              addPlaceholder="New account name"
-              emptyTitle="No accounts yet"
-              emptyDescription="Accounts label where money lives. Existing transactions keep the label after deletion."
-            />
+            <AccountsSection />
           </AccordionPanel>
         </AccordionItem>
 

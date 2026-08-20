@@ -155,6 +155,8 @@ export const api = {
     list: () => apiFetch<Account[]>("/accounts"),
     create: (name: string, type?: AccountType) =>
       apiFetch<Account>("/accounts", { method: "POST", body: { name, type } }),
+    update: (id: string, patch: { name?: string; type?: AccountType }) =>
+      apiFetch<Account>(`/accounts/${encodeURIComponent(id)}`, { method: "PATCH", body: patch }),
     remove: (id: string) =>
       apiFetch<void>(`/accounts/${encodeURIComponent(id)}`, { method: "DELETE" }),
   },

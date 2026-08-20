@@ -11,7 +11,7 @@ import {
 } from '@nestjs/common';
 import { CurrentUser } from '../auth/current-user.decorator';
 import type { Account, Category } from '../database/schema';
-import { AccountDto, NameDto } from './managed.dto';
+import { AccountDto, NameDto, UpdateAccountDto } from './managed.dto';
 import { ManagedService, type TagWithCount } from './managed.service';
 
 @Controller('categories')
@@ -65,6 +65,18 @@ export class AccountsController {
     @Body() body: AccountDto,
   ): Promise<Account> {
     return this.managedService.createAccount(userId, body.name, body.type);
+  }
+
+  @Patch(':id')
+  update(
+    @CurrentUser() userId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: UpdateAccountDto,
+  ): Promise<Account> {
+    return this.managedService.updateAccount(userId, id, {
+      name: body.name,
+      type: body.type,
+    });
   }
 
   @Delete(':id')
