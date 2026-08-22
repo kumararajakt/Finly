@@ -1,26 +1,14 @@
-import { BadRequestException } from '@nestjs/common';
 import { InvestmentsService } from './investments.service';
 
 const USER_ID = 'user-1';
 const ACCOUNT_ID = 'acc-inv-1';
-const FUNDING_ID = 'acc-savings-1';
 
 function makeSelectChain(rows: unknown[]) {
-  const chain = {
-    from: jest.fn(() => ({
-      where: jest.fn(() => ({
-        orderBy: jest.fn(() => Promise.resolve(rows)),
-        limit: jest.fn(() => Promise.resolve(rows)),
-      })),
-      orderBy: jest.fn(() => Promise.resolve(rows)),
-    })),
-    where: jest.fn(() => ({
-      orderBy: jest.fn(() => Promise.resolve(rows)),
-      limit: jest.fn(() => Promise.resolve(rows)),
-    })),
-    limit: jest.fn(() => Promise.resolve(rows)),
-  };
-  return chain;
+  const orderBy = jest.fn(() => Promise.resolve(rows));
+  const limit = jest.fn(() => Promise.resolve(rows));
+  const where = jest.fn(() => ({ orderBy, limit }));
+  const from = jest.fn(() => ({ where, orderBy }));
+  return { from, where, orderBy, limit };
 }
 
 function dbMock() {
@@ -30,26 +18,6 @@ function dbMock() {
     update: jest.fn(),
     delete: jest.fn(),
     transaction: jest.fn(),
-  };
-}
-
-function makeTxMock(insertReturns: unknown[][]) {
-  let callIndex = 0;
-  return {
-    insert: jest.fn().mockImplementation(() => {
-      const ret = insertReturns[callIndex] ?? [];
-      callIndex++;
-      return {
-        values: jest.fn().mockReturnValue({
-          returning: jest.fn().mockResolvedValue(ret),
-        }),
-      };
-    }),
-    update: jest.fn().mockReturnValue({
-      set: jest.fn().mockReturnValue({
-        where: jest.fn().mockResolvedValue(undefined),
-      }),
-    }),
   };
 }
 
@@ -63,7 +31,7 @@ describe('InvestmentsService', () => {
   });
 
   describe('createTrade', () => {
-    it('creates a buy trade with linked transaction atomically', async () => {
+    it('creates a buy trade', async () => {
       const tradeRow = {
         id: 'trade-1',
         accountId: ACCOUNT_ID,
@@ -74,10 +42,12 @@ describe('InvestmentsService', () => {
         amount: 25000,
         fee: 20,
       };
-      const txRow = { id: 'tx-1' };
 
-      const tx = makeTxMock([[tradeRow], [txRow]]);
-      db.transaction.mockImplementation(async (fn: Function) => fn(tx));
+      db.insert.mockReturnValueOnce({
+        values: jest.fn(() => ({
+          returning: jest.fn().mockResolvedValueOnce([tradeRow]),
+        })),
+      });
 
       const result = await service.createTrade(USER_ID, {
         accountId: ACCOUNT_ID,
@@ -87,119 +57,20 @@ describe('InvestmentsService', () => {
         units: 10,
         price: 2500,
         fee: 20,
-        fundingAccountId: FUNDING_ID,
       });
 
       expect(result).toEqual(tradeRow);
-      expect(db.transaction).toHaveBeenCalledTimes(1);
-      expect(tx.insert).toHaveBeenCalledTimes(2);
-      expect(tx.update).toHaveBeenCalledTimes(1);
-    });
-
-    it('creates a sell trade with linked transaction atomically', async () => {
-      const tradeRow = {
-        id: 'trade-2',
-        accountId: ACCOUNT_ID,
-        security: 'RELIANCE.NS',
-        side: 'sell',
-        units: 5,
-        price: 2800,
-        amount: 14000,
-        fee: 10,
-      };
-      const txRow = { id: 'tx-2' };
-
-      const tx = makeTxMock([[tradeRow], [txRow]]);
-      db.transaction.mockImplementation(async (fn: Function) => fn(tx));
-
-      const result = await service.createTrade(USER_ID, {
-        accountId: ACCOUNT_ID,
-        date: '2026-02-10',
-        security: 'RELIANCE.NS',
-        side: 'sell',
-        units: 5,
-        price: 2800,
-        fee: 10,
-        fundingAccountId: FUNDING_ID,
-      });
-
-      expect(result).toEqual(tradeRow);
-      expect(tx.insert).toHaveBeenCalledTimes(2);
-      expect(tx.update).toHaveBeenCalledTimes(1);
-    });
-
-    it('creates a dividend trade with transaction first, then trade', async () => {
-      const txRow = { id: 'tx-3' };
-      const tradeRow = {
-        id: 'trade-3',
-        accountId: ACCOUNT_ID,
-        security: 'RELIANCE.NS',
-        side: 'dividend',
-        units: 0,
-        price: 0,
-        amount: 500,
-        fee: 0,
-        linkedTransactionId: 'tx-3',
-      };
-
-      const tx = makeTxMock([[txRow], [tradeRow]]);
-      db.transaction.mockImplementation(async (fn: Function) => fn(tx));
-
-      const result = await service.createTrade(USER_ID, {
-        accountId: ACCOUNT_ID,
-        date: '2026-03-01',
-        security: 'RELIANCE.NS',
-        side: 'dividend',
-        units: 0,
-        price: 0,
-        fee: 0,
-        fundingAccountId: FUNDING_ID,
-      });
-
-      expect(result).toEqual(tradeRow);
-      expect(tx.insert).toHaveBeenCalledTimes(2);
-      expect(tx.update).not.toHaveBeenCalled();
-    });
-
-    it('creates an interest trade similarly to dividend', async () => {
-      const txRow = { id: 'tx-4' };
-      const tradeRow = {
-        id: 'trade-4',
-        accountId: ACCOUNT_ID,
-        security: 'BANK-FD',
-        side: 'interest',
-        units: 0,
-        price: 0,
-        amount: 1200,
-        fee: 0,
-        linkedTransactionId: 'tx-4',
-      };
-
-      const tx = makeTxMock([[txRow], [tradeRow]]);
-      db.transaction.mockImplementation(async (fn: Function) => fn(tx));
-
-      const result = await service.createTrade(USER_ID, {
-        accountId: ACCOUNT_ID,
-        date: '2026-04-01',
-        security: 'BANK-FD',
-        side: 'interest',
-        units: 0,
-        price: 0,
-        fee: 0,
-        fundingAccountId: FUNDING_ID,
-      });
-
-      expect(result).toEqual(tradeRow);
-      expect(tx.insert).toHaveBeenCalledTimes(2);
-      expect(tx.update).not.toHaveBeenCalled();
+      expect(db.insert).toHaveBeenCalledTimes(1);
     });
 
     it('computes amount as units * price rounded to 2 decimals', async () => {
       const tradeRow = { id: 'trade-5', amount: 3333.33 };
-      const txRow = { id: 'tx-5' };
 
-      const tx = makeTxMock([[tradeRow], [txRow]]);
-      db.transaction.mockImplementation(async (fn: Function) => fn(tx));
+      db.insert.mockReturnValueOnce({
+        values: jest.fn(() => ({
+          returning: jest.fn().mockResolvedValueOnce([tradeRow]),
+        })),
+      });
 
       const result = await service.createTrade(USER_ID, {
         accountId: ACCOUNT_ID,
@@ -208,64 +79,60 @@ describe('InvestmentsService', () => {
         side: 'buy',
         units: 10,
         price: 333.333,
-        fundingAccountId: FUNDING_ID,
       });
 
       expect(result.amount).toBe(3333.33);
     });
 
-    it('throws when funding and investment accounts are the same', async () => {
-      await expect(
-        service.createTrade(USER_ID, {
-          accountId: ACCOUNT_ID,
-          date: '2026-01-15',
-          security: 'RELIANCE.NS',
-          side: 'buy',
-          units: 10,
-          price: 2500,
-          fundingAccountId: ACCOUNT_ID,
-        }),
-      ).rejects.toBeInstanceOf(BadRequestException);
-    });
-
-    it('does not throw SAME_ACCOUNT for dividend trades', async () => {
-      const txRow = { id: 'tx-6' };
-      const tradeRow = { id: 'trade-6', side: 'dividend' };
-
-      const tx = makeTxMock([[txRow], [tradeRow]]);
-      db.transaction.mockImplementation(async (fn: Function) => fn(tx));
-
-      await expect(
-        service.createTrade(USER_ID, {
-          accountId: ACCOUNT_ID,
-          date: '2026-06-01',
-          security: 'RELIANCE.NS',
-          side: 'dividend',
-          units: 0,
-          price: 0,
-          fundingAccountId: ACCOUNT_ID,
-        }),
-      ).resolves.toEqual(tradeRow);
-    });
-
     it('defaults fee to 0 when not provided', async () => {
       const tradeRow = { id: 'trade-7', fee: 0 };
-      const txRow = { id: 'tx-7' };
 
-      const tx = makeTxMock([[tradeRow], [txRow]]);
-      db.transaction.mockImplementation(async (fn: Function) => fn(tx));
+      let captured: { fee?: number } | undefined;
+      db.insert.mockImplementationOnce(() => ({
+        values: jest.fn((values: { fee?: number }) => {
+          captured = values;
+          return {
+            returning: jest.fn().mockResolvedValue([tradeRow]),
+          };
+        }),
+      }));
 
-      const result = await service.createTrade(USER_ID, {
+      await service.createTrade(USER_ID, {
         accountId: ACCOUNT_ID,
         date: '2026-07-01',
         security: 'TCS',
         side: 'buy',
         units: 5,
         price: 3000,
-        fundingAccountId: FUNDING_ID,
       });
 
-      expect(result.fee).toBe(0);
+      expect(captured?.fee).toBe(0);
+    });
+  });
+
+  describe('deleteTrade', () => {
+    it('deletes a trade owned by the user', async () => {
+      db.delete.mockReturnValueOnce({
+        where: jest.fn(() => ({
+          returning: jest.fn().mockResolvedValueOnce([{ id: 'trade-1' }]),
+        })),
+      });
+
+      await expect(
+        service.deleteTrade(USER_ID, 'trade-1'),
+      ).resolves.toBeUndefined();
+    });
+
+    it('throws NotFound when the trade does not exist', async () => {
+      db.delete.mockReturnValueOnce({
+        where: jest.fn(() => ({
+          returning: jest.fn().mockResolvedValueOnce([]),
+        })),
+      });
+
+      await expect(service.deleteTrade(USER_ID, 'missing')).rejects.toThrow(
+        'Trade not found.',
+      );
     });
   });
 
@@ -288,8 +155,8 @@ describe('InvestmentsService', () => {
 
       await service.getTrades(USER_ID, { accountId: ACCOUNT_ID });
 
-      const fromResult = chain.from.mock.results[0].value;
-      expect(fromResult.where).toHaveBeenCalled();
+      expect(chain.from).toHaveBeenCalled();
+      expect(chain.where).toHaveBeenCalled();
     });
 
     it('filters by security when provided', async () => {
@@ -299,8 +166,8 @@ describe('InvestmentsService', () => {
 
       await service.getTrades(USER_ID, { security: 'RELIANCE.NS' });
 
-      const fromResult = chain.from.mock.results[0].value;
-      expect(fromResult.where).toHaveBeenCalled();
+      expect(chain.from).toHaveBeenCalled();
+      expect(chain.where).toHaveBeenCalled();
     });
 
     it('applies orderBy descending on date and createdAt', async () => {
@@ -309,9 +176,7 @@ describe('InvestmentsService', () => {
 
       await service.getTrades(USER_ID, {});
 
-      const fromResult = chain.from.mock.results[0].value;
-      const whereResult = fromResult.where.mock.results[0].value;
-      expect(whereResult.orderBy).toHaveBeenCalled();
+      expect(chain.orderBy).toHaveBeenCalled();
     });
   });
 
@@ -679,8 +544,8 @@ describe('InvestmentsService', () => {
 
       await service.getPositions(USER_ID, { accountId: ACCOUNT_ID });
 
-      const fromResult = chain.from.mock.results[0].value;
-      expect(fromResult.where).toHaveBeenCalled();
+      expect(chain.from).toHaveBeenCalled();
+      expect(chain.where).toHaveBeenCalled();
     });
 
     it('sorts positions by security then date ascending', async () => {
@@ -690,9 +555,7 @@ describe('InvestmentsService', () => {
 
       await service.getPositions(USER_ID, {});
 
-      const fromResult = chain.from.mock.results[0].value;
-      const whereResult = fromResult.where.mock.results[0].value;
-      expect(whereResult.orderBy).toHaveBeenCalled();
+      expect(chain.orderBy).toHaveBeenCalled();
     });
   });
 
@@ -787,8 +650,8 @@ describe('InvestmentsService', () => {
 
       await service.getSummary(USER_ID, ACCOUNT_ID);
 
-      const fromResult = chain.from.mock.results[0].value;
-      expect(fromResult.where).toHaveBeenCalled();
+      expect(chain.from).toHaveBeenCalled();
+      expect(chain.where).toHaveBeenCalled();
     });
 
     it('returns zero totals when there are no trades', async () => {
@@ -871,9 +734,11 @@ describe('InvestmentsService', () => {
       db.select.mockReturnValueOnce(makeSelectChain([]));
       db.insert.mockReturnValueOnce({
         values: jest.fn(() => ({
-          returning: jest.fn().mockResolvedValueOnce([
-            { name: 'RELIANCE.NS', currentPrice: 2800 },
-          ]),
+          returning: jest
+            .fn()
+            .mockResolvedValueOnce([
+              { name: 'RELIANCE.NS', currentPrice: 2800 },
+            ]),
         })),
       });
 
@@ -905,17 +770,17 @@ describe('InvestmentsService', () => {
       db.select.mockReturnValueOnce(makeSelectChain([]));
       db.insert.mockReturnValueOnce({
         values: jest.fn(() => ({
-          returning: jest.fn().mockResolvedValueOnce([
-            { name: 'RELIANCE.NS', currentPrice: 2800 },
-          ]),
+          returning: jest
+            .fn()
+            .mockResolvedValueOnce([
+              { name: 'RELIANCE.NS', currentPrice: 2800 },
+            ]),
         })),
       });
 
-      const result = await service.updateSecurity(
-        USER_ID,
-        '  RELIANCE.NS  ',
-        { currentPrice: 2800 },
-      );
+      const result = await service.updateSecurity(USER_ID, '  RELIANCE.NS  ', {
+        currentPrice: 2800,
+      });
 
       expect(result.name).toBe('RELIANCE.NS');
     });

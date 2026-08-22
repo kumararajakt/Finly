@@ -50,7 +50,6 @@ export interface CreateTrade {
   units: number;
   price: number;
   fee?: number;
-  fundingAccountId: string;
   notes?: string;
 }
 
@@ -220,6 +219,7 @@ export interface NewTransaction {
   amount: number;
   type: TransactionType;
   fromAccount: string;
+  toAccount?: string;
   tags?: string[];
   notes?: string;
   receipt?: boolean;
@@ -228,7 +228,7 @@ export interface NewTransaction {
 export type TransactionPatch = Partial<
   Pick<
     NewTransaction,
-    "merchant" | "category" | "amount" | "date" | "type" | "fromAccount" | "tags" | "notes"
+    "merchant" | "category" | "amount" | "date" | "type" | "fromAccount" | "toAccount" | "tags" | "notes"
   >
 >;
 

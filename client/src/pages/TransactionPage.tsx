@@ -876,10 +876,6 @@ export default function TransactionPage() {
               accounts={accounts.data ?? []}
               tags={tags.data ?? []}
               onSaved={handleEntrySaved}
-              onInvestmentShortcut={() => {
-                setAddOpen(false);
-                window.location.href = "/investments";
-              }}
             />
           </Suspense>
         </SheetContent>
@@ -895,10 +891,6 @@ export default function TransactionPage() {
                 accounts={accounts.data ?? []}
                 tags={tags.data ?? []}
                 onSaved={handleEntrySaved}
-                onInvestmentShortcut={() => {
-                  setEditTx(null);
-                  window.location.href = "/investments";
-                }}
               />
             )}
           </Suspense>

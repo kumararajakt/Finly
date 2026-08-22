@@ -1,8 +1,10 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
+  ParseUUIDPipe,
   Patch,
   Post,
   Query,
@@ -40,6 +42,14 @@ export class InvestmentsController {
     @Query() query: TradeQueryDto,
   ): Promise<Trade[]> {
     return this.investmentsService.getTrades(userId, query);
+  }
+
+  @Delete('trades/:id')
+  deleteTrade(
+    @CurrentUser() userId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<void> {
+    return this.investmentsService.deleteTrade(userId, id);
   }
 
   @Get('positions')
@@ -80,32 +90,6 @@ export class InvestmentsController {
     Array<{ accountId: string; name: string; type: string; balance: number }>
   > {
     return this.investmentsService.getAccountBalances(userId);
-  }
-
-  @Get('backfill/candidates')
-  getBackfillCandidates(@CurrentUser() userId: string): Promise<
-    Array<{
-      id: string;
-      date: string;
-      merchant: string;
-      amount: number;
-      fromAccount: string;
-      category: string;
-    }>
-  > {
-    return this.investmentsService.getBackfillCandidates(userId);
-  }
-
-  @Post('backfill')
-  backfillTransaction(
-    @CurrentUser() userId: string,
-    @Body() body: { transactionId: string; accountId: string },
-  ): Promise<void> {
-    return this.investmentsService.backfillTransaction(
-      userId,
-      body.transactionId,
-      body.accountId,
-    );
   }
 
   @Patch('securities/:name')

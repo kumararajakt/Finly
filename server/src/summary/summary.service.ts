@@ -111,7 +111,10 @@ export class SummaryService {
     const savingsRate =
       income > 0 ? round2(((income - spending) / income) * 100) : 0;
 
-    const netWorthBreakdown = await this.computeNetWorth(userId, allSettings.netWorthAdjustment);
+    const netWorthBreakdown = await this.computeNetWorth(
+      userId,
+      allSettings.netWorthAdjustment,
+    );
     const netWorth = round2(
       netWorthBreakdown.cash +
         netWorthBreakdown.investments +
@@ -238,7 +241,10 @@ export class SummaryService {
     };
   }
 
-  private async computeNetWorth(userId: string, netWorthAdjustment: number): Promise<NetWorthBreakdown> {
+  private async computeNetWorth(
+    userId: string,
+    netWorthAdjustment: number,
+  ): Promise<NetWorthBreakdown> {
     const allAccounts = await this.db
       .select()
       .from(accounts)

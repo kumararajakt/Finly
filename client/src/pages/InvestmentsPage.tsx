@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { ArrowDownUp, Plus, RefreshCw, Wallet } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Plus, RefreshCw, Trash2, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import EmptyState from "@/components/ui/empty-state";
 import ErrorState from "@/components/ui/error-state";
@@ -48,12 +48,10 @@ interface TradeFormProps {
 
 function TradeForm({ accounts, onSaved, onCancel }: TradeFormProps) {
   const investmentAccounts = accounts.filter((a) => a.type === "investment");
-  const cashAccounts = accounts.filter((a) => a.type === "cash");
 
   const [side, setSide] = useState<TradeSide>("buy");
   const [form, setForm] = useState({
     accountId: investmentAccounts[0]?.id ?? "",
-    fundingAccountId: cashAccounts[0]?.id ?? "",
     date: new Date().toISOString().slice(0, 10),
     security: "",
     units: "",
@@ -92,14 +90,12 @@ function TradeForm({ accounts, onSaved, onCancel }: TradeFormProps) {
     if (!Number.isFinite(units) || units <= 0) return setError("Units must be positive.");
     if (!Number.isFinite(price) || price <= 0) return setError("Price must be positive.");
     if (!form.accountId) return setError("Select an investment account.");
-    if (!form.fundingAccountId) return setError("Select a funding account.");
 
     setSaving(true);
     setError(null);
     try {
       const data: CreateTrade = {
         accountId: form.accountId,
-        fundingAccountId: form.fundingAccountId,
         date: form.date,
         security: form.security.trim(),
         side,
@@ -232,49 +228,27 @@ function TradeForm({ accounts, onSaved, onCancel }: TradeFormProps) {
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-medium">
-            {side === "buy" ? "Funding account" : "Receive into account"}
-          </label>
+          <label className="text-xs font-medium">Investment account</label>
           <select
-            value={side === "buy" ? form.fundingAccountId : form.accountId}
+            value={form.accountId}
             onChange={(e) =>
-              side === "buy"
-                ? setForm((f) => ({ ...f, fundingAccountId: e.target.value }))
-                : setForm((f) => ({ ...f, accountId: e.target.value }))
+              setForm((f) => ({ ...f, accountId: e.target.value }))
             }
+            required
             className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
           >
-            {cashAccounts.map((a) => (
+            {investmentAccounts.length === 0 && (
+              <option value="" disabled>
+                No investment accounts
+              </option>
+            )}
+            {investmentAccounts.map((a) => (
               <option key={a.id} value={a.id}>
                 {a.name}
               </option>
             ))}
           </select>
         </div>
-
-        {side === "buy" && (
-          <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium">Investment account</label>
-            <select
-              value={form.accountId}
-              onChange={(e) =>
-                setForm((f) => ({ ...f, accountId: e.target.value }))
-              }
-              className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
-            >
-              {investmentAccounts.length === 0 && (
-                <option value="" disabled>
-                  No investment accounts
-                </option>
-              )}
-              {investmentAccounts.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
 
         {amount > 0 && (
           <p className="text-sm text-muted-foreground">
@@ -362,9 +336,11 @@ function PositionRow({
 function TradeRow({
   trade,
   currency,
+  onDelete,
 }: {
   trade: Trade;
   currency: string;
+  onDelete: (trade: Trade) => void;
 }) {
   const sideLabel =
     trade.side === "buy"
@@ -402,6 +378,18 @@ function TradeRow({
       <TableCell className="tabular-nums text-muted-foreground">
         {trade.fee > 0 ? formatCurrency(trade.fee, currency) : "—"}
       </TableCell>
+      <TableCell className="w-8 text-right">
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          aria-label={`Delete ${trade.side} of ${trade.security}`}
+          onClick={() => onDelete(trade)}
+          className="text-muted-foreground hover:text-destructive"
+        >
+          <Trash2 />
+        </Button>
+      </TableCell>
     </TableRow>
   );
 }
@@ -410,10 +398,12 @@ function MiniLedger({
   trades,
   security,
   currency,
+  onDelete,
 }: {
   trades: Trade[];
   security: string;
   currency: string;
+  onDelete: (trade: Trade) => void;
 }) {
   return (
     <div className="rounded-xl border bg-card p-4">
@@ -433,11 +423,17 @@ function MiniLedger({
                   <TableHead className="text-right">Price</TableHead>
                   <TableHead className="text-right">Amount</TableHead>
                   <TableHead className="text-right">Fee</TableHead>
+                  <TableHead aria-label="Actions" />
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {trades.map((trade) => (
-                  <TradeRow key={trade.id} trade={trade} currency={currency} />
+                  <TradeRow
+                    key={trade.id}
+                    trade={trade}
+                    currency={currency}
+                    onDelete={onDelete}
+                  />
                 ))}
               </TableBody>
             </Table>
@@ -455,7 +451,6 @@ export default function InvestmentsPage() {
   const [tradeOpen, setTradeOpen] = useState(false);
   const [selectedAccount, setSelectedAccount] = useState<string>("all");
   const [refreshing, setRefreshing] = useState(false);
-  const [backfillOpen, setBackfillOpen] = useState(false);
 
   const accounts = useQuery<Account[]>(() => api.accounts.list(), []);
   const positions = useQuery<Position[]>(
@@ -480,10 +475,15 @@ export default function InvestmentsPage() {
     [selectedAccount],
   );
 
+  const staleDataKey = useRef<string | null>(null);
+
   useEffect(() => {
     if (positions.status === "success") {
       const hasStalePrices = positions.data.some((p) => p.currentPrice === null);
       if (hasStalePrices && positions.data.length > 0) {
+        const key = positions.data.map((p) => `${p.security}:${p.currentPrice}`).join(",");
+        if (staleDataKey.current === key) return;
+        staleDataKey.current = key;
         setRefreshing(true);
         api.investments.refreshQuotes().then(() => {
           positions.refetch();
@@ -512,6 +512,23 @@ export default function InvestmentsPage() {
     positions.refetch();
     summary.refetch();
     trades.refetch();
+  }
+
+  async function handleDeleteTrade(trade: Trade) {
+    if (
+      !window.confirm(
+        `Delete the ${trade.side} of "${trade.security}" from ${formatDate(trade.date)}? This cannot be undone.`,
+      )
+    )
+      return;
+    try {
+      await api.investments.deleteTrade(trade.id);
+      positions.refetch();
+      summary.refetch();
+      trades.refetch();
+    } catch (err) {
+      window.alert(message(err));
+    }
   }
 
   async function handleRefreshPrices() {
@@ -547,10 +564,6 @@ export default function InvestmentsPage() {
           >
             <RefreshCw className={cn("size-4", refreshing && "animate-spin")} />
             {refreshing ? "Refreshing…" : "Refresh prices"}
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => setBackfillOpen(true)}>
-            <ArrowDownUp className="size-4" />
-            Backfill
           </Button>
           <Button onClick={() => setTradeOpen(true)}>
             <Plus />
@@ -718,6 +731,7 @@ export default function InvestmentsPage() {
               trades={secTrades}
               security={security}
               currency={currency}
+              onDelete={handleDeleteTrade}
             />
           ))}
         </div>
@@ -732,125 +746,7 @@ export default function InvestmentsPage() {
           />
         </SheetContent>
       </Sheet>
-
-      <Sheet open={backfillOpen} onOpenChange={setBackfillOpen}>
-        <SheetContent side="right" className="sm:max-w-lg">
-          <BackfillSheet
-            accounts={accounts.data ?? []}
-            onDone={() => {
-              setBackfillOpen(false);
-              positions.refetch();
-              summary.refetch();
-              trades.refetch();
-            }}
-          />
-        </SheetContent>
-      </Sheet>
     </div>
   );
 }
 
-interface BackfillCandidate {
-  id: string;
-  date: string;
-  merchant: string;
-  amount: number;
-  fromAccount: string;
-  category: string;
-}
-
-function BackfillSheet({
-  accounts,
-  onDone,
-}: {
-  accounts: Account[];
-  onDone: () => void;
-}) {
-  const { settings } = useSettings();
-  const currency = settings.currency;
-  const investmentAccounts = accounts.filter((a) => a.type === "investment");
-
-  const candidates = useQuery<BackfillCandidate[]>(
-    () => api.investments.getBackfillCandidates(),
-    [],
-  );
-
-  const [converting, setConverting] = useState<string | null>(null);
-
-  async function handleConvert(candidate: BackfillCandidate) {
-    if (investmentAccounts.length === 0) {
-      window.alert("Create an investment account first.");
-      return;
-    }
-    setConverting(candidate.id);
-    try {
-      await api.investments.backfillTransaction(
-        candidate.id,
-        investmentAccounts[0].id,
-      );
-      candidates.refetch();
-      onDone();
-    } catch (err) {
-      window.alert(message(err));
-    } finally {
-      setConverting(null);
-    }
-  }
-
-  return (
-    <>
-      <SheetHeader>
-        <SheetTitle>Backfill investments</SheetTitle>
-        <SheetDescription>
-          Convert expense transactions that look like investment purchases into
-          proper investment records.
-        </SheetDescription>
-      </SheetHeader>
-      <div className="px-4">
-        {candidates.status === "loading" && (
-          <LoadingState label="Scanning transactions…" />
-        )}
-        {candidates.status === "error" && (
-          <ErrorState
-            message={candidates.error?.message ?? "Failed to scan."}
-            onRetry={candidates.refetch}
-          />
-        )}
-        {candidates.status === "success" &&
-          (candidates.data ?? []).length === 0 && (
-            <EmptyState
-              title="Nothing to backfill"
-              description="No expense transactions match known investment securities."
-            />
-          )}
-        {candidates.status === "success" &&
-          (candidates.data ?? []).length > 0 && (
-            <div className="space-y-3 py-4">
-              {(candidates.data ?? []).map((c) => (
-                <div
-                  key={c.id}
-                  className="flex items-center justify-between rounded-lg border p-3"
-                >
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium">{c.merchant}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {formatDate(c.date)} · {c.category} ·{" "}
-                      {formatCurrency(c.amount, currency)}
-                    </p>
-                  </div>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => handleConvert(c)}
-                    disabled={converting === c.id}
-                  >
-                    {converting === c.id ? "Converting…" : "Convert"}
-                  </Button>
-                </div>
-              ))}
-            </div>
-          )}
-      </div>
-    </>
-  );
-}

@@ -42,9 +42,6 @@ export class CreateTradeDto {
   @Max(100_000_000)
   fee?: number;
 
-  @IsUUID()
-  fundingAccountId: string;
-
   @IsOptional()
   @IsString()
   @IsNotEmpty()

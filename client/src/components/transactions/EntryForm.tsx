@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { TrendingUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -53,7 +52,6 @@ interface EntryFormProps {
   tags: Tag[];
   initial?: Transaction | null;
   onSaved: () => void;
-  onInvestmentShortcut?: () => void;
 }
 
 const TYPE_LABELS: Record<TransactionType, string> = {
@@ -71,7 +69,6 @@ export default function EntryForm({
   tags,
   initial,
   onSaved,
-  onInvestmentShortcut,
 }: EntryFormProps) {
   const [form, setForm] = useState<EntryForm>(() => initialForm(initial ?? null));
   const [saving, setSaving] = useState(false);
@@ -112,6 +109,7 @@ export default function EntryForm({
           merchant: form.merchant.trim(),
           category: form.type === "transfer" ? "Transfers" : form.category,
           fromAccount: form.fromAccount,
+          toAccount: form.type === "transfer" ? form.toAccount : undefined,
           amount,
           type: form.type,
           tags: form.tags,
@@ -123,6 +121,7 @@ export default function EntryForm({
           merchant: form.merchant.trim(),
           category: form.type === "transfer" ? "Transfers" : form.category,
           fromAccount: form.fromAccount,
+          toAccount: form.type === "transfer" ? form.toAccount : undefined,
           amount,
           type: form.type,
           tags: form.tags,
@@ -150,7 +149,7 @@ export default function EntryForm({
         </SheetDescription>
       </SheetHeader>
       <div className="flex flex-col gap-4 px-4">
-        <div className="grid grid-cols-4 gap-1 rounded-lg border bg-muted/50 p-1" role="group" aria-label="Transaction type">
+        <div className="grid grid-cols-3 gap-1 rounded-lg border bg-muted/50 p-1" role="group" aria-label="Transaction type">
           {TYPES.map((type) => (
             <button
               key={type}
@@ -168,17 +167,6 @@ export default function EntryForm({
             </button>
           ))}
         </div>
-
-        {isTransfer && (
-          <button
-            type="button"
-            onClick={onInvestmentShortcut}
-            className="inline-flex items-center gap-1.5 self-start rounded-full border bg-muted/50 px-3 py-1 text-xs font-medium text-muted-foreground transition-colors hover:border-foreground hover:text-foreground"
-          >
-            <TrendingUp className="size-3.5" />
-            Transfer to investment
-          </button>
-        )}
 
         <div className="grid grid-cols-2 gap-3">
           <div className="flex flex-col gap-1.5">

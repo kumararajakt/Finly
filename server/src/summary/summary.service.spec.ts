@@ -3,21 +3,23 @@ import { SummaryService } from './summary.service';
 const USER_ID = 'user-1';
 
 function makeSelectChain(rows: unknown[]) {
+  const then = (
+    resolve: (value: unknown[]) => void,
+    reject?: (reason: unknown) => void,
+  ) => Promise.resolve(rows).then(resolve, reject);
   const chain = {
     from: jest.fn(() => ({
       where: jest.fn(() => ({
         orderBy: jest.fn(() => Promise.resolve(rows)),
         limit: jest.fn(() => Promise.resolve(rows)),
-        then: (resolve: Function, reject?: Function) =>
-          Promise.resolve(rows).then(resolve, reject),
+        then,
       })),
       orderBy: jest.fn(() => Promise.resolve(rows)),
     })),
     where: jest.fn(() => ({
       orderBy: jest.fn(() => Promise.resolve(rows)),
       limit: jest.fn(() => Promise.resolve(rows)),
-      then: (resolve: Function, reject?: Function) =>
-        Promise.resolve(rows).then(resolve, reject),
+      then,
     })),
     limit: jest.fn(() => Promise.resolve(rows)),
   };
@@ -86,7 +88,12 @@ describe('SummaryService — net worth', () => {
     const accounts = [{ name: 'Savings', type: 'cash' }];
     const netWorthTx = [
       { type: 'income', fromAccount: 'Savings', toAccount: null, amount: 5000 },
-      { type: 'expense', fromAccount: 'Savings', toAccount: null, amount: 2000 },
+      {
+        type: 'expense',
+        fromAccount: 'Savings',
+        toAccount: null,
+        amount: 2000,
+      },
     ];
     // select 1: getSummary tx (empty to avoid buildBuckets complexity)
     // select 2: accounts

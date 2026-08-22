@@ -276,6 +276,8 @@ export const api = {
       apiFetch<Trade>("/investments/trades", { method: "POST", body: data }),
     listTrades: (params?: { accountId?: string; security?: string }) =>
       apiFetch<Trade[]>(`/investments/trades${buildQuery(params ?? {})}`),
+    deleteTrade: (id: string) =>
+      apiFetch<void>(`/investments/trades/${id}`, { method: "DELETE" }),
     getPositions: (params?: { accountId?: string }) =>
       apiFetch<Position[]>(`/investments/positions${buildQuery(params ?? {})}`),
     getSummary: (accountId?: string) =>
@@ -286,10 +288,6 @@ export const api = {
       apiFetch<Array<{ security: string; price: number; source: string }>>("/investments/quotes/refresh", { method: "POST" }),
     getAccountBalances: () =>
       apiFetch<Array<{ accountId: string; name: string; type: string; balance: number }>>("/investments/balances"),
-    getBackfillCandidates: () =>
-      apiFetch<Array<{ id: string; date: string; merchant: string; amount: number; fromAccount: string; category: string }>>("/investments/backfill/candidates"),
-    backfillTransaction: (transactionId: string, accountId: string) =>
-      apiFetch<void>("/investments/backfill", { method: "POST", body: { transactionId, accountId } }),
     updateSecurity: (name: string, currentPrice: number) =>
       apiFetch<{ name: string; currentPrice: number }>(`/investments/securities/${encodeURIComponent(name)}`, {
         method: "PATCH",

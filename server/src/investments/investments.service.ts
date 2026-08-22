@@ -1,9 +1,4 @@
-import {
-  BadRequestException,
-  Inject,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { and, asc, desc, eq, type SQL } from 'drizzle-orm';
 import { DRIZZLE } from '../database/database.constants';
 import type { Database } from '../database/database.module';
@@ -15,7 +10,6 @@ import {
   transactions,
   type Trade,
 } from '../database/schema';
-import { computeFingerprint } from '../common/fingerprint';
 import {
   CreateTradeDto,
   PositionQueryDto,
@@ -62,114 +56,26 @@ export class InvestmentsService {
   constructor(@Inject(DRIZZLE) private readonly db: Database) {}
 
   async createTrade(userId: string, dto: CreateTradeDto): Promise<Trade> {
-    if (dto.side === 'buy' || dto.side === 'sell') {
-      if (dto.fundingAccountId === dto.accountId) {
-        throw new BadRequestException({
-          message: 'Funding account and investment account must be different.',
-          code: 'SAME_ACCOUNT',
-        });
-      }
-    }
-
     const amount = round2(dto.units * dto.price);
     const fee = round2(dto.fee ?? 0);
 
-    const result = await this.db.transaction(async (tx) => {
-      if (dto.side === 'buy' || dto.side === 'sell') {
-        const [tradeRow] = await tx
-          .insert(trades)
-          .values({
-            userId,
-            accountId: dto.accountId,
-            date: dto.date,
-            security: dto.security,
-            side: dto.side,
-            units: dto.units,
-            price: dto.price,
-            amount,
-            fee,
-            notes: dto.notes ?? null,
-          })
-          .returning();
-
-        const txFingerprint = computeFingerprint({
-          type: 'investment',
-          date: dto.date,
-          merchant: dto.security,
-          amount,
-        });
-
-        const [txRow] = await tx
-          .insert(transactions)
-          .values({
-            userId,
-            date: dto.date,
-            merchant: dto.security,
-            category: 'Investments',
-            amount,
-            type: 'investment',
-            fromAccount: dto.fundingAccountId,
-            toAccount: dto.accountId,
-            side: dto.side,
-            notes: dto.notes ?? null,
-            source: 'manual',
-            fingerprint: txFingerprint,
-          })
-          .returning();
-
-        await tx
-          .update(trades)
-          .set({ linkedTransactionId: txRow.id })
-          .where(eq(trades.id, tradeRow.id));
-
-        return tradeRow;
-      }
-
-      const txFingerprint = computeFingerprint({
-        type: 'investment',
+    const [tradeRow] = await this.db
+      .insert(trades)
+      .values({
+        userId,
+        accountId: dto.accountId,
         date: dto.date,
-        merchant: dto.security,
+        security: dto.security,
+        side: dto.side,
+        units: dto.units,
+        price: dto.price,
         amount,
-      });
+        fee,
+        notes: dto.notes ?? null,
+      })
+      .returning();
 
-      const [txRow] = await tx
-        .insert(transactions)
-        .values({
-          userId,
-          date: dto.date,
-          merchant: dto.security,
-          category: 'Investments',
-          amount,
-          type: 'investment',
-          fromAccount: dto.fundingAccountId,
-          side: dto.side,
-          notes: dto.notes ?? null,
-          source: 'manual',
-          fingerprint: txFingerprint,
-        })
-        .returning();
-
-      const [tradeRow] = await tx
-        .insert(trades)
-        .values({
-          userId,
-          accountId: dto.accountId,
-          date: dto.date,
-          security: dto.security,
-          side: dto.side,
-          units: dto.units,
-          price: dto.price,
-          amount,
-          fee,
-          linkedTransactionId: txRow.id,
-          notes: dto.notes ?? null,
-        })
-        .returning();
-
-      return tradeRow;
-    });
-
-    return result;
+    return tradeRow;
   }
 
   async getTrades(userId: string, query: TradeQueryDto): Promise<Trade[]> {
@@ -186,6 +92,19 @@ export class InvestmentsService {
       .from(trades)
       .where(and(...conditions))
       .orderBy(desc(trades.date), desc(trades.createdAt));
+  }
+
+  async deleteTrade(userId: string, id: string): Promise<void> {
+    const result = await this.db
+      .delete(trades)
+      .where(and(eq(trades.id, id), eq(trades.userId, userId)))
+      .returning({ id: trades.id });
+    if (result.length === 0) {
+      throw new NotFoundException({
+        message: 'Trade not found.',
+        code: 'NOT_FOUND',
+      });
+    }
   }
 
   async getPositions(
@@ -528,132 +447,13 @@ export class InvestmentsService {
       }
     }
 
-    const positions = await this.getPositions(userId, {});
-    const securityPriceMap = new Map<string, number>();
-    for (const pos of positions) {
-      if (pos.currentPrice !== null) {
-        securityPriceMap.set(pos.security, pos.currentPrice);
-      }
-    }
-
     return allAccounts.map((acct) => ({
       accountId: acct.id,
       name: acct.name,
       type: acct.type,
       balance:
-        acct.type === 'investment'
-          ? this.computeInvestmentBalance(
-              acct.id,
-              balanceMap.get(acct.name) ?? 0,
-              securityPriceMap,
-            )
-          : (balanceMap.get(acct.name) ?? 0),
+        acct.type === 'investment' ? 0 : (balanceMap.get(acct.name) ?? 0),
     }));
-  }
-
-  async getBackfillCandidates(userId: string): Promise<
-    Array<{
-      id: string;
-      date: string;
-      merchant: string;
-      amount: number;
-      fromAccount: string;
-      category: string;
-    }>
-  > {
-    const investmentNames = new Set<string>();
-    const allTrades = await this.db
-      .select({ security: trades.security })
-      .from(trades)
-      .where(eq(trades.userId, userId));
-    for (const t of allTrades) {
-      investmentNames.add(t.security.toLowerCase());
-    }
-
-    const expenseRows = await this.db
-      .select()
-      .from(transactions)
-      .where(
-        and(eq(transactions.userId, userId), eq(transactions.type, 'expense')),
-      )
-      .orderBy(desc(transactions.date));
-
-    return expenseRows
-      .filter((tx) => {
-        const merchant = tx.merchant.toLowerCase();
-        const category = tx.category.toLowerCase();
-        return (
-          investmentNames.has(merchant) ||
-          investmentNames.has(category) ||
-          category === 'investments'
-        );
-      })
-      .map((tx) => ({
-        id: tx.id,
-        date: tx.date,
-        merchant: tx.merchant,
-        amount: tx.amount,
-        fromAccount: tx.fromAccount,
-        category: tx.category,
-      }));
-  }
-
-  async backfillTransaction(
-    userId: string,
-    transactionId: string,
-    accountId: string,
-  ): Promise<void> {
-    const [tx] = await this.db
-      .select()
-      .from(transactions)
-      .where(
-        and(
-          eq(transactions.id, transactionId),
-          eq(transactions.userId, userId),
-        ),
-      )
-      .limit(1);
-
-    if (!tx) {
-      throw new NotFoundException({
-        message: 'Transaction not found.',
-        code: 'NOT_FOUND',
-      });
-    }
-    if (tx.type !== 'expense') {
-      throw new BadRequestException({
-        message: 'Only expense transactions can be backfilled.',
-        code: 'NOT_EXPENSE',
-      });
-    }
-
-    const security = tx.merchant;
-    const units = 1;
-    const price = tx.amount;
-
-    await this.db.transaction(async (dbTx) => {
-      await dbTx
-        .update(transactions)
-        .set({
-          type: 'investment',
-          toAccount: accountId,
-          side: 'buy',
-        })
-        .where(eq(transactions.id, transactionId));
-
-      await dbTx.insert(trades).values({
-        userId,
-        accountId,
-        date: tx.date,
-        security,
-        side: 'buy',
-        units,
-        price,
-        amount: tx.amount,
-        fee: 0,
-        linkedTransactionId: transactionId,
-      });
-    });
   }
 
   private async upsertSecurityPrice(
@@ -683,14 +483,6 @@ export class InvestmentsService {
         currentPrice: price,
       });
     }
-  }
-
-  private computeInvestmentBalance(
-    _accountId: string,
-    _cashBalance: number,
-    securityPriceMap: Map<string, number>,
-  ): number {
-    return 0;
   }
 
   private async fetchYahooPrice(symbol: string): Promise<number> {
