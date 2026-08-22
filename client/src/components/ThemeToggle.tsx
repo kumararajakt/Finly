@@ -1,20 +1,30 @@
-import { Moon, Sun } from "lucide-react";
+import { Moon, Sun, Monitor } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "@/contexts/ThemeContext";
+import { cn } from "@/lib/utils";
 
 export default function ThemeToggle() {
-  const { theme, toggleTheme } = useTheme();
-  const isDark = theme === "dark";
+  const { resolved, mode, setMode } = useTheme();
+
+  const nextMode = mode === "light" ? "dark" : mode === "dark" ? "system" : "light";
+  const icon = resolved === "dark" ? <Sun /> : <Moon />;
+  const title = 
+    mode === "system" 
+      ? `System (${resolved}) — click to cycle`
+      : mode === "light"
+      ? "Light mode — click to cycle"
+      : "Dark mode — click to cycle";
 
   return (
     <Button
       variant="ghost"
       size="icon"
-      onClick={toggleTheme}
-      aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
-      title={isDark ? "Switch to light mode" : "Switch to dark mode"}
+      onClick={() => setMode(nextMode)}
+      aria-label={title}
+      title={title}
+      className={cn(mode === "system" && "text-muted-foreground")}
     >
-      {isDark ? <Sun /> : <Moon />}
+      {mode === "system" ? <Monitor /> : icon}
     </Button>
   );
 }
