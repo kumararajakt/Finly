@@ -316,6 +316,35 @@ export interface CsvMapping {
   hasHeader?: boolean;
 }
 
+export interface TradeColumnMapping {
+  date: number;
+  security: number;
+  side: number;
+  units: number;
+  price: number;
+  amount?: number;
+  fee?: number;
+  account?: number;
+  notes?: number;
+  hasHeader?: boolean;
+}
+
+export interface TradeImportPreview {
+  headers: string[];
+  columnCount: number;
+  sampleRows: string[][];
+  rowCount: number;
+  hasHeader: boolean;
+  mapping: TradeColumnMapping;
+  ambiguous: string[];
+}
+
+export interface TradeImportResult {
+  inserted: number;
+  skipped: number;
+  totalRows: number;
+}
+
 export interface AuthUser {
   id: string;
   name: string;

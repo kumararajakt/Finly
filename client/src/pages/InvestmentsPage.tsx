@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Plus, RefreshCw, Trash2, Wallet } from "lucide-react";
+import { Plus, RefreshCw, Trash2, Wallet, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import EmptyState from "@/components/ui/empty-state";
 import ErrorState from "@/components/ui/error-state";
@@ -21,6 +21,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { TradeImportModal } from "@/components/trade-import-modal";
 import { useSettings } from "@/contexts/SettingsContext";
 import { useQuery } from "@/hooks/use-query";
 import { ApiError, api } from "@/lib/api";
@@ -449,6 +450,7 @@ export default function InvestmentsPage() {
   const currency = settings.currency;
 
   const [tradeOpen, setTradeOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [selectedAccount, setSelectedAccount] = useState<string>("all");
   const [refreshing, setRefreshing] = useState(false);
 
@@ -564,6 +566,14 @@ export default function InvestmentsPage() {
           >
             <RefreshCw className={cn("size-4", refreshing && "animate-spin")} />
             {refreshing ? "Refreshing…" : "Refresh prices"}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setImportOpen(true)}
+          >
+            <Upload className="size-4" />
+            Import CSV
           </Button>
           <Button onClick={() => setTradeOpen(true)}>
             <Plus />
@@ -746,6 +756,16 @@ export default function InvestmentsPage() {
           />
         </SheetContent>
       </Sheet>
+
+      <TradeImportModal
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        onImported={() => {
+          positions.refetch();
+          summary.refetch();
+          trades.refetch();
+        }}
+      />
     </div>
   );
 }

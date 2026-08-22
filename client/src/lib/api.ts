@@ -25,6 +25,9 @@ import type {
   Summary,
   Tag,
   Trade,
+  TradeColumnMapping,
+  TradeImportPreview,
+  TradeImportResult,
   Transaction,
   TransactionFilters,
   TransactionPatch,
@@ -292,6 +295,16 @@ export const api = {
       apiFetch<{ name: string; currentPrice: number }>(`/investments/securities/${encodeURIComponent(name)}`, {
         method: "PATCH",
         body: { currentPrice },
+      }),
+    importTradesPreview: (csv: string) =>
+      apiFetch<TradeImportPreview>("/import/csv/trades/preview", {
+        method: "POST",
+        body: { csv },
+      }),
+    importTrades: (csv: string, mapping: TradeColumnMapping) =>
+      apiFetch<TradeImportResult>("/import/csv/trades", {
+        method: "POST",
+        body: { csv, mapping },
       }),
   },
 };

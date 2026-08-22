@@ -1,10 +1,17 @@
 import { Body, Controller, Post } from '@nestjs/common';
 import { CurrentUser } from '../auth/current-user.decorator';
-import { CsvImportDto, CsvPreviewDto } from './import.dto';
+import {
+  CsvImportDto,
+  CsvPreviewDto,
+  TradeImportDto,
+  TradeImportPreviewDto,
+} from './import.dto';
 import type {
   CsvImportPreview,
   CsvImportResult,
   CsvPreviewResult,
+  TradeImportPreviewResult,
+  TradeImportResult,
 } from './import.service';
 import { ImportService } from './import.service';
 
@@ -31,5 +38,18 @@ export class ImportController {
     @Body() body: CsvImportDto,
   ): Promise<CsvImportResult> {
     return this.importService.importCsv(userId, body);
+  }
+
+  @Post('trades/preview')
+  tradePreview(@Body() body: TradeImportPreviewDto): TradeImportPreviewResult {
+    return this.importService.tradePreview(body);
+  }
+
+  @Post('trades')
+  importTrades(
+    @CurrentUser() userId: string,
+    @Body() body: TradeImportDto,
+  ): Promise<TradeImportResult> {
+    return this.importService.importTrades(userId, body);
   }
 }

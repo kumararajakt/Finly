@@ -13,6 +13,18 @@ export interface ColumnMapping {
   notes: number | null;
 }
 
+export interface TradeColumnMapping {
+  date: number;
+  security: number;
+  side: number;
+  units: number;
+  price: number;
+  amount: number | null;
+  fee: number | null;
+  account: number | null;
+  notes: number | null;
+}
+
 export interface ColumnDetection {
   mapping: ColumnMapping;
   ambiguous: string[];
@@ -325,4 +337,137 @@ export function parseAmount(value: string): number | null {
     return null;
   }
   return negative ? -Math.abs(parsed) : parsed;
+}
+
+type TradeRole =
+  | 'date'
+  | 'security'
+  | 'side'
+  | 'units'
+  | 'price'
+  | 'amount'
+  | 'fee'
+  | 'account'
+  | 'notes';
+
+const TRADE_KEYWORDS: Record<TradeRole, string[]> = {
+  date: [
+    'date',
+    'transaction date',
+    'trade date',
+    'posting date',
+    'value date',
+  ],
+  security: [
+    'security',
+    'symbol',
+    'ticker',
+    'stock',
+    'fund',
+    'instrument',
+    'isin',
+  ],
+  side: [
+    'side',
+    'type',
+    'action',
+    'transaction type',
+    'trade type',
+    'buy/sell',
+  ],
+  units: ['units', 'quantity', 'qty', 'shares', 'shares qty', 'shares quantity'],
+  price: ['price', 'unit price', 'price per unit', 'cost per share'],
+  amount: ['amount', 'total', 'transaction amount', 'trade amount', 'value'],
+  fee: ['fee', 'fees', 'commission', 'commissions', 'charges', 'cost'],
+  account: ['account', 'investment account', 'portfolio'],
+  notes: ['note', 'notes', 'remarks', 'description'],
+};
+
+const TRADE_ROLE_ORDER: TradeRole[] = [
+  'date',
+  'security',
+  'side',
+  'units',
+  'price',
+  'amount',
+  'fee',
+  'account',
+  'notes',
+];
+
+function matchesTradeKeywords(header: string, role: TradeRole): boolean {
+  const value = header.toLowerCase().trim();
+  if (value.length === 0) {
+    return false;
+  }
+  return TRADE_KEYWORDS[role].some((keyword) => {
+    return value === keyword || value.includes(keyword);
+  });
+}
+
+export interface TradeColumnDetection {
+  mapping: TradeColumnMapping;
+  ambiguous: string[];
+}
+
+export function detectTradeColumns(
+  headers: string[],
+): TradeColumnDetection {
+  const assigned = new Map<TradeRole, number>();
+  const ambiguity: string[] = [];
+
+  headers.forEach((header, index) => {
+    const value = header.toLowerCase().trim();
+    if (value.length === 0) {
+      return;
+    }
+    for (const role of TRADE_ROLE_ORDER) {
+      if (assigned.has(role)) {
+        continue;
+      }
+      if (matchesTradeKeywords(value, role)) {
+        assigned.set(role, index);
+        break;
+      }
+    }
+  });
+
+  const date = assigned.get('date');
+  if (date === undefined) {
+    ambiguity.push('date');
+  }
+
+  const security = assigned.get('security');
+  if (security === undefined) {
+    ambiguity.push('security');
+  }
+
+  const side = assigned.get('side');
+  if (side === undefined) {
+    ambiguity.push('side');
+  }
+
+  const units = assigned.get('units');
+  if (units === undefined) {
+    ambiguity.push('units');
+  }
+
+  const price = assigned.get('price');
+  if (price === undefined) {
+    ambiguity.push('price');
+  }
+
+  const mapping: TradeColumnMapping = {
+    date: date ?? 0,
+    security: security ?? 1,
+    side: side ?? 2,
+    units: units ?? 3,
+    price: price ?? 4,
+    amount: assigned.get('amount') ?? null,
+    fee: assigned.get('fee') ?? null,
+    account: assigned.get('account') ?? null,
+    notes: assigned.get('notes') ?? null,
+  };
+
+  return { mapping, ambiguous: ambiguity };
 }

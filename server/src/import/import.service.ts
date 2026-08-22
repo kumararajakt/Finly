@@ -10,21 +10,31 @@ import type { Database } from '../database/database.module';
 import {
   accounts,
   categories,
+  trades,
   transactions,
+  type NewTrade,
   type NewTransaction,
   type TransactionType,
+  type TradeSide,
 } from '../database/schema';
 import { computeFingerprint } from '../common/fingerprint';
 import {
   detectColumns,
   detectHeaderRow,
+  detectTradeColumns,
   normalizeDate,
   parseAmount,
   parseCsv,
   type ColumnMapping,
   type SignConvention,
+  type TradeColumnMapping,
 } from './csv';
-import { CsvImportDto, CsvPreviewDto } from './import.dto';
+import {
+  CsvImportDto,
+  CsvPreviewDto,
+  TradeImportDto,
+  TradeImportPreviewDto,
+} from './import.dto';
 
 const MAX_CSV_CHARS = 10_000_000;
 const MAX_ROWS = 100_000;
@@ -47,6 +57,22 @@ export interface CsvImportResult {
   duplicates: number;
   skipped: number;
   needsReview: number;
+  totalRows: number;
+}
+
+export interface TradeImportPreviewResult {
+  headers: string[];
+  columnCount: number;
+  sampleRows: string[][];
+  rowCount: number;
+  hasHeader: boolean;
+  mapping: TradeColumnMapping;
+  ambiguous: string[];
+}
+
+export interface TradeImportResult {
+  inserted: number;
+  skipped: number;
   totalRows: number;
 }
 
@@ -621,5 +647,199 @@ export class ImportService {
       .from(accounts)
       .where(eq(accounts.userId, userId));
     return new Map(rows.map((row) => [row.name.toLowerCase(), row.name]));
+  }
+
+  tradePreview(dto: TradeImportPreviewDto): TradeImportPreviewResult {
+    const rows = parseCsv(dto.csv);
+    if (rows.length === 0) {
+      throw new BadRequestException({
+        message: 'The CSV file has no rows.',
+        code: 'INVALID_CSV',
+      });
+    }
+    if (dto.csv.length > MAX_CSV_CHARS) {
+      throw new BadRequestException({
+        message: 'The CSV file is too large.',
+        code: 'PAYLOAD_TOO_LARGE',
+      });
+    }
+
+    const hasHeader = detectHeaderRow(rows);
+    const headerCells = hasHeader ? rows[0] : [];
+    const dataRows = hasHeader ? rows.slice(1) : rows;
+    if (dataRows.length > MAX_ROWS) {
+      throw new BadRequestException({
+        message: `The CSV file has too many rows (max ${MAX_ROWS}).`,
+        code: 'PAYLOAD_TOO_LARGE',
+      });
+    }
+
+    const detection = detectTradeColumns(
+      hasHeader ? headerCells : (rows[0] ?? []),
+    );
+    const sampleRows = dataRows.slice(0, SAMPLE_ROWS);
+
+    return {
+      headers: headerCells,
+      columnCount: (hasHeader ? headerCells : rows[0]).length,
+      sampleRows,
+      rowCount: dataRows.length,
+      hasHeader,
+      mapping: detection.mapping,
+      ambiguous: detection.ambiguous,
+    };
+  }
+
+  async importTrades(
+    userId: string,
+    dto: TradeImportDto,
+  ): Promise<TradeImportResult> {
+    const { values: planned, skipped, accountMap } = await this.buildTradePlan(
+      userId,
+      dto,
+    );
+    const values = planned.filter(
+      (value): value is Omit<NewTrade, 'userId'> & { accountId: string } =>
+        value !== null,
+    );
+
+    let inserted = 0;
+
+    try {
+      for (let start = 0; start < values.length; start += INSERT_CHUNK) {
+        const chunk = values.slice(start, start + INSERT_CHUNK);
+
+        if (chunk.length === 0) continue;
+
+        const returned = await this.db
+          .insert(trades)
+          .values(
+            chunk.map((trade) => ({
+              ...trade,
+              userId,
+            })),
+          )
+          .returning({ id: trades.id });
+
+        inserted += returned.length;
+      }
+    } catch (error) {
+      throw new ServiceUnavailableException(
+        {
+          message: `Import interrupted mid-batch: ${inserted} of ${values.length} rows were inserted before the failure. The inserted rows are kept; re-run the import to retry the remaining rows.`,
+          code: 'PARTIAL_IMPORT',
+        },
+        { cause: error },
+      );
+    }
+
+    return {
+      inserted,
+      skipped,
+      totalRows: values.length + skipped,
+    };
+  }
+
+  private async buildTradePlan(
+    userId: string,
+    dto: TradeImportDto,
+  ): Promise<{
+    values: (Omit<NewTrade, 'userId'> & { accountId: string })[];
+    skipped: number;
+    accountMap: Map<string, string>;
+  }> {
+    const rows = parseCsv(dto.csv);
+    if (rows.length === 0) {
+      return { values: [], skipped: 0, accountMap: new Map() };
+    }
+
+    const hasHeader = detectHeaderRow(rows);
+    const dataRows = hasHeader ? rows.slice(1) : rows;
+    const { mapping } = dto;
+
+    const accountLookup = await this.accountLookup(userId);
+    const accountMap = new Map(accountLookup);
+    let skipped = 0;
+    const values: (Omit<NewTrade, 'userId'> & { accountId: string })[] = [];
+
+    for (const row of dataRows) {
+      try {
+        const dateStr = row[mapping.date]?.trim();
+        const securityStr = row[mapping.security]?.trim();
+        const sideStr = row[mapping.side]?.trim().toLowerCase();
+        const unitsStr = row[mapping.units]?.trim();
+        const priceStr = row[mapping.price]?.trim();
+        const amountStr = 
+          mapping.amount !== null ? (row[mapping.amount as number] ?? '')?.trim() : undefined;
+        const feeStr = 
+          mapping.fee !== null ? (row[mapping.fee as number] ?? '')?.trim() : undefined;
+        const accountStr = 
+          mapping.account !== null ? (row[mapping.account as number] ?? '')?.trim() : undefined;
+        const notesStr = 
+          mapping.notes !== null ? (row[mapping.notes as number] ?? '')?.trim() : undefined;
+
+        if (!dateStr || !securityStr || !sideStr || !unitsStr || !priceStr) {
+          skipped++;
+          continue;
+        }
+
+        const date = normalizeDate(dateStr);
+        if (!date) {
+          skipped++;
+          continue;
+        }
+
+        if (!['buy', 'sell', 'dividend', 'interest'].includes(sideStr)) {
+          skipped++;
+          continue;
+        }
+
+        const units = parseAmount(unitsStr);
+        if (units === null || units <= 0) {
+          skipped++;
+          continue;
+        }
+
+        const price = parseAmount(priceStr);
+        if (price === null || price <= 0) {
+          skipped++;
+          continue;
+        }
+
+        const amount = amountStr ? parseAmount(amountStr) : units * price;
+
+        if (amount === null || amount <= 0) {
+          skipped++;
+          continue;
+        }
+
+        const fee = feeStr ? (parseAmount(feeStr) ?? 0) : 0;
+        const accountName = accountStr || 'Investments';
+        const accountId = accountMap.get(accountName.toLowerCase());
+
+        if (!accountId) {
+          skipped++;
+          continue;
+        }
+
+        values.push({
+          accountId,
+          security: securityStr,
+          date,
+          side: sideStr as TradeSide,
+          units,
+          price,
+          amount,
+          fee,
+          notes: notesStr || null,
+          linkedTransactionId: null,
+          createdAt: new Date(),
+        });
+      } catch {
+        skipped++;
+      }
+    }
+
+    return { values, skipped, accountMap };
   }
 }
