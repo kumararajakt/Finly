@@ -121,6 +121,12 @@ export function monthLabelYM(ym: string): string {
   }).format(calendarInstant({ year, month, day: 1 }));
 }
 
+export function monthDateRange(ym: string): { from: string; to: string } {
+  const [year, month] = ym.split("-").map(Number);
+  const lastDay = new Date(year, month, 0).getDate();
+  return { from: `${ym}-01`, to: `${ym}-${pad2(lastDay)}` };
+}
+
 export function shiftMonth(ym: string, delta: number): string {
   const [year, month] = ym.split("-").map(Number);
   const d = new Date(year, month - 1 + delta, 1);

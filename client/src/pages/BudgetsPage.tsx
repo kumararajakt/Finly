@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router";
 import { ChevronLeft, ChevronRight, Pencil, Plus, Target, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import EmptyState from "@/components/ui/empty-state";
@@ -19,6 +20,7 @@ import { ApiError, api } from "@/lib/api";
 import {
   currentYearMonth,
   formatCurrency,
+  monthDateRange,
   monthLabelYM,
   shiftMonth,
 } from "@/lib/format";
@@ -192,13 +194,15 @@ function BudgetForm({ initial, categories, onSaved, onDeleted }: BudgetFormProps
 }
 
 export default function BudgetsPage() {
-  const { settings } = useSettings();
+  const { settings, setPeriod, saveSetting } = useSettings();
   const currency = settings.currency;
+  const navigate = useNavigate();
 
   const [month, setMonth] = useState(() => currentYearMonth());
   const [addOpen, setAddOpen] = useState(false);
   const [editing, setEditing] = useState<Budget | null>(null);
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [openingCategory, setOpeningCategory] = useState<string | null>(null);
   const [mutationError, setMutationError] = useState<string | null>(null);
 
   const budgets = useQuery<Budget[]>(() => api.budgets.list(), []);
@@ -224,6 +228,22 @@ export default function BudgetsPage() {
     setEditing(item);
     setMutationError(null);
     setAddOpen(true);
+  }
+
+  async function viewCategoryTransactions(category: string) {
+    const { from, to } = monthDateRange(month);
+    setOpeningCategory(category);
+    setMutationError(null);
+    try {
+      await saveSetting("customDateFrom", from);
+      await saveSetting("customDateTo", to);
+      await setPeriod("custom");
+      navigate(`/transactions?category=${encodeURIComponent(category)}`);
+    } catch (error) {
+      setMutationError(message(error));
+    } finally {
+      setOpeningCategory(null);
+    }
   }
 
   async function handleToggleActive(item: Budget) {
@@ -426,7 +446,17 @@ export default function BudgetsPage() {
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
                             <div className="flex flex-wrap items-center gap-2">
-                              <span className="font-medium">{item.category}</span>
+                              <button
+                                type="button"
+                                onClick={() => viewCategoryTransactions(item.category)}
+                                disabled={openingCategory === item.category}
+                                title={`View ${item.category} transactions for ${monthLabelYM(month)}`}
+                                className="font-medium underline-offset-2 transition-colors hover:text-primary hover:underline disabled:opacity-60"
+                              >
+                                {openingCategory === item.category
+                                  ? "Opening…"
+                                  : item.category}
+                              </button>
                               {!item.active && (
                                 <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
                                   Paused

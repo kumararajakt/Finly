@@ -1,4 +1,5 @@
 import { Suspense, lazy, useEffect, useState } from "react";
+import { useSearchParams } from "react-router";
 import { ChevronsUpDown, Paperclip, Pencil, Plus, Receipt, Search, SlidersHorizontal, Trash2, Upload, X } from "lucide-react";
 import PeriodSelector from "@/components/PeriodSelector";
 import { Button } from "@/components/ui/button";
@@ -360,10 +361,11 @@ export default function TransactionPage() {
   const currency = settings.currency;
   const isMobile = useIsMobile();
 
+  const [searchParams] = useSearchParams();
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [accountFilter, setAccountFilter] = useState("all");
-  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [categoryFilter, setCategoryFilter] = useState(() => searchParams.get("category") ?? "all");
   const [showMoreFilters, setShowMoreFilters] = useState(false);
   const [filterSheetOpen, setFilterSheetOpen] = useState(false);
   const [typeFilter, setTypeFilter] = useState<"expense" | "income" | "transfer" | "investment" | "all">("all");
