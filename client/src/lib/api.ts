@@ -237,8 +237,11 @@ export const api = {
   },
 
   importCsv: {
-    preview: (csv: string) =>
-      apiFetch<CsvPreview>("/import/csv/preview", { method: "POST", body: { csv } }),
+    preview: (csv: string, mapping?: CsvMapping) =>
+      apiFetch<CsvPreview>("/import/csv/preview", {
+        method: "POST",
+        body: { csv, ...(mapping ? { mapping } : {}) },
+      }),
     previewRows: (
       csv: string,
       mapping: CsvMapping,

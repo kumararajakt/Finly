@@ -492,6 +492,7 @@ describe('ImportService', () => {
         totalRows: 2,
         newCategories: [],
         newAccounts: [],
+        unknownDirectionValues: [],
       });
     });
 
@@ -655,6 +656,245 @@ describe('ImportService', () => {
         category: 'Dining',
         fromAccount: 'Checking',
       });
+    });
+  });
+
+  describe('direction column import', () => {
+    it('maps type values to expense and income with positive amounts', async () => {
+      const { db, valuesCalls } = makeDb();
+      service = new ImportService(db);
+
+      const result = await service.importCsv(USER_ID, {
+        csv: 'Date,Description,Type,Amount\n2024-01-05,Coffee,Debit,5.50\n2024-01-06,Paycheck,Credit,2500.00\n',
+        mapping: {
+          date: 0,
+          merchant: 1,
+          type: 2,
+          amount: 3,
+          direction: { expense: 'Debit', income: 'Credit' },
+        },
+      });
+
+      expect(result).toMatchObject({ inserted: 2, skipped: 0 });
+      const values = valuesCalls.flat();
+      expect(values.find((value) => value.merchant === 'Coffee')).toMatchObject(
+        {
+          type: 'expense',
+          amount: 5.5,
+        },
+      );
+      expect(
+        values.find((value) => value.merchant === 'Paycheck'),
+      ).toMatchObject({
+        type: 'income',
+        amount: 2500,
+      });
+    });
+
+    it('ignores the amount sign when a type column is used', async () => {
+      const { db, valuesCalls } = makeDb();
+      service = new ImportService(db);
+
+      await service.importCsv(USER_ID, {
+        csv: 'Date,Description,Type,Amount\n2024-01-05,Coffee,Debit,-5.50\n2024-01-06,Paycheck,Credit,-2500.00\n',
+        mapping: {
+          date: 0,
+          merchant: 1,
+          type: 2,
+          amount: 3,
+          direction: { expense: 'Debit', income: 'Credit' },
+        },
+      });
+
+      const values = valuesCalls.flat();
+      expect(values.find((value) => value.merchant === 'Coffee')).toMatchObject(
+        {
+          type: 'expense',
+          amount: 5.5,
+        },
+      );
+      expect(
+        values.find((value) => value.merchant === 'Paycheck'),
+      ).toMatchObject({
+        type: 'income',
+        amount: 2500,
+      });
+    });
+
+    it('normalizes case and whitespace in type values', async () => {
+      const { db, valuesCalls } = makeDb();
+      service = new ImportService(db);
+
+      await service.importCsv(USER_ID, {
+        csv: 'Date,Description,Type,Amount\n2024-01-05,Coffee, Debit ,5.50\n2024-01-06,Paycheck,credit,2500.00\n',
+        mapping: {
+          date: 0,
+          merchant: 1,
+          type: 2,
+          amount: 3,
+          direction: { expense: 'debit', income: 'credit' },
+        },
+      });
+
+      const values = valuesCalls.flat();
+      expect(values.map((value) => value.merchant)).toEqual([
+        'Coffee',
+        'Paycheck',
+      ]);
+    });
+
+    it('skips rows whose type value matches neither token', async () => {
+      const { db, valuesCalls } = makeDb();
+      service = new ImportService(db);
+
+      const result = await service.importCsv(USER_ID, {
+        csv: 'Date,Description,Type,Amount\n2024-01-05,Coffee,Debit,5.50\n2024-01-06,Refund,Refund,10.00\n2024-01-07,Paycheck,Credit,2500.00\n',
+        mapping: {
+          date: 0,
+          merchant: 1,
+          type: 2,
+          amount: 3,
+          direction: { expense: 'Debit', income: 'Credit' },
+        },
+      });
+
+      expect(result).toMatchObject({ inserted: 2, skipped: 1 });
+      expect(valuesCalls.flat().map((value) => value.merchant)).toEqual([
+        'Coffee',
+        'Paycheck',
+      ]);
+    });
+
+    it('rejects a type column combined with debit/credit split', async () => {
+      const { db } = makeDb();
+      service = new ImportService(db);
+      await expect(
+        service.importCsv(USER_ID, {
+          csv: 'Date,Description,Type,Debit,Credit\n2024-01-05,Coffee,Debit,5.50,\n',
+          mapping: { date: 0, merchant: 1, type: 2, debit: 3, credit: 4 },
+        }),
+      ).rejects.toMatchObject({ response: { code: 'INVALID_MAPPING' } });
+    });
+
+    it('rejects a type column without an amount column', async () => {
+      const { db } = makeDb();
+      service = new ImportService(db);
+      await expect(
+        service.importCsv(USER_ID, {
+          csv: 'Date,Description,Type\n2024-01-05,Coffee,Debit\n',
+          mapping: { date: 0, merchant: 1, type: 2 },
+        }),
+      ).rejects.toMatchObject({ response: { code: 'INVALID_MAPPING' } });
+    });
+
+    it('rejects a type column without direction values', async () => {
+      const { db } = makeDb();
+      service = new ImportService(db);
+      await expect(
+        service.importCsv(USER_ID, {
+          csv: 'Date,Description,Type,Amount\n2024-01-05,Coffee,Debit,5.50\n',
+          mapping: { date: 0, merchant: 1, type: 2, amount: 3 },
+        }),
+      ).rejects.toMatchObject({ response: { code: 'INVALID_MAPPING' } });
+    });
+  });
+
+  describe('preview with direction detection', () => {
+    it('detects a type column and its direction values', () => {
+      const { db } = makeDb();
+      service = new ImportService(db);
+      const result = service.preview({
+        csv: 'Date,Description,Type,Amount\n2024-01-05,Coffee,Debit,5.50\n2024-01-06,Paycheck,Credit,2500.00\n',
+      });
+      expect(result.mapping.type).toBe(2);
+      expect(result.direction).toEqual({
+        values: ['debit', 'credit'],
+        guess: { expense: 'debit', income: 'credit' },
+        ambiguous: false,
+      });
+    });
+
+    it('returns null direction when no type column is mapped', () => {
+      const { db } = makeDb();
+      service = new ImportService(db);
+      const result = service.preview({
+        csv: 'Date,Description,Amount\n2024-01-05,Coffee,5.50\n',
+      });
+      expect(result.mapping.type).toBeNull();
+      expect(result.direction).toBeNull();
+    });
+
+    it('honours a user-supplied mapping when detecting direction', () => {
+      const { db } = makeDb();
+      service = new ImportService(db);
+      const result = service.preview({
+        csv: 'Date,Description,Amount,Direction\n2024-01-05,Coffee,5.50,Outgoing\n2024-01-06,Paycheck,25.00,Incoming\n',
+        mapping: {
+          date: 0,
+          merchant: 1,
+          amount: 2,
+          type: 3,
+        },
+      });
+      expect(result.mapping.type).toBe(3);
+      expect(result.direction).toEqual({
+        values: ['outgoing', 'incoming'],
+        guess: null,
+        ambiguous: true,
+      });
+    });
+
+    it('rejects an invalid supplied mapping on preview', () => {
+      const { db } = makeDb();
+      service = new ImportService(db);
+      expect(() =>
+        service.preview({
+          csv: 'Date,Description,Type,Amount\n2024-01-05,Coffee,Debit,5.50\n',
+          mapping: { date: 0, merchant: 1, type: 2 },
+        }),
+      ).toThrow(BadRequestException);
+    });
+  });
+
+  describe('previewRows with direction detection', () => {
+    it('reports unknown type values', async () => {
+      const { db } = makeDb();
+      service = new ImportService(db);
+
+      const result = await service.previewRows(USER_ID, {
+        csv: 'Date,Description,Type,Amount\n2024-01-05,Coffee,Debit,5.50\n2024-01-06,Refund,Refund,10.00\n',
+        mapping: {
+          date: 0,
+          merchant: 1,
+          type: 2,
+          amount: 3,
+          direction: { expense: 'Debit', income: 'Credit' },
+        },
+      });
+
+      expect(result.rows.map((row) => row.status)).toEqual([
+        'insert',
+        'skipped',
+      ]);
+      expect(result.unknownDirectionValues).toEqual(['Refund']);
+    });
+
+    it('returns no unknown values when every type matches', async () => {
+      const { db } = makeDb();
+      service = new ImportService(db);
+
+      const result = await service.previewRows(USER_ID, {
+        csv: 'Date,Description,Type,Amount\n2024-01-05,Coffee,Debit,5.50\n2024-01-06,Paycheck,Credit,2500.00\n',
+        mapping: {
+          date: 0,
+          merchant: 1,
+          type: 2,
+          amount: 3,
+          direction: { expense: 'Debit', income: 'Credit' },
+        },
+      });
+
+      expect(result.unknownDirectionValues).toEqual([]);
     });
   });
 });

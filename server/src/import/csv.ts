@@ -8,9 +8,21 @@ export interface ColumnMapping {
   amount: number | null;
   debit: number | null;
   credit: number | null;
+  type: number | null;
   category: number | null;
   account: number | null;
   notes: number | null;
+}
+
+export interface DirectionValues {
+  expense: string;
+  income: string;
+}
+
+export interface DirectionDetection {
+  values: string[];
+  guess: DirectionValues | null;
+  ambiguous: boolean;
 }
 
 export interface TradeColumnMapping {
@@ -59,6 +71,7 @@ const MONTHS: Record<string, number> = {
 
 type Role =
   | 'date'
+  | 'type'
   | 'merchant'
   | 'amount'
   | 'debit'
@@ -101,6 +114,14 @@ const KEYWORDS: Record<Role, string[]> = {
     'expense',
   ],
   credit: ['credit', 'deposit', 'paid in', 'money in', 'moneyin', 'income'],
+  type: [
+    'type',
+    'transaction type',
+    'txn type',
+    'dr/cr',
+    'debit/credit',
+    'direction',
+  ],
   category: [
     'category',
     'merchant category',
@@ -113,6 +134,7 @@ const KEYWORDS: Record<Role, string[]> = {
 
 const ROLE_ORDER: Role[] = [
   'date',
+  'type',
   'merchant',
   'category',
   'debit',
@@ -202,12 +224,84 @@ export function detectColumns(headers: string[]): ColumnDetection {
     amount,
     debit,
     credit,
+    type: assigned.get('type') ?? null,
     category: assigned.get('category') ?? null,
     account: assigned.get('account') ?? null,
     notes: assigned.get('notes') ?? null,
   };
 
   return { mapping, ambiguous: ambiguity };
+}
+
+export function normalizeDirectionToken(value: string): string {
+  return value.trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+const EXPENSE_DIRECTION_TOKENS = [
+  'debit',
+  'dr',
+  'withdrawal',
+  'paid out',
+  'money out',
+  'moneyout',
+  'expense',
+  'payment',
+];
+
+const INCOME_DIRECTION_TOKENS = [
+  'credit',
+  'cr',
+  'deposit',
+  'paid in',
+  'money in',
+  'moneyin',
+  'income',
+  'receipt',
+];
+
+export function guessDirectionValue(
+  value: string,
+): 'expense' | 'income' | null {
+  const token = normalizeDirectionToken(value);
+  if (EXPENSE_DIRECTION_TOKENS.includes(token)) {
+    return 'expense';
+  }
+  if (INCOME_DIRECTION_TOKENS.includes(token)) {
+    return 'income';
+  }
+  return null;
+}
+
+export function detectDirection(
+  rows: string[][],
+  typeColumn: number,
+): DirectionDetection {
+  const distinct = new Map<string, true>();
+  for (const row of rows) {
+    const raw = (row[typeColumn] ?? '').trim();
+    if (raw.length === 0) {
+      continue;
+    }
+    distinct.set(normalizeDirectionToken(raw), true);
+  }
+
+  const values = [...distinct.keys()];
+  if (values.length !== 2) {
+    return { values, guess: null, ambiguous: true };
+  }
+
+  const guess: DirectionValues = { expense: '', income: '' };
+  for (const value of values) {
+    const direction = guessDirectionValue(value);
+    if (direction === 'expense') {
+      guess.expense = value;
+    } else if (direction === 'income') {
+      guess.income = value;
+    }
+  }
+
+  const ambiguous = guess.expense.length === 0 || guess.income.length === 0;
+  return { values, guess: ambiguous ? null : guess, ambiguous };
 }
 
 export function normalizeDate(value: string): string | null {
@@ -375,7 +469,14 @@ const TRADE_KEYWORDS: Record<TradeRole, string[]> = {
     'trade type',
     'buy/sell',
   ],
-  units: ['units', 'quantity', 'qty', 'shares', 'shares qty', 'shares quantity'],
+  units: [
+    'units',
+    'quantity',
+    'qty',
+    'shares',
+    'shares qty',
+    'shares quantity',
+  ],
   price: ['price', 'unit price', 'price per unit', 'cost per share'],
   amount: ['amount', 'total', 'transaction amount', 'trade amount', 'value'],
   fee: ['fee', 'fees', 'commission', 'commissions', 'charges', 'cost'],
@@ -410,9 +511,7 @@ export interface TradeColumnDetection {
   ambiguous: string[];
 }
 
-export function detectTradeColumns(
-  headers: string[],
-): TradeColumnDetection {
+export function detectTradeColumns(headers: string[]): TradeColumnDetection {
   const assigned = new Map<TradeRole, number>();
   const ambiguity: string[] = [];
 

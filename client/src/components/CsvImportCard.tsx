@@ -19,6 +19,8 @@ import type {
   CsvImportPreview,
   CsvMapping,
   CsvPreview,
+  DirectionDetection,
+  DirectionValues,
   ImportResult,
   SignConvention,
 } from "@/lib/types";
@@ -33,6 +35,8 @@ const ROLE_LABELS: Record<string, string> = {
   amount: "Amount",
   debit: "Debit (money out)",
   credit: "Credit (money in)",
+  type: "Type / direction",
+  direction: "Type column values",
   category: "Category",
   account: "Account",
   notes: "Notes",
@@ -114,6 +118,7 @@ type MappingRole =
   | "amount"
   | "debit"
   | "credit"
+  | "type"
   | "category"
   | "account"
   | "notes";
@@ -147,10 +152,34 @@ export default function CsvImportCard({ onNavigate, onImported }: CsvImportCardP
   const [hasHeader, setHasHeader] = useState(true);
   const [signConvention, setSignConvention] =
     useState<SignConvention>("negative-expense");
-  const [amountMode, setAmountMode] = useState<"amount" | "split">("amount");
+  const [amountMode, setAmountMode] = useState<
+    "amount" | "split" | "direction"
+  >("amount");
+  const [direction, setDirection] = useState<DirectionValues>({
+    expense: "",
+    income: "",
+  });
+  const [directionDetection, setDirectionDetection] =
+    useState<DirectionDetection | null>(null);
+  const directionRefreshRef = useRef(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<ImportResult | null>(null);
+
+  function applyDetection(detected: CsvPreview) {
+    setPreview(detected);
+    setMapping(detected.mapping);
+    setHasHeader(detected.hasHeader);
+    setAmountMode(
+      detected.mapping.type !== null
+        ? "direction"
+        : detected.mapping.amount !== null
+          ? "amount"
+          : "split"
+    );
+    setDirectionDetection(detected.direction);
+    setDirection(detected.direction?.guess ?? { expense: "", income: "" });
+  }
 
   async function handleFile(file: File) {
     setError(null);
@@ -166,24 +195,14 @@ export default function CsvImportCard({ onNavigate, onImported }: CsvImportCardP
         setCsvText(extracted.csv);
         setFileName(extracted.filename);
         const detected = await api.importCsv.preview(extracted.csv);
-        setPreview(detected);
-        setMapping(detected.mapping);
-        setHasHeader(detected.hasHeader);
-        setAmountMode(
-          detected.mapping.amount !== null ? "amount" : "split"
-        );
+        applyDetection(detected);
         setStep("mapping");
         return;
       }
       const text = await file.text();
       const detected = await api.importCsv.preview(text);
       setCsvText(text);
-      setPreview(detected);
-      setMapping(detected.mapping);
-      setHasHeader(detected.hasHeader);
-      setAmountMode(
-        detected.mapping.amount !== null ? "amount" : "split"
-      );
+      applyDetection(detected);
       setStep("mapping");
     } catch (err) {
       setError(message(err));
@@ -201,21 +220,90 @@ export default function CsvImportCard({ onNavigate, onImported }: CsvImportCardP
     setMapping(setRole(mapping, role, value));
   }
 
-  function switchAmountMode(mode: "amount" | "split") {
+  function mappingPayload(m: CsvColumnMapping): CsvMapping {
+    return {
+      date: m.date,
+      merchant: m.merchant,
+      amount: m.amount ?? undefined,
+      debit: m.debit ?? undefined,
+      credit: m.credit ?? undefined,
+      type: m.type ?? undefined,
+      category: m.category ?? undefined,
+      account: m.account ?? undefined,
+      notes: m.notes ?? undefined,
+      hasHeader,
+    };
+  }
+
+  async function refreshDirection(next: CsvColumnMapping) {
+    if (next.type === null || next.type === undefined) {
+      setDirectionDetection(null);
+      setDirection({ expense: "", income: "" });
+      return;
+    }
+    const requestId = ++directionRefreshRef.current;
+    setBusy(true);
+    setError(null);
+    try {
+      const refreshed = await api.importCsv.preview(csvText, mappingPayload(next));
+      if (requestId !== directionRefreshRef.current) return;
+      setDirectionDetection(refreshed.direction ?? null);
+      setDirection(refreshed.direction?.guess ?? { expense: "", income: "" });
+    } catch (err) {
+      if (requestId === directionRefreshRef.current) setError(message(err));
+    } finally {
+      if (requestId === directionRefreshRef.current) setBusy(false);
+    }
+  }
+
+  function handleTypeChange(value: number | null) {
+    if (!mapping) return;
+    const next = setRole(mapping, "type", value);
+    setMapping(next);
+    void refreshDirection(next);
+  }
+
+  function switchAmountMode(mode: "amount" | "split" | "direction") {
     if (!mapping || !preview) return;
-    setAmountMode(mode);
-    setMapping((current) => {
-      if (!current) return current;
+    const next: CsvColumnMapping = (() => {
       if (mode === "amount") {
-        const fallback = current.amount ?? current.debit ?? 2;
-        return { ...current, debit: null, credit: null, amount: fallback };
+        const fallback = mapping.amount ?? mapping.debit ?? 2;
+        return {
+          ...mapping,
+          amount: fallback,
+          debit: null,
+          credit: null,
+          type: null,
+        };
       }
-      const debit = current.debit ?? current.amount ?? 2;
-      const credit =
-        current.credit ??
-        (debit + 1 < preview.columnCount ? debit + 1 : debit);
-      return { ...current, amount: null, debit, credit };
-    });
+      if (mode === "split") {
+        const debit = mapping.debit ?? mapping.amount ?? 2;
+        const credit =
+          mapping.credit ??
+          (debit + 1 < preview.columnCount ? debit + 1 : debit);
+        return {
+          ...mapping,
+          amount: null,
+          debit,
+          credit,
+          type: null,
+        };
+      }
+      const type = mapping.type ?? null;
+      const amount = mapping.amount ?? mapping.debit ?? 2;
+      return {
+        ...mapping,
+        amount,
+        debit: null,
+        credit: null,
+        type,
+      };
+    })();
+    setAmountMode(mode);
+    setMapping(next);
+    if (mode === "direction") {
+      void refreshDirection(next);
+    }
   }
 
   function mappingErrors(): string[] {
@@ -236,6 +324,14 @@ export default function CsvImportCard({ onNavigate, onImported }: CsvImportCardP
     if (hasAmount && hasSplit) {
       problems.push("amount");
     }
+    if (amountMode === "direction") {
+      if (mapping.type === null || mapping.type === undefined) {
+        problems.push(ROLE_LABELS.type);
+      }
+      if (!direction.expense.trim() || !direction.income.trim()) {
+        problems.push(ROLE_LABELS.direction);
+      }
+    }
     return problems;
   }
 
@@ -247,15 +343,15 @@ export default function CsvImportCard({ onNavigate, onImported }: CsvImportCardP
       return null;
     }
     return {
-      date: mapping.date,
-      merchant: mapping.merchant,
-      amount: mapping.amount ?? undefined,
-      debit: mapping.debit ?? undefined,
-      credit: mapping.credit ?? undefined,
-      category: mapping.category ?? undefined,
-      account: mapping.account ?? undefined,
-      notes: mapping.notes ?? undefined,
-      hasHeader,
+      ...mappingPayload(mapping),
+      ...(amountMode === "direction"
+        ? {
+            direction: {
+              expense: direction.expense.trim(),
+              income: direction.income.trim(),
+            },
+          }
+        : {}),
     };
   }
 
@@ -307,6 +403,8 @@ export default function CsvImportCard({ onNavigate, onImported }: CsvImportCardP
     setImportPreview(null);
     setError(null);
     setResult(null);
+    setDirection({ expense: "", income: "" });
+    setDirectionDetection(null);
   }
 
   if (step === "mapping" && preview && mapping) {
@@ -365,7 +463,7 @@ export default function CsvImportCard({ onNavigate, onImported }: CsvImportCardP
           <div className="flex flex-col gap-1.5 sm:col-span-2">
             <span className="text-xs font-medium">Amount</span>
             <div className="flex flex-wrap gap-1.5">
-              {(["amount", "split"] as const).map((mode) => (
+              {(["amount", "split", "direction"] as const).map((mode) => (
                 <button
                   key={mode}
                   type="button"
@@ -378,7 +476,11 @@ export default function CsvImportCard({ onNavigate, onImported }: CsvImportCardP
                   )}
                   aria-pressed={amountMode === mode}
                 >
-                  {mode === "amount" ? "Single amount column" : "Debit / Credit split"}
+                  {mode === "amount"
+                    ? "Single amount column"
+                    : mode === "split"
+                      ? "Debit / Credit split"
+                      : "Debit / Credit type column"}
                 </button>
               ))}
             </div>
@@ -392,7 +494,7 @@ export default function CsvImportCard({ onNavigate, onImported }: CsvImportCardP
               preview={preview}
               required
             />
-          ) : (
+          ) : amountMode === "split" ? (
             <>
               <RoleSelect
                 role="debit"
@@ -408,6 +510,101 @@ export default function CsvImportCard({ onNavigate, onImported }: CsvImportCardP
                 preview={preview}
                 required
               />
+            </>
+          ) : (
+            <>
+              <RoleSelect
+                role="amount"
+                value={mapping.amount}
+                onChange={(value) => handleMappingChange("amount", value)}
+                preview={preview}
+                required
+              />
+              <RoleSelect
+                role="type"
+                value={mapping.type}
+                onChange={handleTypeChange}
+                preview={preview}
+                required
+              />
+              <div className="flex flex-col gap-1.5 sm:col-span-2">
+                <span className="text-xs font-medium">
+                  Type column values
+                  <span className="text-destructive"> *</span>
+                </span>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="flex flex-col gap-1.5">
+                    <label
+                      htmlFor="direction-expense"
+                      className="text-xs text-muted-foreground"
+                    >
+                      Money out (expense)
+                    </label>
+                    <input
+                      id="direction-expense"
+                      type="text"
+                      value={direction.expense}
+                      onChange={(event) =>
+                        setDirection((current) => ({
+                          ...current,
+                          expense: event.target.value,
+                        }))
+                      }
+                      placeholder="e.g. Debit, DR, Withdrawal"
+                      list="finly-direction-values"
+                      className="w-full rounded-lg border border-input bg-background px-2.5 py-1.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <label
+                      htmlFor="direction-income"
+                      className="text-xs text-muted-foreground"
+                    >
+                      Money in (income)
+                    </label>
+                    <input
+                      id="direction-income"
+                      type="text"
+                      value={direction.income}
+                      onChange={(event) =>
+                        setDirection((current) => ({
+                          ...current,
+                          income: event.target.value,
+                        }))
+                      }
+                      placeholder="e.g. Credit, CR, Deposit"
+                      list="finly-direction-values"
+                      className="w-full rounded-lg border border-input bg-background px-2.5 py-1.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                    />
+                  </div>
+                </div>
+                <datalist id="finly-direction-values">
+                  {(directionDetection?.values ?? []).map((value) => (
+                    <option key={value} value={value} />
+                  ))}
+                </datalist>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setDirection((current) => ({
+                      expense: current.income,
+                      income: current.expense,
+                    }))
+                  }
+                  className="self-start text-xs font-medium text-primary hover:underline"
+                >
+                  Swap money-out / money-in values
+                </button>
+                {directionDetection && directionDetection.ambiguous && (
+                  <p className="text-xs text-amber-600 dark:text-amber-400">
+                    {directionDetection.values.length === 0
+                      ? "No values found in the selected type column."
+                      : directionDetection.values.length === 1
+                        ? `Only one value found in the type column (“${directionDetection.values[0]}”). Check the column or type both values manually.`
+                        : `The type column contains more than two values (${directionDetection.values.join(", ")}). Rows with other values will be skipped.`}
+                  </p>
+                )}
+              </div>
             </>
           )}
 
@@ -444,24 +641,26 @@ export default function CsvImportCard({ onNavigate, onImported }: CsvImportCardP
               className="size-4 self-start"
             />
           </div>
-          <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium">Sign convention</label>
-            <select
-              value={signConvention}
-              onChange={(event) =>
-                setSignConvention(event.target.value as SignConvention)
-              }
-              aria-label="Sign convention"
-              className="w-full rounded-lg border border-input bg-background px-2.5 py-1.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-            >
-              <option value="negative-expense">
-                Negative = expense, positive = income
-              </option>
-              <option value="negative-income">
-                Negative = income, positive = expense
-              </option>
-            </select>
-          </div>
+          {amountMode !== "direction" && (
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-medium">Sign convention</label>
+              <select
+                value={signConvention}
+                onChange={(event) =>
+                  setSignConvention(event.target.value as SignConvention)
+                }
+                aria-label="Sign convention"
+                className="w-full rounded-lg border border-input bg-background px-2.5 py-1.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+              >
+                <option value="negative-expense">
+                  Negative = expense, positive = income
+                </option>
+                <option value="negative-income">
+                  Negative = income, positive = expense
+                </option>
+              </select>
+            </div>
+          )}
         </div>
 
         {error && (
@@ -563,6 +762,25 @@ export default function CsvImportCard({ onNavigate, onImported }: CsvImportCardP
           </p>
         )}
 
+        {amountMode === "direction" &&
+          importPreview.unknownDirectionValues.length > 0 && (
+            <p
+              role="alert"
+              className="mt-3 flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-400"
+            >
+              <AlertTriangle
+                className="mt-0.5 size-4 shrink-0"
+                aria-hidden="true"
+              />
+              <span>
+                {importPreview.unknownDirectionValues.length} row
+                {importPreview.unknownDirectionValues.length === 1 ? "" : "s"}{" "}
+                don&apos;t match your money-out/money-in values and will be
+                skipped: {importPreview.unknownDirectionValues.join(", ")}.
+              </span>
+            </p>
+          )}
+
         <div className="mt-4 overflow-auto rounded-lg border">
           <table className="w-full text-left text-sm">
             <thead className="sticky top-0 bg-muted/50">
@@ -570,6 +788,7 @@ export default function CsvImportCard({ onNavigate, onImported }: CsvImportCardP
                 <th className="px-3 py-2 font-medium">Date</th>
                 <th className="px-3 py-2 font-medium">Merchant</th>
                 <th className="px-3 py-2 text-right font-medium">Amount</th>
+                <th className="hidden px-3 py-2 font-medium sm:table-cell">Type</th>
                 <th className="hidden px-3 py-2 font-medium sm:table-cell">Category</th>
                 <th className="hidden px-3 py-2 font-medium sm:table-cell">Account</th>
                 <th className="px-3 py-2 font-medium">Status</th>
@@ -593,6 +812,9 @@ export default function CsvImportCard({ onNavigate, onImported }: CsvImportCardP
                     {row.amount > 0
                       ? formatSignedAmount(row.amount, row.type, settings.currency)
                       : "—"}
+                  </td>
+                  <td className="px-3 py-1.5 text-xs capitalize hidden sm:table-cell">
+                    {row.type || "—"}
                   </td>
                   <td className="max-w-[12rem] truncate px-3 py-1.5 hidden sm:table-cell">
                     {row.category || "—"}

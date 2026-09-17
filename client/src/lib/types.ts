@@ -190,6 +190,7 @@ export interface CsvImportPreview {
   totalRows: number;
   newCategories: string[];
   newAccounts: string[];
+  unknownDirectionValues: string[];
 }
 
 export interface PdfExtractResult {
@@ -283,12 +284,24 @@ export interface Summary {
 
 export type SignConvention = "negative-expense" | "negative-income";
 
+export interface DirectionValues {
+  expense: string;
+  income: string;
+}
+
+export interface DirectionDetection {
+  values: string[];
+  guess: DirectionValues | null;
+  ambiguous: boolean;
+}
+
 export interface CsvColumnMapping {
   date: number;
   merchant: number;
   amount: number | null;
   debit: number | null;
   credit: number | null;
+  type: number | null;
   category: number | null;
   account: number | null;
   notes: number | null;
@@ -302,6 +315,7 @@ export interface CsvPreview {
   hasHeader: boolean;
   mapping: CsvColumnMapping;
   ambiguous: string[];
+  direction: DirectionDetection | null;
 }
 
 export interface CsvMapping {
@@ -310,6 +324,8 @@ export interface CsvMapping {
   amount?: number;
   debit?: number;
   credit?: number;
+  type?: number;
+  direction?: Partial<DirectionValues>;
   category?: number;
   account?: number;
   notes?: number;

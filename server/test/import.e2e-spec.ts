@@ -24,8 +24,20 @@ interface CsvPreviewBody {
   sampleRows: string[][];
   rowCount: number;
   hasHeader: boolean;
-  mapping: { date: number; merchant: number; amount: number; category: number };
+  mapping: {
+    date: number;
+    merchant: number;
+    amount: number;
+    credit: number;
+    type: number;
+    category: number;
+  };
   ambiguous: string[];
+  direction: {
+    values: string[];
+    guess: { expense: string; income: string } | null;
+    ambiguous: boolean;
+  } | null;
 }
 
 interface CsvImportBody {
@@ -252,6 +264,87 @@ describe('CSV Import (e2e)', () => {
     const res = await agent.post('/api/import/csv').send({
       csv: STATEMENT,
       mapping: { date: 0, merchant: 1, amount: 2, debit: 2 },
+    });
+    expect(res.status).toBe(400);
+    expect((res.body as ErrorBody).error.code).toBe('INVALID_MAPPING');
+  });
+
+  it('previews a type column and detects its direction values', async () => {
+    const res = await agent.post('/api/import/csv/preview').send({
+      csv: [
+        'Date,Transaction Details,Type,Amount,Account,Notes,Category',
+        '08-02-26,Coffee,Debit,5.50,ICICI,note,Other',
+        '08-03-26,Paycheck,Credit,2500.00,ICICI,note,Other',
+      ].join('\n'),
+    });
+    expect(res.status).toBe(201);
+    const body = res.body as CsvPreviewBody;
+    expect(body.mapping).toMatchObject({
+      date: 0,
+      merchant: 1,
+      type: 2,
+      amount: 3,
+    });
+    expect(body.direction).toEqual({
+      values: ['debit', 'credit'],
+      guess: { expense: 'debit', income: 'credit' },
+      ambiguous: false,
+    });
+  });
+
+  it('imports debit/credit rows via a type column', async () => {
+    const res = await agent.post('/api/import/csv').send({
+      csv: [
+        'Date,Transaction Details,Type,Amount',
+        '2024-01-11,Brunch Express,Debit,5.50',
+        '2024-01-12,Freelance Pay,Credit,2500.00',
+        '2024-01-13,Refund Row,Refund,10.00',
+      ].join('\n'),
+      mapping: {
+        date: 0,
+        merchant: 1,
+        type: 2,
+        amount: 3,
+        direction: { expense: 'Debit', income: 'Credit' },
+      },
+    });
+    expect(res.status).toBe(201);
+    expect(res.body as CsvImportBody).toEqual({
+      inserted: 2,
+      duplicates: 0,
+      skipped: 1,
+      needsReview: 2,
+      totalRows: 3,
+    });
+
+    const rows = await db
+      .select()
+      .from(transactions)
+      .where(
+        inArray(transactions.merchant, ['Brunch Express', 'Freelance Pay']),
+      );
+    const brunch = rows.find((row) => row.merchant === 'Brunch Express');
+    const freelance = rows.find((row) => row.merchant === 'Freelance Pay');
+    expect(brunch).toMatchObject({ type: 'expense', amount: 5.5 });
+    expect(freelance).toMatchObject({ type: 'income', amount: 2500 });
+  });
+
+  it('rejects a type column combined with debit/credit split', async () => {
+    const res = await agent.post('/api/import/csv').send({
+      csv: STATEMENT,
+      mapping: { date: 0, merchant: 1, type: 2, debit: 2 },
+    });
+    expect(res.status).toBe(400);
+    expect((res.body as ErrorBody).error.code).toBe('INVALID_MAPPING');
+  });
+
+  it('rejects a type column without direction values', async () => {
+    const res = await agent.post('/api/import/csv').send({
+      csv: [
+        'Date,Transaction Details,Type,Amount',
+        '2024-01-11,Coffee,Debit,5.50',
+      ].join('\n'),
+      mapping: { date: 0, merchant: 1, type: 2, amount: 3 },
     });
     expect(res.status).toBe(400);
     expect((res.body as ErrorBody).error.code).toBe('INVALID_MAPPING');

@@ -20,16 +20,21 @@ import {
 import { computeFingerprint } from '../common/fingerprint';
 import {
   detectColumns,
+  detectDirection,
   detectHeaderRow,
   detectTradeColumns,
   normalizeDate,
+  normalizeDirectionToken,
   parseAmount,
   parseCsv,
   type ColumnMapping,
+  type DirectionDetection,
+  type DirectionValues,
   type SignConvention,
   type TradeColumnMapping,
 } from './csv';
 import {
+  ColumnMappingDto,
   CsvImportDto,
   CsvPreviewDto,
   TradeImportDto,
@@ -50,6 +55,7 @@ export interface CsvPreviewResult {
   hasHeader: boolean;
   mapping: ColumnMapping;
   ambiguous: string[];
+  direction: DirectionDetection | null;
 }
 
 export interface CsvImportResult {
@@ -98,6 +104,7 @@ export interface CsvImportPreview {
   totalRows: number;
   newCategories: string[];
   newAccounts: string[];
+  unknownDirectionValues: string[];
 }
 
 interface ParsedRow {
@@ -141,16 +148,32 @@ export class ImportService {
     }
 
     const detection = detectColumns(hasHeader ? headerCells : (rows[0] ?? []));
+    const columnCount = (hasHeader ? headerCells : rows[0]).length;
+    const mapping =
+      dto.mapping !== undefined
+        ? this.buildMapping(
+            dto.mapping,
+            rows,
+            this.resolveDirection(dto.mapping),
+            false,
+          ).mapping
+        : detection.mapping;
+    const ambiguous = dto.mapping !== undefined ? [] : detection.ambiguous;
+    const direction =
+      mapping.type !== null && mapping.type !== undefined
+        ? detectDirection(dataRows, mapping.type)
+        : null;
     const sampleRows = dataRows.slice(0, SAMPLE_ROWS);
 
     return {
       headers: headerCells,
-      columnCount: (hasHeader ? headerCells : rows[0]).length,
+      columnCount,
       sampleRows,
       rowCount: dataRows.length,
       hasHeader,
-      mapping: detection.mapping,
-      ambiguous: detection.ambiguous,
+      mapping,
+      ambiguous,
+      direction,
     };
   }
 
@@ -229,10 +252,8 @@ export class ImportService {
     userId: string,
     dto: CsvImportDto,
   ): Promise<CsvImportPreview> {
-    const { values, skipped, categoryMap, accountMap } = await this.buildPlan(
-      userId,
-      dto,
-    );
+    const { values, skipped, categoryMap, accountMap, unknownDirectionValues } =
+      await this.buildPlan(userId, dto);
 
     const valid = values.filter(
       (value): value is NewTransaction => value !== null,
@@ -310,6 +331,7 @@ export class ImportService {
         (value) => value.fromAccount ?? '',
         'Imported account',
       ),
+      unknownDirectionValues,
     };
   }
 
@@ -321,6 +343,7 @@ export class ImportService {
     skipped: number;
     categoryMap: Map<string, string>;
     accountMap: Map<string, string>;
+    unknownDirectionValues: string[];
   }> {
     if (dto.csv.length > MAX_CSV_CHARS) {
       throw new BadRequestException({
@@ -337,7 +360,12 @@ export class ImportService {
       });
     }
 
-    const { mapping, hasHeader } = this.resolveMapping(dto, rows);
+    const direction = this.resolveDirection(dto.mapping);
+    const { mapping, hasHeader } = this.buildMapping(
+      dto.mapping,
+      rows,
+      direction,
+    );
 
     const dataRows = hasHeader ? rows.slice(1) : rows;
     if (dataRows.length > MAX_ROWS) {
@@ -359,6 +387,7 @@ export class ImportService {
       const parsed = this.parseRow(
         row,
         mapping,
+        direction,
         signConvention,
         categoryMap,
         accountMap,
@@ -383,7 +412,18 @@ export class ImportService {
       } satisfies NewTransaction;
     });
 
-    return { values, skipped, categoryMap, accountMap };
+    const unknownDirectionValues =
+      direction !== null && mapping.type !== null && mapping.type !== undefined
+        ? this.collectUnknownDirectionValues(dataRows, mapping.type, direction)
+        : [];
+
+    return {
+      values,
+      skipped,
+      categoryMap,
+      accountMap,
+      unknownDirectionValues,
+    };
   }
 
   private collectNewLabels(
@@ -441,9 +481,11 @@ export class ImportService {
     }
   }
 
-  private resolveMapping(
-    dto: CsvImportDto,
+  private buildMapping(
+    dtoMapping: ColumnMappingDto,
     rows: string[][],
+    direction: DirectionValues | null,
+    requireDirection = true,
   ): {
     mapping: ColumnMapping;
     hasHeader: boolean;
@@ -451,22 +493,55 @@ export class ImportService {
   } {
     const columnCount = rows[0].length;
     const mapping: ColumnMapping = {
-      date: dto.mapping.date,
-      merchant: dto.mapping.merchant,
-      amount: dto.mapping.amount ?? null,
-      debit: dto.mapping.debit ?? null,
-      credit: dto.mapping.credit ?? null,
-      category: dto.mapping.category ?? null,
-      account: dto.mapping.account ?? null,
-      notes: dto.mapping.notes ?? null,
+      date: dtoMapping.date,
+      merchant: dtoMapping.merchant,
+      amount: dtoMapping.amount ?? null,
+      debit: dtoMapping.debit ?? null,
+      credit: dtoMapping.credit ?? null,
+      type: dtoMapping.type ?? null,
+      category: dtoMapping.category ?? null,
+      account: dtoMapping.account ?? null,
+      notes: dtoMapping.notes ?? null,
     };
+    this.validateMapping(mapping, columnCount, direction, requireDirection);
 
+    const hasHeader = dtoMapping.hasHeader ?? true;
+    return { mapping, hasHeader, columnCount };
+  }
+
+  private resolveDirection(
+    dtoMapping: ColumnMappingDto | null | undefined,
+  ): DirectionValues | null {
+    if (dtoMapping === null || dtoMapping === undefined) {
+      return null;
+    }
+    if (
+      dtoMapping.type === undefined ||
+      dtoMapping.type === null ||
+      dtoMapping.type < 0
+    ) {
+      return null;
+    }
+    const direction: DirectionValues = {
+      expense: normalizeDirectionToken(dtoMapping.direction?.expense ?? ''),
+      income: normalizeDirectionToken(dtoMapping.direction?.income ?? ''),
+    };
+    return direction;
+  }
+
+  private validateMapping(
+    mapping: ColumnMapping,
+    columnCount: number,
+    direction: DirectionValues | null,
+    requireDirection = true,
+  ): void {
     const hasAmountColumn =
       mapping.amount !== null && mapping.amount !== undefined;
     const hasDebitColumn =
       mapping.debit !== null && mapping.debit !== undefined;
     const hasCreditColumn =
       mapping.credit !== null && mapping.credit !== undefined;
+    const hasTypeColumn = mapping.type !== null && mapping.type !== undefined;
     const hasSplit = hasDebitColumn || hasCreditColumn;
 
     if (hasAmountColumn && hasSplit) {
@@ -476,7 +551,31 @@ export class ImportService {
         code: 'INVALID_MAPPING',
       });
     }
-    if (!hasAmountColumn && !hasSplit) {
+    if (hasTypeColumn && hasSplit) {
+      throw new BadRequestException({
+        message:
+          'Map either a single amount column or debit/credit columns, not both.',
+        code: 'INVALID_MAPPING',
+      });
+    }
+    if (hasTypeColumn && !hasAmountColumn) {
+      throw new BadRequestException({
+        message: 'A single amount column is required when using a type column.',
+        code: 'INVALID_MAPPING',
+      });
+    }
+    if (
+      requireDirection &&
+      hasTypeColumn &&
+      (!direction || !direction.expense || !direction.income)
+    ) {
+      throw new BadRequestException({
+        message:
+          'Both a money-out (expense) and a money-in (income) type value are required when using a type column.',
+        code: 'INVALID_MAPPING',
+      });
+    }
+    if (!hasAmountColumn && !hasSplit && !hasTypeColumn) {
       throw new BadRequestException({
         message: 'An amount, debit, or credit column is required.',
         code: 'INVALID_MAPPING',
@@ -489,6 +588,7 @@ export class ImportService {
       mapping.amount,
       mapping.debit,
       mapping.credit,
+      mapping.type,
       mapping.category,
       mapping.account,
       mapping.notes,
@@ -501,14 +601,36 @@ export class ImportService {
         code: 'INVALID_MAPPING',
       });
     }
+  }
 
-    const hasHeader = dto.mapping.hasHeader ?? true;
-    return { mapping, hasHeader, columnCount };
+  private collectUnknownDirectionValues(
+    rows: string[][],
+    typeColumn: number,
+    direction: DirectionValues,
+  ): string[] {
+    const seen = new Set<string>();
+    const unknown: string[] = [];
+    for (const row of rows) {
+      const raw = (row[typeColumn] ?? '').trim();
+      if (raw.length === 0) {
+        continue;
+      }
+      const token = normalizeDirectionToken(raw);
+      if (token === direction.expense || token === direction.income) {
+        continue;
+      }
+      if (!seen.has(token)) {
+        seen.add(token);
+        unknown.push(raw);
+      }
+    }
+    return unknown;
   }
 
   private parseRow(
     row: string[],
     mapping: ColumnMapping,
+    direction: DirectionValues | null,
     signConvention: SignConvention,
     categoryMap: Map<string, string>,
     accountMap: Map<string, string>,
@@ -523,7 +645,12 @@ export class ImportService {
       return null;
     }
 
-    const resolved = this.resolveAmount(row, mapping, signConvention);
+    const resolved = this.resolveAmount(
+      row,
+      mapping,
+      direction,
+      signConvention,
+    );
     if (resolved === null) {
       return null;
     }
@@ -568,8 +695,34 @@ export class ImportService {
   private resolveAmount(
     row: string[],
     mapping: ColumnMapping,
+    direction: DirectionValues | null,
     signConvention: SignConvention,
   ): { amount: number; type: 'expense' | 'income' } | null {
+    if (
+      direction !== null &&
+      mapping.type !== null &&
+      mapping.type !== undefined &&
+      mapping.amount !== null &&
+      mapping.amount !== undefined
+    ) {
+      const value = parseAmount(row[mapping.amount] ?? '');
+      if (value === null || value === 0) {
+        return null;
+      }
+      const token = normalizeDirectionToken(row[mapping.type] ?? '');
+      if (token.length === 0) {
+        return null;
+      }
+      const amount = Math.round(Math.abs(value) * 100) / 100;
+      if (token === direction.expense) {
+        return { amount, type: 'expense' };
+      }
+      if (token === direction.income) {
+        return { amount, type: 'income' };
+      }
+      return null;
+    }
+
     if (mapping.amount !== null && mapping.amount !== undefined) {
       const value = parseAmount(row[mapping.amount] ?? '');
       if (value === null || value === 0) {
@@ -694,10 +847,7 @@ export class ImportService {
     userId: string,
     dto: TradeImportDto,
   ): Promise<TradeImportResult> {
-    const { values: planned, skipped, accountMap } = await this.buildTradePlan(
-      userId,
-      dto,
-    );
+    const { values: planned, skipped } = await this.buildTradePlan(userId, dto);
     const values = planned.filter(
       (value): value is Omit<NewTrade, 'userId'> & { accountId: string } =>
         value !== null,
@@ -769,14 +919,22 @@ export class ImportService {
         const sideStr = row[mapping.side]?.trim().toLowerCase();
         const unitsStr = row[mapping.units]?.trim();
         const priceStr = row[mapping.price]?.trim();
-        const amountStr = 
-          mapping.amount !== null ? (row[mapping.amount as number] ?? '')?.trim() : undefined;
-        const feeStr = 
-          mapping.fee !== null ? (row[mapping.fee as number] ?? '')?.trim() : undefined;
-        const accountStr = 
-          mapping.account !== null ? (row[mapping.account as number] ?? '')?.trim() : undefined;
-        const notesStr = 
-          mapping.notes !== null ? (row[mapping.notes as number] ?? '')?.trim() : undefined;
+        const amountStr =
+          mapping.amount !== null
+            ? (row[mapping.amount as number] ?? '')?.trim()
+            : undefined;
+        const feeStr =
+          mapping.fee !== null
+            ? (row[mapping.fee as number] ?? '')?.trim()
+            : undefined;
+        const accountStr =
+          mapping.account !== null
+            ? (row[mapping.account as number] ?? '')?.trim()
+            : undefined;
+        const notesStr =
+          mapping.notes !== null
+            ? (row[mapping.notes as number] ?? '')?.trim()
+            : undefined;
 
         if (!dateStr || !securityStr || !sideStr || !unitsStr || !priceStr) {
           skipped++;

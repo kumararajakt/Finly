@@ -12,10 +12,14 @@ import {
 } from 'class-validator';
 import type { SignConvention } from './csv';
 
-export class CsvPreviewDto {
+export class DirectionValuesDto {
+  @IsOptional()
   @IsString()
-  @IsNotEmpty({ message: 'CSV content is required.' })
-  csv: string;
+  expense?: string;
+
+  @IsOptional()
+  @IsString()
+  income?: string;
 }
 
 export class ColumnMappingDto {
@@ -45,6 +49,16 @@ export class ColumnMappingDto {
   @IsOptional()
   @IsInt()
   @Min(0)
+  type?: number;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => DirectionValuesDto)
+  direction?: DirectionValuesDto;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
   category?: number;
 
   @IsOptional()
@@ -60,6 +74,18 @@ export class ColumnMappingDto {
   @IsOptional()
   @IsBoolean()
   hasHeader?: boolean;
+}
+
+export class CsvPreviewDto {
+  @IsString()
+  @IsNotEmpty({ message: 'CSV content is required.' })
+  csv: string;
+
+  @IsOptional()
+  @IsObject()
+  @ValidateNested()
+  @Type(() => ColumnMappingDto)
+  mapping?: ColumnMappingDto;
 }
 
 export class CsvImportDto {

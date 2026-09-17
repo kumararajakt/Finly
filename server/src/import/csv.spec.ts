@@ -1,6 +1,8 @@
 import {
   detectColumns,
+  detectDirection,
   detectHeaderRow,
+  guessDirectionValue,
   normalizeDate,
   parseAmount,
   parseCsv,
@@ -84,6 +86,7 @@ describe('detectColumns', () => {
       amount: null,
       debit: 2,
       credit: 3,
+      type: null,
       category: 4,
       account: null,
       notes: null,
@@ -121,6 +124,121 @@ describe('detectColumns', () => {
     const { mapping, ambiguous } = detectColumns(headers);
     expect(ambiguous).toEqual([]);
     expect(mapping.account).toBeNull();
+  });
+
+  it('maps a Type column before merchant so it is not claimed by the description', () => {
+    const headers = [
+      'Date',
+      'Transaction Details',
+      'Type',
+      'Amount',
+      'Account',
+      'Notes',
+      'Category',
+    ];
+    const { mapping, ambiguous } = detectColumns(headers);
+    expect(ambiguous).toEqual([]);
+    expect(mapping.type).toBe(2);
+    expect(mapping.merchant).toBe(1);
+    expect(mapping.amount).toBe(3);
+  });
+
+  it('treats Transaction Type as the type role', () => {
+    const headers = ['Date', 'Description', 'Transaction Type', 'Amount'];
+    const { mapping } = detectColumns(headers);
+    expect(mapping.type).toBe(2);
+    expect(mapping.merchant).toBe(1);
+  });
+});
+
+describe('guessDirectionValue', () => {
+  it('maps expense synonyms', () => {
+    expect(guessDirectionValue('Debit')).toBe('expense');
+    expect(guessDirectionValue('DR')).toBe('expense');
+    expect(guessDirectionValue('Withdrawal')).toBe('expense');
+    expect(guessDirectionValue('Paid Out')).toBe('expense');
+    expect(guessDirectionValue('Money Out')).toBe('expense');
+    expect(guessDirectionValue('Expense')).toBe('expense');
+    expect(guessDirectionValue('Payment')).toBe('expense');
+  });
+
+  it('maps income synonyms', () => {
+    expect(guessDirectionValue('Credit')).toBe('income');
+    expect(guessDirectionValue('CR')).toBe('income');
+    expect(guessDirectionValue('Deposit')).toBe('income');
+    expect(guessDirectionValue('Paid In')).toBe('income');
+    expect(guessDirectionValue('Money In')).toBe('income');
+    expect(guessDirectionValue('Income')).toBe('income');
+    expect(guessDirectionValue('Receipt')).toBe('income');
+  });
+
+  it('normalizes case and whitespace', () => {
+    expect(guessDirectionValue('  debit  ')).toBe('expense');
+    expect(guessDirectionValue('CR')).toBe('income');
+  });
+
+  it('returns null for unknown tokens', () => {
+    expect(guessDirectionValue('Refund')).toBeNull();
+    expect(guessDirectionValue('')).toBeNull();
+  });
+});
+
+describe('detectDirection', () => {
+  const rows = [
+    ['2024-01-05', 'Coffee', 'Debit', '5.50'],
+    ['2024-01-06', 'Coffee', 'Debit', '6.00'],
+    ['2024-01-07', 'Paycheck', 'Credit', '2500.00'],
+  ];
+
+  it('detects two values and guesses debit as expense', () => {
+    expect(detectDirection(rows, 2)).toEqual({
+      values: ['debit', 'credit'],
+      guess: { expense: 'debit', income: 'credit' },
+      ambiguous: false,
+    });
+  });
+
+  it('returns a guess regardless of column order', () => {
+    const flipped = rows.map(([d, m, t, a]) => [
+      d,
+      m,
+      t === 'Debit' ? 'Credit' : 'Debit',
+      a,
+    ]);
+    const result = detectDirection(flipped, 2);
+    expect(result.guess).toEqual({ expense: 'debit', income: 'credit' });
+  });
+
+  it('is ambiguous when more than two distinct values exist', () => {
+    const withRefund = [...rows, ['2024-01-08', 'Shop', 'Refund', '10.00']];
+    const result = detectDirection(withRefund, 2);
+    expect(result.guess).toBeNull();
+    expect(result.ambiguous).toBe(true);
+    expect(result.values).toEqual(['debit', 'credit', 'refund']);
+  });
+
+  it('is ambiguous when only one distinct value exists', () => {
+    const single = [rows[0]];
+    const result = detectDirection(single, 2);
+    expect(result.guess).toBeNull();
+    expect(result.ambiguous).toBe(true);
+  });
+
+  it('is ambiguous when neither value matches a synonym', () => {
+    const custom = [
+      ['2024-01-05', 'A', 'Incoming', '5.00'],
+      ['2024-01-06', 'A', 'Outgoing', '5.00'],
+    ];
+    const result = detectDirection(custom, 2);
+    expect(result.guess).toBeNull();
+    expect(result.ambiguous).toBe(true);
+    expect(result.values).toEqual(['incoming', 'outgoing']);
+  });
+
+  it('ignores empty type cells', () => {
+    const withBlank = [...rows, ['2024-01-08', 'Shop', '', '10.00']];
+    const result = detectDirection(withBlank, 2);
+    expect(result.ambiguous).toBe(false);
   });
 });
 
