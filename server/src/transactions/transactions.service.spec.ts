@@ -5,16 +5,13 @@ import { TransactionsService } from './transactions.service';
 const USER_ID = 'user-1';
 
 function makeSelectChain(rows: unknown[]) {
-  const where = jest.fn(() => ({
-    orderBy: jest.fn(() => Promise.resolve(rows)),
-    limit: jest.fn(() => Promise.resolve(rows)),
-  }));
+  const orderBy = jest.fn(() => Promise.resolve(rows));
+  const limit = jest.fn(() => Promise.resolve(rows));
+  const where = jest.fn(() => ({ orderBy, limit }));
   return {
-    from: jest.fn(() => ({
-      where,
-      orderBy: jest.fn(() => Promise.resolve(rows)),
-    })),
+    from: jest.fn(() => ({ where, orderBy })),
     where,
+    orderBy,
   };
 }
 
@@ -145,6 +142,43 @@ describe('TransactionsService', () => {
     const sql = whereSql(chain);
     expect(sql.sql).toContain('"receipt" =');
     expect(sql.params).toEqual(expect.arrayContaining([USER_ID, false]));
+  });
+
+  function orderBySql(chain: ReturnType<typeof makeSelectChain>): string[] {
+    return chain.orderBy.mock.calls[0].map(
+      (arg: unknown) => new PgDialect().sqlToQuery(arg as never).sql,
+    );
+  }
+
+  it('defaults to newest-first by date', async () => {
+    const chain = makeSelectChain([]);
+    db.select.mockReturnValue(chain);
+    await service.list(USER_ID, {});
+    const [primary, tiebreaker] = orderBySql(chain);
+    expect(primary).toContain('"date"');
+    expect(primary).toContain('desc');
+    expect(tiebreaker).toContain('"created_at"');
+    expect(tiebreaker).toContain('desc');
+  });
+
+  it('sorts by amount descending when requested', async () => {
+    const chain = makeSelectChain([]);
+    db.select.mockReturnValue(chain);
+    await service.list(USER_ID, { sortBy: 'amount', sortOrder: 'desc' });
+    const [primary, tiebreaker] = orderBySql(chain);
+    expect(primary).toContain('"amount"');
+    expect(primary).toContain('desc');
+    expect(tiebreaker).toContain('"created_at"');
+    expect(tiebreaker).toContain('desc');
+  });
+
+  it('sorts ascending on text columns', async () => {
+    const chain = makeSelectChain([]);
+    db.select.mockReturnValue(chain);
+    await service.list(USER_ID, { sortBy: 'merchant', sortOrder: 'asc' });
+    const [primary] = orderBySql(chain);
+    expect(primary).toContain('"merchant"');
+    expect(primary).toContain('asc');
   });
 
   it('creates a transaction', async () => {

@@ -65,6 +65,14 @@ export class TransactionQueryDto {
   @IsOptional()
   @IsIn(['true', 'false'])
   receipt?: string;
+
+  @IsOptional()
+  @IsIn(['date', 'amount', 'merchant', 'category'])
+  sortBy?: 'date' | 'amount' | 'merchant' | 'category';
+
+  @IsOptional()
+  @IsIn(['asc', 'desc'])
+  sortOrder?: 'asc' | 'desc';
 }
 
 export class CreateTransactionDto {

@@ -211,7 +211,12 @@ export interface TransactionFilters {
   minAmount?: number;
   maxAmount?: number;
   receipt?: boolean;
+  sortBy?: TransactionSortBy;
+  sortOrder?: SortOrder;
 }
+
+export type TransactionSortBy = "date" | "amount" | "merchant" | "category";
+export type SortOrder = "asc" | "desc";
 
 export interface NewTransaction {
   date: string;

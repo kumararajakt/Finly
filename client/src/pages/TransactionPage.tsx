@@ -1,6 +1,6 @@
 import { Suspense, lazy, useEffect, useState } from "react";
 import { useSearchParams } from "react-router";
-import { ChevronsUpDown, Paperclip, Pencil, Plus, Receipt, Search, SlidersHorizontal, Trash2, Upload, X } from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronsUpDown, Paperclip, Pencil, Plus, Receipt, Search, SlidersHorizontal, Trash2, Upload, X } from "lucide-react";
 import PeriodSelector from "@/components/PeriodSelector";
 import { Button } from "@/components/ui/button";
 import EmptyState from "@/components/ui/empty-state";
@@ -15,7 +15,7 @@ import { useSettings } from "@/contexts/SettingsContext";
 import { useQuery } from "@/hooks/use-query";
 import { api } from "@/lib/api";
 import { formatDate, formatSignedAmount } from "@/lib/format";
-import type { Account, Category, Tag, Transaction } from "@/lib/types";
+import type { Account, Category, SortOrder, Tag, Transaction, TransactionSortBy } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const CsvImportCard = lazy(() => import("@/components/CsvImportCard"));
@@ -90,6 +90,39 @@ function TagPills({ tags, removing, onRemove, onAdd }: TagPillsProps) {
         </button>
       </li>
     </ul>
+  );
+}
+
+interface SortableHeaderProps {
+  column: TransactionSortBy;
+  label: string;
+  sortBy: TransactionSortBy;
+  sortOrder: SortOrder;
+  onSort: (column: TransactionSortBy) => void;
+  className?: string;
+}
+
+function SortableHeader({ column, label, sortBy, sortOrder, onSort, className }: SortableHeaderProps) {
+  const active = sortBy === column;
+  const Icon = active ? (sortOrder === "asc" ? ArrowUp : ArrowDown) : ChevronsUpDown;
+  return (
+    <TableHead
+      aria-sort={active ? (sortOrder === "asc" ? "ascending" : "descending") : undefined}
+      className={className}
+    >
+      <button
+        type="button"
+        onClick={() => onSort(column)}
+        title={`Sort by ${label.toLowerCase()}`}
+        className="inline-flex items-center gap-1 rounded font-medium hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+      >
+        {label}
+        <Icon
+          className={cn("size-3", active ? "text-primary" : "text-muted-foreground/50")}
+          aria-hidden="true"
+        />
+      </button>
+    </TableHead>
   );
 }
 
@@ -375,6 +408,8 @@ export default function TransactionPage() {
   const [minAmount, setMinAmount] = useState("");
   const [maxAmount, setMaxAmount] = useState("");
   const [receiptFilter, setReceiptFilter] = useState<"all" | "yes" | "no">("all");
+  const [sortBy, setSortBy] = useState<TransactionSortBy>("date");
+  const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
   const [addOpen, setAddOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [editorTx, setEditorTx] = useState<Transaction | null>(null);
@@ -403,8 +438,10 @@ export default function TransactionPage() {
         ...(minAmount !== "" ? { minAmount: Number(minAmount) } : {}),
         ...(maxAmount !== "" ? { maxAmount: Number(maxAmount) } : {}),
         ...(receiptFilter !== "all" ? { receipt: receiptFilter === "yes" } : {}),
+        sortBy,
+        sortOrder,
       }),
-    [period, settings.customDateFrom, settings.customDateTo, accountFilter, categoryFilter, debouncedSearch, typeFilter, tagFilter, dateFrom, dateTo, minAmount, maxAmount, receiptFilter]
+    [period, settings.customDateFrom, settings.customDateTo, accountFilter, categoryFilter, debouncedSearch, typeFilter, tagFilter, dateFrom, dateTo, minAmount, maxAmount, receiptFilter, sortBy, sortOrder]
   );
   const categories = useQuery<Category[]>(() => api.categories.list(), []);
   const accounts = useQuery<Account[]>(() => api.accounts.list(), []);
@@ -425,6 +462,15 @@ export default function TransactionPage() {
     setMinAmount("");
     setMaxAmount("");
     setReceiptFilter("all");
+  }
+
+  function handleSort(column: TransactionSortBy) {
+    if (column === sortBy) {
+      setSortOrder((order) => (order === "asc" ? "desc" : "asc"));
+    } else {
+      setSortBy(column);
+      setSortOrder(column === "merchant" || column === "category" ? "asc" : "desc");
+    }
   }
 
   async function handleCategoryChange(tx: Transaction, name: string) {
@@ -578,6 +624,25 @@ export default function TransactionPage() {
               {name}
             </option>
           ))}
+        </select>
+        <select
+          value={`${sortBy}-${sortOrder}`}
+          onChange={(e) => {
+            const [by, order] = e.target.value.split("-") as [TransactionSortBy, SortOrder];
+            setSortBy(by);
+            setSortOrder(order);
+          }}
+          aria-label="Sort transactions"
+          className="h-8 rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 md:hidden"
+        >
+          <option value="date-desc">Newest first</option>
+          <option value="date-asc">Oldest first</option>
+          <option value="amount-desc">Amount: high to low</option>
+          <option value="amount-asc">Amount: low to high</option>
+          <option value="merchant-asc">Merchant: A to Z</option>
+          <option value="merchant-desc">Merchant: Z to A</option>
+          <option value="category-asc">Category: A to Z</option>
+          <option value="category-desc">Category: Z to A</option>
         </select>
         <Button
           variant="outline"
@@ -752,12 +817,38 @@ export default function TransactionPage() {
                 <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Merchant</TableHead>
-                    <TableHead>Category</TableHead>
+                    <SortableHeader
+                      column="date"
+                      label="Date"
+                      sortBy={sortBy}
+                      sortOrder={sortOrder}
+                      onSort={handleSort}
+                    />
+                    <SortableHeader
+                      column="merchant"
+                      label="Merchant"
+                      sortBy={sortBy}
+                      sortOrder={sortOrder}
+                      onSort={handleSort}
+                    />
+                    <SortableHeader
+                      column="category"
+                      label="Category"
+                      sortBy={sortBy}
+                      sortOrder={sortOrder}
+                      onSort={handleSort}
+                    />
                     <TableHead className="hidden sm:table-cell">Account</TableHead>
                     <TableHead className="hidden md:table-cell">Notes</TableHead>
                     <TableHead>Tags</TableHead>
-                    <TableHead className="text-right">Amount</TableHead>
+                    <SortableHeader
+                      column="amount"
+                      label="Amount"
+                      sortBy={sortBy}
+                      sortOrder={sortOrder}
+                      onSort={handleSort}
+                      className="text-right"
+                    />
                     <TableHead className="text-right">
                       <span className="sr-only">Actions</span>
                     </TableHead>
@@ -766,6 +857,9 @@ export default function TransactionPage() {
                 <TableBody>
                   {transactions.data.map((tx) => (
                     <TableRow key={tx.id}>
+                      <TableCell className="text-muted-foreground">
+                        {formatDate(tx.date)}
+                      </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1.5">
                           <span className="font-medium">{tx.merchant}</span>
@@ -780,7 +874,6 @@ export default function TransactionPage() {
                             </span>
                           )}
                         </div>
-                        <p className="text-xs text-muted-foreground">{formatDate(tx.date)}</p>
                       </TableCell>
                       <TableCell>
                         <CategoryCell

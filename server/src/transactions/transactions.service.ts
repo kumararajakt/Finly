@@ -7,6 +7,7 @@ import {
 import {
   and,
   arrayContains,
+  asc,
   desc,
   eq,
   gte,
@@ -127,11 +128,20 @@ export class TransactionsService {
       conditions.push(eq(transactions.receipt, query.receipt === 'true'));
     }
 
+    const sortBy = query.sortBy ?? 'date';
+    const sortCol = {
+      date: transactions.date,
+      amount: transactions.amount,
+      merchant: transactions.merchant,
+      category: transactions.category,
+    }[sortBy];
+    const order = query.sortOrder === 'asc' ? asc(sortCol) : desc(sortCol);
+
     return this.db
       .select()
       .from(transactions)
       .where(conditions.length > 0 ? and(...conditions) : undefined)
-      .orderBy(desc(transactions.date), desc(transactions.createdAt));
+      .orderBy(order, desc(transactions.createdAt));
   }
 
   private async customRange(userId: string): Promise<DateRange> {
