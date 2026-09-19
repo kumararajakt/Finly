@@ -1,8 +1,8 @@
+import { useMemo } from "react";
+import { useTheme } from "@/contexts/ThemeContext";
 import { formatCompactCurrency } from "@/lib/format";
+import { resolveChartColors } from "@/lib/theme-palettes";
 import type { CashFlowPoint } from "@/lib/types";
-
-const INCOME_COLOR = "#22c55e";
-const SPENDING_COLOR = "#f59e0b";
 
 interface CashFlowChartProps {
   data: CashFlowPoint[];
@@ -10,6 +10,15 @@ interface CashFlowChartProps {
 }
 
 export default function CashFlowChart({ data, currency }: CashFlowChartProps) {
+  const { paletteId, resolved, customTheme } = useTheme();
+  // Series map 1:1 onto the theme's --chart-* tokens (income = chart-1,
+  // spending = chart-2), matching TweakCN's dashboard convention.
+  const charts = useMemo(
+    () => resolveChartColors({ paletteId, resolved, customTheme }),
+    [paletteId, resolved, customTheme]
+  );
+  const incomeColor = charts[0] ?? "#91c5ff";
+  const spendingColor = charts[1] ?? "#3a81f6";
   const width = 640;
   const height = 240;
   const pad = { top: 16, right: 12, bottom: 28, left: 52 };
@@ -33,11 +42,11 @@ export default function CashFlowChart({ data, currency }: CashFlowChartProps) {
     <div>
       <div className="mb-3 flex items-center gap-4 text-xs text-muted-foreground">
         <span className="flex items-center gap-1.5">
-          <span className="size-2.5 rounded-full" style={{ backgroundColor: INCOME_COLOR }} />
+          <span className="size-2.5 rounded-full" style={{ backgroundColor: incomeColor }} />
           Income
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="size-2.5 rounded-full" style={{ backgroundColor: SPENDING_COLOR }} />
+          <span className="size-2.5 rounded-full" style={{ backgroundColor: spendingColor }} />
           Spending
         </span>
       </div>
@@ -47,6 +56,16 @@ export default function CashFlowChart({ data, currency }: CashFlowChartProps) {
         role="img"
         aria-label="Cash flow chart"
       >
+        <defs>
+          <linearGradient id="incomeAreaFill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="5%" stopColor={incomeColor} stopOpacity="1" />
+            <stop offset="95%" stopColor={incomeColor} stopOpacity="0.1" />
+          </linearGradient>
+          <linearGradient id="spendingAreaFill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="5%" stopColor={spendingColor} stopOpacity="0.8" />
+            <stop offset="95%" stopColor={spendingColor} stopOpacity="0.1" />
+          </linearGradient>
+        </defs>
         {gridLines.map((value, i) => (
           <g key={i}>
             <line
@@ -70,20 +89,20 @@ export default function CashFlowChart({ data, currency }: CashFlowChartProps) {
           </g>
         ))}
 
-        <path d={areaPath("income")} fill={INCOME_COLOR} fillOpacity="0.12" />
+        <path d={areaPath("income")} fill="url(#incomeAreaFill)" />
         <path
           d={linePath("income")}
           fill="none"
-          stroke={INCOME_COLOR}
+          stroke={incomeColor}
           strokeWidth="2"
           strokeLinejoin="round"
           strokeLinecap="round"
         />
-        <path d={areaPath("spending")} fill={SPENDING_COLOR} fillOpacity="0.12" />
+        <path d={areaPath("spending")} fill="url(#spendingAreaFill)" />
         <path
           d={linePath("spending")}
           fill="none"
-          stroke={SPENDING_COLOR}
+          stroke={spendingColor}
           strokeWidth="2"
           strokeLinejoin="round"
           strokeLinecap="round"
