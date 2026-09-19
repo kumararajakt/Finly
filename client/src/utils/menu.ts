@@ -8,6 +8,7 @@ import {
   ListChecks,
   Settings,
   TrendingUp,
+  Wallet,
 } from "lucide-react";
 
 export const menus = [
@@ -16,6 +17,12 @@ export const menus = [
     value: "dashboard",
     path: "/dashboard",
     icon: LayoutDashboard,
+  },
+  {
+    label: "Accounts",
+    value: "accounts",
+    path: "/accounts",
+    icon: Wallet,
   },
   {
     label: "Transactions",

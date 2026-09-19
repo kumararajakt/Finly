@@ -11,6 +11,7 @@ import AuthPage from "./pages/AuthPage";
 import { menuPath } from "./utils/menu";
 
 const DashboardPage = lazy(() => import("./pages/DashboardPage"));
+const AccountPage = lazy(() => import("./pages/AccountPage"));
 const TransactionPage = lazy(() => import("./pages/TransactionPage"));
 const InvestmentsPage = lazy(() => import("./pages/InvestmentsPage"));
 const RecurringPage = lazy(() => import("./pages/RecurringPage"));
@@ -27,6 +28,7 @@ interface PageProps {
 
 const pages: Record<string, React.ComponentType<PageProps>> = {
   dashboard: DashboardPage,
+  accounts: AccountPage,
   transactions: TransactionPage,
   investments: InvestmentsPage,
   recurring: RecurringPage,
