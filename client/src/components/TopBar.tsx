@@ -2,6 +2,7 @@ import { Upload } from "lucide-react";
 import { useLocation } from "react-router";
 import AccountMenu from "@/components/AccountMenu";
 import AppearanceSheet from "@/components/AppearanceSheet";
+import ThemeToggle from "@/components/ThemeToggle";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { menuValueFromPath, menus } from "@/utils/menu";
 
@@ -19,6 +20,7 @@ export default function TopBar() {
         {Icon ? <Icon className="size-4 shrink-0" /> : null}
         <span className="min-w-0 truncate">{title}</span>
       </h1>
+      <ThemeToggle />
       <AppearanceSheet />
       <AccountMenu />
     </header>

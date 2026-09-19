@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { LogOut, Moon, Sun, User, Monitor } from "lucide-react";
+import { LogOut, User } from "lucide-react";
 import Avatar from "@/components/Avatar";
 import { AvatarPicker } from "@/components/AvatarPicker";
 import { Button } from "@/components/ui/button";
@@ -21,13 +21,11 @@ import {
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSettings } from "@/contexts/SettingsContext";
-import { useTheme } from "@/contexts/ThemeContext";
 import { api } from "@/lib/api";
 import { fileToAvatarDataUrl, validateFile } from "@/lib/avatar";
 import type { AvatarValue } from "@/lib/avatar";
 import { formatCurrency } from "@/lib/format";
 import type { Country } from "@/lib/types";
-import { cn } from "@/lib/utils";
 
 let countriesPromise: Promise<Country[]> | null = null;
 
@@ -49,7 +47,6 @@ function message(error: unknown): string {
 export default function AccountMenu() {
   const { user, updateProfile, logout } = useAuth();
   const { saveSetting } = useSettings();
-  const { mode, setMode } = useTheme();
   const [profileOpen, setProfileOpen] = useState(false);
   const [name, setName] = useState("");
   const [image, setImage] = useState<AvatarValue>(null);
@@ -139,34 +136,6 @@ export default function AccountMenu() {
           <DropdownMenuItem onClick={() => setProfileOpen(true)}>
             <User />
             View profile
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
-            Theme
-          </div>
-          <DropdownMenuItem
-            onClick={() => setMode("light")}
-            className={cn(mode === "light" && "bg-accent")}
-          >
-            <Sun className="size-4" />
-            Light
-            {mode === "light" && <span className="ml-auto text-xs">✓</span>}
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            onClick={() => setMode("dark")}
-            className={cn(mode === "dark" && "bg-accent")}
-          >
-            <Moon className="size-4" />
-            Dark
-            {mode === "dark" && <span className="ml-auto text-xs">✓</span>}
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            onClick={() => setMode("system")}
-            className={cn(mode === "system" && "bg-accent")}
-          >
-            <Monitor className="size-4" />
-            System
-            {mode === "system" && <span className="ml-auto text-xs">✓</span>}
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem variant="destructive" onClick={() => void logout()}>
