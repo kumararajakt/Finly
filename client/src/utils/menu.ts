@@ -13,7 +13,7 @@ import {
 
 export const menus = [
   {
-    label: "Dashboard",
+    label: "Overview",
     value: "dashboard",
     path: "/dashboard",
     icon: LayoutDashboard,
