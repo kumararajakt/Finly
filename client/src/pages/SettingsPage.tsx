@@ -341,11 +341,12 @@ function usageSummary(usage: CategoryUsage): string {
 /**
  * Categories are referenced by name from transactions, so deleting one that is
  * still in use asks where those records should move to first. The target is
- * created on the server when it doesn't already exist.
+ * created on the server when it doesn't already exist. A single dialog covers
+ * both cases — the move field only appears when something is still referenced.
  */
 function CategoriesSection() {
   const [items, setItems] = useState<ManagedItem[]>([]);
-  const [target, setTarget] = useState<ManagedItem | null>(null);
+  const [pending, setPending] = useState<ManagedItem | null>(null);
   const [usage, setUsage] = useState<CategoryUsage | null>(null);
   const [moveTo, setMoveTo] = useState("");
   const [checking, setChecking] = useState(false);
@@ -356,7 +357,7 @@ function CategoriesSection() {
   const handleLoaded = useCallback((loaded: ManagedItem[]) => setItems(loaded), []);
 
   function closeDialog() {
-    setTarget(null);
+    setPending(null);
     setUsage(null);
     setMoveTo("");
     setError(null);
@@ -373,15 +374,8 @@ function CategoriesSection() {
     setError(null);
     try {
       const found = await api.categories.usage(item.key);
-      if (usageCount(found) === 0) {
-        if (!window.confirm(`Delete "${item.label}"? It will be removed from future selectors.`)) {
-          return;
-        }
-        setError(await confirm());
-        return;
-      }
       confirmRef.current = confirm;
-      setTarget(item);
+      setPending(item);
       setUsage(found);
       setMoveTo("");
     } catch (err) {
@@ -391,18 +385,24 @@ function CategoriesSection() {
     }
   }
 
+  const needsMove = usage !== null && usageCount(usage) > 0;
   const trimmed = moveTo.trim();
-  const sameAsTarget =
-    target !== null && trimmed.toLowerCase() === target.label.toLowerCase();
+  const sameAsPending =
+    pending !== null &&
+    needsMove &&
+    trimmed.toLowerCase() === pending.label.toLowerCase();
   const canSubmit =
-    target !== null && trimmed !== "" && !sameAsTarget && !submitting && !checking;
+    pending !== null &&
+    !submitting &&
+    !checking &&
+    (!needsMove || (trimmed !== "" && !sameAsPending));
 
-  async function handleMoveAndDelete() {
+  async function handleConfirm() {
     const confirm = confirmRef.current;
     if (!confirm || !canSubmit) return;
     setSubmitting(true);
     setError(null);
-    const failure = await confirm(trimmed);
+    const failure = await confirm(needsMove ? trimmed : undefined);
     if (failure) {
       setError(failure);
       setSubmitting(false);
@@ -440,53 +440,55 @@ function CategoriesSection() {
       />
 
       <Dialog
-        open={target !== null}
+        open={pending !== null}
         onOpenChange={(open) => {
           if (!open && !submitting) closeDialog();
         }}
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete &quot;{usage?.name}&quot;?</DialogTitle>
+            <DialogTitle>Delete &quot;{pending?.label}&quot;?</DialogTitle>
             <DialogDescription>
-              {usage
+              {needsMove && usage
                 ? `${usageSummary(usage)} still use this category. Choose where they should move to — it is created if it does not exist yet — and the category is deleted.`
-                : "Choose where the existing records should move to."}
+                : "Nothing uses this category yet. It will be removed from future selectors."}
             </DialogDescription>
           </DialogHeader>
 
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="category-move-to" className="text-xs font-medium">
-              Move to
-            </label>
-            <Input
-              id="category-move-to"
-              list="category-move-to-options"
-              value={moveTo}
-              onChange={(event) => setMoveTo(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  event.preventDefault();
-                  void handleMoveAndDelete();
-                }
-              }}
-              placeholder="e.g. Other"
-              aria-invalid={sameAsTarget}
-              autoFocus
-            />
-            <datalist id="category-move-to-options">
-              {items
-                .filter((item) => item.key !== target?.key)
-                .map((item) => (
-                  <option key={item.key} value={item.label} />
-                ))}
-            </datalist>
-            {sameAsTarget && (
-              <p role="alert" className="text-xs text-destructive">
-                Pick a different category than the one being deleted.
-              </p>
-            )}
-          </div>
+          {needsMove && (
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="category-move-to" className="text-xs font-medium">
+                Move to
+              </label>
+              <Input
+                id="category-move-to"
+                list="category-move-to-options"
+                value={moveTo}
+                onChange={(event) => setMoveTo(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    void handleConfirm();
+                  }
+                }}
+                placeholder="e.g. Other"
+                aria-invalid={sameAsPending}
+                autoFocus
+              />
+              <datalist id="category-move-to-options">
+                {items
+                  .filter((item) => item.key !== pending?.key)
+                  .map((item) => (
+                    <option key={item.key} value={item.label} />
+                  ))}
+              </datalist>
+              {sameAsPending && (
+                <p role="alert" className="text-xs text-destructive">
+                  Pick a different category than the one being deleted.
+                </p>
+              )}
+            </div>
+          )}
 
           {error && (
             <p role="alert" className="text-xs text-destructive">
@@ -506,10 +508,10 @@ function CategoriesSection() {
             <Button
               type="button"
               variant="destructive"
-              onClick={() => void handleMoveAndDelete()}
+              onClick={() => void handleConfirm()}
               disabled={!canSubmit}
             >
-              {submitting ? "Moving…" : "Move and delete"}
+              {submitting ? "Deleting…" : needsMove ? "Move and delete" : "Delete"}
             </Button>
           </DialogFooter>
         </DialogContent>
