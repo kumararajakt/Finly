@@ -1,5 +1,5 @@
 import { ConflictException, NotFoundException } from '@nestjs/common';
-import { ManagedService } from './managed.service';
+import { ManagedService, type CategoryUsage } from './managed.service';
 
 const USER_ID = 'user-1';
 
@@ -49,6 +49,22 @@ function uniqueViolation(): Error {
   return Object.assign(new Error('unique_violation'), { code: '23505' });
 }
 
+/** Queues the four usage counts in the order countUsage() issues them. */
+function mockUsageCounts(
+  db: ReturnType<typeof dbMock>,
+  counts: Partial<CategoryUsage> = {},
+): void {
+  const queued = [
+    counts.transactions ?? 0,
+    counts.recurring ?? 0,
+    counts.subscriptions ?? 0,
+    counts.budgets ?? 0,
+  ];
+  for (const n of queued) {
+    db.select.mockReturnValueOnce(selectChain([{ n }]));
+  }
+}
+
 describe('ManagedService', () => {
   let service: ManagedService;
   let db: ReturnType<typeof dbMock>;
@@ -84,25 +100,129 @@ describe('ManagedService', () => {
     ).rejects.toBeInstanceOf(NotFoundException);
   });
 
-  it('throws a 409 when deleting a category in use', async () => {
+  it('reports which records still reference a category', async () => {
     const cat = { id: 'c1', name: 'Food', createdAt: new Date('2026-01-01') };
-    db.select
-      .mockReturnValueOnce(selectChain([cat]))
-      .mockReturnValueOnce(selectChain([{ n: 3 }]));
+    db.select.mockReturnValueOnce(selectChain([cat]));
+    mockUsageCounts(db, { transactions: 3, budgets: 1 });
+    await expect(service.getCategoryUsage(USER_ID, 'c1')).resolves.toEqual({
+      name: 'Food',
+      transactions: 3,
+      recurring: 0,
+      subscriptions: 0,
+      budgets: 1,
+    });
+  });
+
+  it('throws a 409 when deleting a category in use without a move target', async () => {
+    const cat = { id: 'c1', name: 'Food', createdAt: new Date('2026-01-01') };
+    db.select.mockReturnValueOnce(selectChain([cat]));
+    mockUsageCounts(db, { transactions: 3 });
     await expect(service.deleteCategory(USER_ID, 'c1')).rejects.toMatchObject({
       response: { code: 'CATEGORY_IN_USE' },
+    });
+    expect(db.delete).not.toHaveBeenCalled();
+  });
+
+  it('names every referencing table in the 409 message', async () => {
+    const cat = { id: 'c1', name: 'Food', createdAt: new Date('2026-01-01') };
+    db.select.mockReturnValueOnce(selectChain([cat]));
+    mockUsageCounts(db, { transactions: 2, recurring: 1, budgets: 1 });
+    await expect(service.deleteCategory(USER_ID, 'c1')).rejects.toMatchObject({
+      response: {
+        message:
+          'Category "Food" is used by 2 transactions, 1 recurring payment, 1 budget — choose another category to move them to before deleting "Food".',
+      },
     });
   });
 
   it('deletes a category that is not in use', async () => {
     const cat = { id: 'c1', name: 'Food', createdAt: new Date('2026-01-01') };
-    db.select
-      .mockReturnValueOnce(selectChain([cat]))
-      .mockReturnValueOnce(selectChain([{ n: 0 }]));
+    db.select.mockReturnValueOnce(selectChain([cat]));
+    mockUsageCounts(db);
     db.delete.mockReturnValue(deleteChain([cat]));
     await expect(
       service.deleteCategory(USER_ID, 'c1'),
     ).resolves.toBeUndefined();
+  });
+
+  it('rejects moving a category onto itself', async () => {
+    const cat = { id: 'c1', name: 'Food', createdAt: new Date('2026-01-01') };
+    db.select.mockReturnValueOnce(selectChain([cat]));
+    mockUsageCounts(db, { transactions: 1 });
+    await expect(
+      service.deleteCategory(USER_ID, 'c1', ' food '),
+    ).rejects.toMatchObject({ response: { code: 'MOVE_TO_SAME_CATEGORY' } });
+    expect(db.transaction).not.toHaveBeenCalled();
+  });
+
+  it('merges into an existing category when moving records', async () => {
+    const cat = { id: 'c1', name: 'Food', createdAt: new Date('2026-01-01') };
+    db.select.mockReturnValueOnce(selectChain([cat]));
+    mockUsageCounts(db, { transactions: 2, budgets: 1 });
+    // The move target already exists, so it is reused rather than created.
+    db.select.mockReturnValueOnce(
+      selectChain([{ id: 'c2', name: 'Dining Out', createdAt: new Date() }]),
+    );
+    db.transaction.mockImplementation(
+      async (callback: (tx: unknown) => Promise<unknown>) => callback(db),
+    );
+    const chain = updateChain([]);
+    db.update.mockReturnValue(chain);
+    db.delete.mockReturnValue(deleteChain([cat]));
+
+    await expect(
+      service.deleteCategory(USER_ID, 'c1', '  Dining Out  '),
+    ).resolves.toBeUndefined();
+
+    expect(db.insert).not.toHaveBeenCalled();
+    expect(chain.set.mock.calls.map((call) => call[0])).toEqual([
+      { category: 'Dining Out' },
+      { category: 'Dining Out' },
+      { category: 'Dining Out' },
+      { category: 'Dining Out' },
+    ]);
+    expect(db.delete).toHaveBeenCalled();
+  });
+
+  it('creates the target category when it does not exist yet', async () => {
+    const cat = { id: 'c1', name: 'Food', createdAt: new Date('2026-01-01') };
+    db.select.mockReturnValueOnce(selectChain([cat]));
+    mockUsageCounts(db, { transactions: 1 });
+    db.select.mockReturnValueOnce(selectChain([]));
+    db.transaction.mockImplementation(
+      async (callback: (tx: unknown) => Promise<unknown>) => callback(db),
+    );
+    const insert = insertChain([{ id: 'c3', name: 'Other' }]);
+    db.insert.mockReturnValue(insert);
+    db.update.mockReturnValue(updateChain([]));
+    db.delete.mockReturnValue(deleteChain([cat]));
+
+    await expect(
+      service.deleteCategory(USER_ID, 'c1', 'Other'),
+    ).resolves.toBeUndefined();
+
+    expect(db.insert).toHaveBeenCalledTimes(1);
+    expect(insert.values).toHaveBeenCalledWith({
+      userId: USER_ID,
+      name: 'Other',
+    });
+  });
+
+  it('maps a unique violation while creating the move target to a conflict', async () => {
+    const cat = { id: 'c1', name: 'Food', createdAt: new Date('2026-01-01') };
+    db.select.mockReturnValueOnce(selectChain([cat]));
+    mockUsageCounts(db, { transactions: 1 });
+    db.select.mockReturnValueOnce(selectChain([]));
+    db.transaction.mockImplementation(
+      async (callback: (tx: unknown) => Promise<unknown>) => callback(db),
+    );
+    db.insert.mockImplementation(() => ({
+      values: jest.fn(() => Promise.reject(uniqueViolation())),
+    }));
+
+    await expect(
+      service.deleteCategory(USER_ID, 'c1', 'Other'),
+    ).rejects.toBeInstanceOf(ConflictException);
   });
 
   it('renames a category and cascades the label across tables', async () => {

@@ -5,6 +5,7 @@ import type {
   AuthUser,
   Budget,
   Category,
+  CategoryUsage,
   Country,
   CreateTrade,
   CsvImportPreview,
@@ -150,8 +151,13 @@ export const api = {
         method: "PATCH",
         body: { name },
       }),
-    remove: (id: string) =>
-      apiFetch<void>(`/categories/${encodeURIComponent(id)}`, { method: "DELETE" }),
+    remove: (id: string, moveTo?: string) =>
+      apiFetch<void>(`/categories/${encodeURIComponent(id)}`, {
+        method: "DELETE",
+        body: moveTo ? { moveTo } : {},
+      }),
+    usage: (id: string) =>
+      apiFetch<CategoryUsage>(`/categories/${encodeURIComponent(id)}/usage`),
   },
 
   accounts: {

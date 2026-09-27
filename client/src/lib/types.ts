@@ -77,6 +77,15 @@ export interface Category {
   createdAt: string;
 }
 
+/** Which records still reference a category by name. */
+export interface CategoryUsage {
+  name: string;
+  transactions: number;
+  recurring: number;
+  subscriptions: number;
+  budgets: number;
+}
+
 export interface Account {
   id: string;
   name: string;

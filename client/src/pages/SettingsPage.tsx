@@ -1,4 +1,4 @@
-import { useEffect, useState, type ComponentType } from "react";
+import { useCallback, useEffect, useRef, useState, type ComponentType } from "react";
 import {
   AlertTriangle,
   Check,
@@ -36,7 +36,7 @@ import { useSettings } from "@/contexts/SettingsContext";
 import { useQuery } from "@/hooks/use-query";
 import { ApiError, api } from "@/lib/api";
 import { formatCurrency } from "@/lib/format";
-import type { Category, Density, Tag } from "@/lib/types";
+import type { Category, CategoryUsage, Density, Tag } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 function message(error: unknown): string {
@@ -63,8 +63,20 @@ interface ManagedListProps {
   title: string;
   list: () => Promise<ManagedItem[]>;
   add: (name: string) => Promise<void>;
-  remove: (item: ManagedItem) => Promise<void>;
+  remove: (item: ManagedItem, moveTo?: string) => Promise<void>;
   rename?: (item: ManagedItem, name: string) => Promise<void>;
+  /**
+   * Takes over the delete flow instead of the plain confirm — used by categories,
+   * which must ask where the existing transactions should move to. The callback
+   * receives a `confirm` helper that runs the delete and resolves to an error
+   * message, or null on success.
+   */
+  requestRemove?: (
+    item: ManagedItem,
+    confirm: (moveTo?: string) => Promise<string | null>,
+  ) => void;
+  /** Notified whenever the list loads, so parents can reuse it (e.g. for suggestions). */
+  onLoaded?: (items: ManagedItem[]) => void;
   addLabel: string;
   addPlaceholder: string;
   emptyTitle: string;
@@ -78,6 +90,8 @@ function ManagedList({
   add,
   remove,
   rename,
+  requestRemove,
+  onLoaded,
   addLabel,
   addPlaceholder,
   emptyTitle,
@@ -91,6 +105,12 @@ function ManagedList({
   const [renamingKey, setRenamingKey] = useState<string | null>(null);
   const [renameDraft, setRenameDraft] = useState("");
   const [renamingBusy, setRenamingBusy] = useState(false);
+
+  useEffect(() => {
+    if (query.status === "success") {
+      onLoaded?.(query.data ?? []);
+    }
+  }, [query.status, query.data, onLoaded]);
 
   async function handleAdd() {
     const name = draft.trim();
@@ -108,23 +128,35 @@ function ManagedList({
     }
   }
 
-  async function handleRemove(item: ManagedItem) {
-    if (
-      !window.confirm(
-        `Delete "${item.label}"? It will be removed from future selectors. Categories in use by transactions cannot be deleted.`
-      )
-    ) {
-      return;
-    }
+  /** Runs the delete and returns the error message, or null on success. */
+  async function performRemove(
+    item: ManagedItem,
+    moveTo?: string
+  ): Promise<string | null> {
     setBusyKey(item.key);
     setError(null);
     try {
-      await remove(item);
+      await remove(item, moveTo);
       query.refetch();
+      return null;
     } catch (err) {
-      setError(message(err));
+      return message(err);
     } finally {
       setBusyKey(null);
+    }
+  }
+
+  async function handleRemove(item: ManagedItem) {
+    if (requestRemove) {
+      requestRemove(item, (moveTo) => performRemove(item, moveTo));
+      return;
+    }
+    if (!window.confirm(`Delete "${item.label}"? It will be removed from future selectors.`)) {
+      return;
+    }
+    const failure = await performRemove(item);
+    if (failure) {
+      setError(failure);
     }
   }
 
@@ -285,6 +317,203 @@ function ManagedList({
             ))}
           </ul>
         ))}
+    </div>
+  );
+}
+
+const USAGE_LABELS: { key: Exclude<keyof CategoryUsage, "name">; label: string }[] = [
+  { key: "transactions", label: "transaction" },
+  { key: "recurring", label: "recurring payment" },
+  { key: "subscriptions", label: "subscription" },
+  { key: "budgets", label: "budget" },
+];
+
+function usageCount(usage: CategoryUsage): number {
+  return USAGE_LABELS.reduce((total, { key }) => total + usage[key], 0);
+}
+
+function usageSummary(usage: CategoryUsage): string {
+  return USAGE_LABELS.filter(({ key }) => usage[key] > 0)
+    .map(({ key, label }) => `${usage[key]} ${label}${usage[key] === 1 ? "" : "s"}`)
+    .join(", ");
+}
+
+/**
+ * Categories are referenced by name from transactions, so deleting one that is
+ * still in use asks where those records should move to first. The target is
+ * created on the server when it doesn't already exist.
+ */
+function CategoriesSection() {
+  const [items, setItems] = useState<ManagedItem[]>([]);
+  const [target, setTarget] = useState<ManagedItem | null>(null);
+  const [usage, setUsage] = useState<CategoryUsage | null>(null);
+  const [moveTo, setMoveTo] = useState("");
+  const [checking, setChecking] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const confirmRef = useRef<((moveTo?: string) => Promise<string | null>) | null>(null);
+
+  const handleLoaded = useCallback((loaded: ManagedItem[]) => setItems(loaded), []);
+
+  function closeDialog() {
+    setTarget(null);
+    setUsage(null);
+    setMoveTo("");
+    setError(null);
+    setSubmitting(false);
+    confirmRef.current = null;
+  }
+
+  async function handleRequestRemove(
+    item: ManagedItem,
+    confirm: (moveTo?: string) => Promise<string | null>
+  ) {
+    if (checking) return;
+    setChecking(true);
+    setError(null);
+    try {
+      const found = await api.categories.usage(item.key);
+      if (usageCount(found) === 0) {
+        if (!window.confirm(`Delete "${item.label}"? It will be removed from future selectors.`)) {
+          return;
+        }
+        setError(await confirm());
+        return;
+      }
+      confirmRef.current = confirm;
+      setTarget(item);
+      setUsage(found);
+      setMoveTo("");
+    } catch (err) {
+      setError(message(err));
+    } finally {
+      setChecking(false);
+    }
+  }
+
+  const trimmed = moveTo.trim();
+  const sameAsTarget =
+    target !== null && trimmed.toLowerCase() === target.label.toLowerCase();
+  const canSubmit =
+    target !== null && trimmed !== "" && !sameAsTarget && !submitting && !checking;
+
+  async function handleMoveAndDelete() {
+    const confirm = confirmRef.current;
+    if (!confirm || !canSubmit) return;
+    setSubmitting(true);
+    setError(null);
+    const failure = await confirm(trimmed);
+    if (failure) {
+      setError(failure);
+      setSubmitting(false);
+      return;
+    }
+    closeDialog();
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      <ManagedList
+        icon={FolderOpen}
+        title="Categories"
+        list={async (): Promise<ManagedItem[]> =>
+          (await api.categories.list()).map((category: Category) => ({
+            key: category.id,
+            label: category.name,
+          }))
+        }
+        add={async (name) => {
+          await api.categories.create(name);
+        }}
+        remove={async (item, moveTo) => {
+          await api.categories.remove(item.key, moveTo);
+        }}
+        rename={async (item, name) => {
+          await api.categories.rename(item.key, name);
+        }}
+        requestRemove={handleRequestRemove}
+        onLoaded={handleLoaded}
+        addLabel="Add"
+        addPlaceholder="New category name"
+        emptyTitle="No categories yet"
+        emptyDescription="Categories drive the pickers used across the app."
+      />
+
+      <Dialog
+        open={target !== null}
+        onOpenChange={(open) => {
+          if (!open && !submitting) closeDialog();
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete &quot;{usage?.name}&quot;?</DialogTitle>
+            <DialogDescription>
+              {usage
+                ? `${usageSummary(usage)} still use this category. Choose where they should move to — it is created if it does not exist yet — and the category is deleted.`
+                : "Choose where the existing records should move to."}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="category-move-to" className="text-xs font-medium">
+              Move to
+            </label>
+            <Input
+              id="category-move-to"
+              list="category-move-to-options"
+              value={moveTo}
+              onChange={(event) => setMoveTo(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  void handleMoveAndDelete();
+                }
+              }}
+              placeholder="e.g. Other"
+              aria-invalid={sameAsTarget}
+              autoFocus
+            />
+            <datalist id="category-move-to-options">
+              {items
+                .filter((item) => item.key !== target?.key)
+                .map((item) => (
+                  <option key={item.key} value={item.label} />
+                ))}
+            </datalist>
+            {sameAsTarget && (
+              <p role="alert" className="text-xs text-destructive">
+                Pick a different category than the one being deleted.
+              </p>
+            )}
+          </div>
+
+          {error && (
+            <p role="alert" className="text-xs text-destructive">
+              {error}
+            </p>
+          )}
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={closeDialog}
+              disabled={submitting}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={() => void handleMoveAndDelete()}
+              disabled={!canSubmit}
+            >
+              {submitting ? "Moving…" : "Move and delete"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -684,29 +913,7 @@ export default function SettingsPage() {
             </AccordionTrigger>
           </AccordionHeader>
           <AccordionPanel>
-            <ManagedList
-              icon={FolderOpen}
-              title="Categories"
-              list={async (): Promise<ManagedItem[]> =>
-                (await api.categories.list()).map((category: Category) => ({
-                  key: category.id,
-                  label: category.name,
-                }))
-              }
-              add={async (name) => {
-                await api.categories.create(name);
-              }}
-              remove={async (item) => {
-                await api.categories.remove(item.key);
-              }}
-              rename={async (item, name) => {
-                await api.categories.rename(item.key, name);
-              }}
-              addLabel="Add"
-              addPlaceholder="New category name"
-              emptyTitle="No categories yet"
-              emptyDescription="Categories drive the pickers used across the app."
-            />
+            <CategoriesSection />
           </AccordionPanel>
         </AccordionItem>
 

@@ -11,8 +11,17 @@ import {
 } from '@nestjs/common';
 import { CurrentUser } from '../auth/current-user.decorator';
 import type { Account, Category } from '../database/schema';
-import { AccountDto, NameDto, UpdateAccountDto } from './managed.dto';
-import { ManagedService, type TagWithCount } from './managed.service';
+import {
+  AccountDto,
+  DeleteCategoryDto,
+  NameDto,
+  UpdateAccountDto,
+} from './managed.dto';
+import {
+  ManagedService,
+  type CategoryUsage,
+  type TagWithCount,
+} from './managed.service';
 
 @Controller('categories')
 export class CategoriesController {
@@ -40,13 +49,22 @@ export class CategoriesController {
     return this.managedService.renameCategory(userId, id, body.name);
   }
 
+  @Get(':id/usage')
+  usage(
+    @CurrentUser() userId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<CategoryUsage> {
+    return this.managedService.getCategoryUsage(userId, id);
+  }
+
   @Delete(':id')
   @HttpCode(204)
   async remove(
     @CurrentUser() userId: string,
     @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: DeleteCategoryDto,
   ): Promise<void> {
-    await this.managedService.deleteCategory(userId, id);
+    await this.managedService.deleteCategory(userId, id, body?.moveTo);
   }
 }
 

@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   Inject,
   Injectable,
@@ -25,6 +26,17 @@ export interface TagWithCount {
   count: number;
 }
 
+/** Every place a category name is stored as a plain TEXT label. */
+export interface CategoryUsage {
+  name: string;
+  transactions: number;
+  recurring: number;
+  subscriptions: number;
+  budgets: number;
+}
+
+type DbTransaction = Parameters<Parameters<Database['transaction']>[0]>[0];
+
 function isUniqueViolation(error: unknown): boolean {
   let current: unknown = error;
   for (let depth = 0; depth < 4 && current; depth++) {
@@ -44,6 +56,29 @@ function notFound(resource: string): NotFoundException {
     message: `${resource} not found.`,
     code: 'NOT_FOUND',
   });
+}
+
+function usageTotal(usage: CategoryUsage): number {
+  return (
+    usage.transactions + usage.recurring + usage.subscriptions + usage.budgets
+  );
+}
+
+const USAGE_LABELS: {
+  key: Exclude<keyof CategoryUsage, 'name'>;
+  label: string;
+}[] = [
+  { key: 'transactions', label: 'transaction' },
+  { key: 'recurring', label: 'recurring payment' },
+  { key: 'subscriptions', label: 'subscription' },
+  { key: 'budgets', label: 'budget' },
+];
+
+function describeUsage(usage: CategoryUsage): string {
+  const parts = USAGE_LABELS.filter(({ key }) => usage[key] > 0).map(
+    ({ key, label }) => `${usage[key]} ${label}${usage[key] === 1 ? '' : 's'}`,
+  );
+  return `Category "${usage.name}" is used by ${parts.join(', ')}`;
 }
 
 @Injectable()
@@ -97,44 +132,7 @@ export class ManagedService {
     }
     try {
       const renamed = await this.db.transaction(async (tx) => {
-        await Promise.all([
-          tx
-            .update(transactions)
-            .set({ category: trimmed })
-            .where(
-              and(
-                eq(transactions.userId, userId),
-                eq(transactions.category, current.name),
-              ),
-            ),
-          tx
-            .update(recurring)
-            .set({ category: trimmed })
-            .where(
-              and(
-                eq(recurring.userId, userId),
-                eq(recurring.category, current.name),
-              ),
-            ),
-          tx
-            .update(subscriptions)
-            .set({ category: trimmed })
-            .where(
-              and(
-                eq(subscriptions.userId, userId),
-                eq(subscriptions.category, current.name),
-              ),
-            ),
-          tx
-            .update(budgets)
-            .set({ category: trimmed })
-            .where(
-              and(
-                eq(budgets.userId, userId),
-                eq(budgets.category, current.name),
-              ),
-            ),
-        ]);
+        await this.reassignCategoryLabel(tx, userId, current.name, trimmed);
         const [row] = await tx
           .update(categories)
           .set({ name: trimmed })
@@ -154,7 +152,71 @@ export class ManagedService {
     }
   }
 
-  async deleteCategory(userId: string, id: string): Promise<void> {
+  /**
+   * Reports which records still point at a category, so the client can ask for a
+   * replacement category before allowing the delete.
+   */
+  async getCategoryUsage(userId: string, id: string): Promise<CategoryUsage> {
+    const cat = await this.findCategory(userId, id);
+    return this.countUsage(userId, cat.name);
+  }
+
+  /**
+   * Deletes a category. Because transactions (and budgets/recurring/subscriptions)
+   * store the category as a plain label, a category that is still in use can only be
+   * removed by passing `moveTo` — the name of an existing category to merge into, or
+   * a new name to create. Every referencing row is moved first, in one transaction.
+   */
+  async deleteCategory(
+    userId: string,
+    id: string,
+    moveTo?: string,
+  ): Promise<void> {
+    const cat = await this.findCategory(userId, id);
+    const usage = await this.countUsage(userId, cat.name);
+
+    if (usageTotal(usage) === 0) {
+      await this.db
+        .delete(categories)
+        .where(and(eq(categories.id, id), eq(categories.userId, userId)));
+      return;
+    }
+
+    if (!moveTo) {
+      throw new ConflictException({
+        message: `${describeUsage(usage)} — choose another category to move them to before deleting "${cat.name}".`,
+        code: 'CATEGORY_IN_USE',
+      });
+    }
+
+    const target = moveTo.trim();
+    if (target.toLowerCase() === cat.name.toLowerCase()) {
+      throw new BadRequestException({
+        message: `"${target}" is the category you are deleting. Choose a different category.`,
+        code: 'MOVE_TO_SAME_CATEGORY',
+      });
+    }
+
+    try {
+      await this.db.transaction(async (tx) => {
+        const targetName = await this.resolveMoveTarget(tx, userId, target);
+        await this.reassignCategoryLabel(tx, userId, cat.name, targetName);
+        await tx
+          .delete(categories)
+          .where(and(eq(categories.id, id), eq(categories.userId, userId)));
+      });
+    } catch (error) {
+      if (isUniqueViolation(error)) {
+        throw new ConflictException({
+          message: `A category named "${target}" already exists.`,
+          code: 'DUPLICATE_CATEGORY',
+        });
+      }
+      throw error;
+    }
+  }
+
+  private async findCategory(userId: string, id: string): Promise<Category> {
     const [cat] = await this.db
       .select()
       .from(categories)
@@ -163,26 +225,92 @@ export class ManagedService {
     if (!cat) {
       throw notFound('Category');
     }
+    return cat;
+  }
 
-    const [{ n }] = await this.db
-      .select({ n: count() })
-      .from(transactions)
+  private async countUsage(
+    userId: string,
+    name: string,
+  ): Promise<CategoryUsage> {
+    type LabeledTable =
+      | typeof transactions
+      | typeof recurring
+      | typeof subscriptions
+      | typeof budgets;
+    const countFor = (table: LabeledTable) =>
+      this.db
+        .select({ n: count() })
+        .from(table)
+        .where(and(eq(table.userId, userId), eq(table.category, name)));
+    const [[tx], [rec], [sub], [bud]] = await Promise.all([
+      countFor(transactions),
+      countFor(recurring),
+      countFor(subscriptions),
+      countFor(budgets),
+    ]);
+    return {
+      name,
+      transactions: tx?.n ?? 0,
+      recurring: rec?.n ?? 0,
+      subscriptions: sub?.n ?? 0,
+      budgets: bud?.n ?? 0,
+    };
+  }
+
+  /** Reuses an existing category with a case-insensitive match, otherwise creates one. */
+  private async resolveMoveTarget(
+    tx: DbTransaction,
+    userId: string,
+    target: string,
+  ): Promise<string> {
+    const [existing] = await tx
+      .select()
+      .from(categories)
       .where(
         and(
-          eq(transactions.userId, userId),
-          eq(transactions.category, cat.name),
+          eq(categories.userId, userId),
+          sql`lower(trim(${categories.name})) = lower(trim(${target}))`,
         ),
-      );
-    if (n > 0) {
-      throw new ConflictException({
-        message: `Category "${cat.name}" is used by ${n} transaction${n === 1 ? '' : 's'} and cannot be deleted.`,
-        code: 'CATEGORY_IN_USE',
-      });
+      )
+      .limit(1);
+    if (existing) {
+      return existing.name;
     }
+    await tx.insert(categories).values({ userId, name: target });
+    return target;
+  }
 
-    await this.db
-      .delete(categories)
-      .where(and(eq(categories.id, id), eq(categories.userId, userId)));
+  private async reassignCategoryLabel(
+    tx: DbTransaction,
+    userId: string,
+    from: string,
+    to: string,
+  ): Promise<void> {
+    await Promise.all([
+      tx
+        .update(transactions)
+        .set({ category: to })
+        .where(
+          and(eq(transactions.userId, userId), eq(transactions.category, from)),
+        ),
+      tx
+        .update(recurring)
+        .set({ category: to })
+        .where(and(eq(recurring.userId, userId), eq(recurring.category, from))),
+      tx
+        .update(subscriptions)
+        .set({ category: to })
+        .where(
+          and(
+            eq(subscriptions.userId, userId),
+            eq(subscriptions.category, from),
+          ),
+        ),
+      tx
+        .update(budgets)
+        .set({ category: to })
+        .where(and(eq(budgets.userId, userId), eq(budgets.category, from))),
+    ]);
   }
 
   async listAccounts(userId: string): Promise<Account[]> {
