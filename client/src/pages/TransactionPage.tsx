@@ -550,8 +550,13 @@ export default function TransactionPage() {
     (maxAmount !== "" ? 1 : 0);
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    // h-full + flex column: the page exactly fills the shell's scroll
+    // container, so nothing here scrolls the page. The table below is the
+    // only scroll area. The mobile card list is taller than the viewport and
+    // still overflows visibly into the container's scroll, so phones scroll
+    // as before.
+    <div className="flex h-full min-h-0 flex-col gap-4">
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-lg font-semibold">Transactions</h2>
           <p className="text-sm text-muted-foreground">Review and manage your transactions.</p>
@@ -582,7 +587,7 @@ export default function TransactionPage() {
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex shrink-0 flex-wrap items-center gap-2">
         <div className="relative min-w-0 flex-1 basis-56">
           <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
@@ -665,7 +670,7 @@ export default function TransactionPage() {
       </div>
 
       {showMoreFilters && (
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
           <select
             value={typeFilter}
             onChange={(e) => setTypeFilter(e.target.value as typeof typeFilter)}
@@ -731,7 +736,7 @@ export default function TransactionPage() {
       {mutationError && (
         <div
           role="alert"
-          className="flex items-center justify-between gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+          className="flex shrink-0 items-center justify-between gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
         >
           <span>{mutationError}</span>
           <button
@@ -806,9 +811,15 @@ export default function TransactionPage() {
                   ))}
                 </div>
               </div>
-              <div className="hidden rounded-xl border bg-card md:block">
+              {/* The page's only scroll area: flex-1 takes whatever the
+                  header and filter rows leave, overflow-auto scrolls the rows.
+                  The 8rem floor is deliberate rather than min-h-0: with
+                  min-h-0 an open filters panel on a short window drives the
+                  table to zero height and it disappears. Here it stops at
+                  8rem, the page overflows, and the shell scrolls instead. */}
+              <div className="hidden min-h-[8rem] flex-1 flex-col overflow-auto rounded-xl border bg-card md:flex">
                 <Table>
-                <TableHeader>
+                <TableHeader className="sticky top-0 z-10 bg-card">
                   <TableRow>
                     <SortableHeader
                       column="date"

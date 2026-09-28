@@ -51,7 +51,10 @@ function AppShell() {
     <>
       <AppSidebar>
         <TopBar />
-        <div className="p-4 md:p-6">
+        {/* The scroll container for pages that overflow. Pages that manage
+            their own scrolling (transactions) fill this exactly and let their
+            table scroll instead, so this never scrolls for them. */}
+        <div className="min-h-0 flex-1 overflow-y-auto p-4 md:p-6">
           <Suspense fallback={<LoadingState label="Loading…" />}>
             <Routes>
               <Route index element={<Navigate to={menuPath("dashboard")} replace />} />

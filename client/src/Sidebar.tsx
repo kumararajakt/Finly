@@ -101,7 +101,9 @@ const AppSidebar = (props: AppSidebarProps) => {
         <SidebarNav />
       </Sidebar>
 
-      <main className="flex min-w-0 flex-1 flex-col">
+      {/* min-h-0: a flex item defaults to min-height:auto, which would let
+          main grow past the fixed-height wrapper instead of shrinking to it. */}
+      <main className="flex min-h-0 min-w-0 flex-1 flex-col">
         {children}
       </main>
     </SidebarProvider>
