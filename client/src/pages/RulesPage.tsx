@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Pencil, Plus, SlidersHorizontal, Tag as TagIcon, Trash2, X } from "lucide-react";
+import ConfirmDialog from "@/components/ConfirmDialog";
 import { Button } from "@/components/ui/button";
 import EmptyState from "@/components/ui/empty-state";
 import ErrorState from "@/components/ui/error-state";
@@ -49,6 +50,7 @@ function RuleForm({ initial, onSaved, onDeleted }: RuleFormProps) {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -79,21 +81,19 @@ function RuleForm({ initial, onSaved, onDeleted }: RuleFormProps) {
 
   async function handleDelete() {
     if (!initial) return;
-    if (!window.confirm(`Delete this rule?`)) return;
     setDeleting(true);
     setError(null);
     try {
       await api.rules.remove(initial.id);
-      setDeleting(false);
       onDeleted();
-    } catch (err) {
-      setError(message(err));
+    } finally {
       setDeleting(false);
     }
   }
 
   return (
-    <form onSubmit={handleSubmit}>
+    <>
+      <form onSubmit={handleSubmit}>
       <SheetHeader>
         <SheetTitle>{initial ? "Edit rule" : "Create rule"}</SheetTitle>
         <SheetDescription>
@@ -139,7 +139,7 @@ function RuleForm({ initial, onSaved, onDeleted }: RuleFormProps) {
           <Button
             type="button"
             variant="destructive"
-            onClick={handleDelete}
+            onClick={() => setConfirmingDelete(true)}
             disabled={deleting}
           >
             <Trash2 />
@@ -153,6 +153,16 @@ function RuleForm({ initial, onSaved, onDeleted }: RuleFormProps) {
         </Button>
       </SheetFooter>
     </form>
+      <ConfirmDialog
+        open={confirmingDelete}
+        title="Delete this rule?"
+        description={`${
+          initial?.whenText.trim() || "This rule"
+        } will no longer be suggested. Existing transactions are not rewritten.`}
+        onOpenChange={setConfirmingDelete}
+        onConfirm={handleDelete}
+      />
+    </>
   );
 }
 
@@ -161,6 +171,7 @@ export default function RulesPage() {
   const [editing, setEditing] = useState<Rule | null>(null);
   const [tagDraft, setTagDraft] = useState("");
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [pendingTagDelete, setPendingTagDelete] = useState<Tag | null>(null);
   const [addingTag, setAddingTag] = useState(false);
   const [mutationError, setMutationError] = useState<string | null>(null);
 
@@ -209,20 +220,11 @@ export default function RulesPage() {
   }
 
   async function handleDeleteTag(tag: Tag) {
-    if (
-      !window.confirm(
-        `Delete tag "${tag.name}"? It will be removed from future selectors. Existing transactions keep the label.`
-      )
-    ) {
-      return;
-    }
     setSavingId(tag.name);
     setMutationError(null);
     try {
       await api.tags.remove(tag.name);
       tags.refetch();
-    } catch (error) {
-      setMutationError(message(error));
     } finally {
       setSavingId(null);
     }
@@ -423,7 +425,7 @@ export default function RulesPage() {
                     <Button
                       size="icon-sm"
                       variant="ghost"
-                      onClick={() => handleDeleteTag(tag)}
+                      onClick={() => setPendingTagDelete(tag)}
                       disabled={savingId === tag.name}
                       aria-label={`Delete tag ${tag.name}`}
                       className="text-destructive hover:text-destructive"
@@ -447,6 +449,19 @@ export default function RulesPage() {
           />
         </SheetContent>
       </Sheet>
+
+      <ConfirmDialog
+        open={pendingTagDelete !== null}
+        title={`Delete tag "${pendingTagDelete?.name}"?`}
+        description="It will be removed from future selectors. Existing transactions keep the label."
+        onOpenChange={(open) => {
+          if (!open) setPendingTagDelete(null);
+        }}
+        onConfirm={() => {
+          if (!pendingTagDelete) return;
+          return handleDeleteTag(pendingTagDelete);
+        }}
+      />
     </div>
   );
 }

@@ -19,6 +19,7 @@ import {
   AccordionPanel,
 } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
+import ConfirmDialog from "@/components/ConfirmDialog";
 import {
   Dialog,
   DialogContent,
@@ -105,6 +106,7 @@ function ManagedList({
   const [renamingKey, setRenamingKey] = useState<string | null>(null);
   const [renameDraft, setRenameDraft] = useState("");
   const [renamingBusy, setRenamingBusy] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<ManagedItem | null>(null);
 
   useEffect(() => {
     if (query.status === "success") {
@@ -146,18 +148,18 @@ function ManagedList({
     }
   }
 
-  async function handleRemove(item: ManagedItem) {
+  function handleRemove(item: ManagedItem) {
     if (requestRemove) {
       requestRemove(item, (moveTo) => performRemove(item, moveTo));
       return;
     }
-    if (!window.confirm(`Delete "${item.label}"? It will be removed from future selectors.`)) {
-      return;
-    }
+    setPendingDelete(item);
+  }
+
+  /** Deletes and rethrows, so ConfirmDialog can show the failure inline. */
+  async function confirmRemove(item: ManagedItem) {
     const failure = await performRemove(item);
-    if (failure) {
-      setError(failure);
-    }
+    if (failure) throw new Error(failure);
   }
 
   function startRename(item: ManagedItem) {
@@ -317,6 +319,19 @@ function ManagedList({
             ))}
           </ul>
         ))}
+
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        title={`Delete "${pendingDelete?.label}"?`}
+        description="It will be removed from future selectors."
+        onOpenChange={(open) => {
+          if (!open) setPendingDelete(null);
+        }}
+        onConfirm={() => {
+          if (!pendingDelete) return;
+          return confirmRemove(pendingDelete);
+        }}
+      />
     </div>
   );
 }
@@ -702,8 +717,7 @@ function DensitySection() {
 
 function IgnoredSuggestionsSection() {
   const { settings, saveSetting } = useSettings();
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [confirmingRestore, setConfirmingRestore] = useState(false);
   const [saved, setSaved] = useState(false);
 
   const count = settings.dismissedPatterns.length;
@@ -715,23 +729,8 @@ function IgnoredSuggestionsSection() {
   }, [saved]);
 
   async function handleRestore() {
-    if (
-      !window.confirm(
-        "Restore ignored suggestions? Previously ignored patterns will be suggested again on the Recurring and Subscriptions pages."
-      )
-    ) {
-      return;
-    }
-    setSaving(true);
-    setError(null);
-    try {
-      await saveSetting("dismissedPatterns", []);
-      setSaved(true);
-    } catch (err) {
-      setError(message(err));
-    } finally {
-      setSaving(false);
-    }
+    await saveSetting("dismissedPatterns", []);
+    setSaved(true);
   }
 
   return (
@@ -757,21 +756,27 @@ function IgnoredSuggestionsSection() {
               Restored
             </span>
           )}
-          {error && (
-            <span role="alert" className="text-xs text-destructive">
-              {error}
-            </span>
-          )}
           <Button
             type="button"
             variant="outline"
-            onClick={handleRestore}
-            disabled={saving || count === 0}
+            onClick={() => setConfirmingRestore(true)}
+            disabled={count === 0}
           >
-            {saving ? "Restoring…" : "Restore ignored suggestions"}
+            Restore ignored suggestions
           </Button>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={confirmingRestore}
+        title="Restore ignored suggestions?"
+        description="Previously ignored patterns will be suggested again on the Recurring and Subscriptions pages."
+        confirmLabel="Restore"
+        pendingLabel="Restoring…"
+        tone="default"
+        onOpenChange={setConfirmingRestore}
+        onConfirm={handleRestore}
+      />
     </div>
   );
 }

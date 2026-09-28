@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Pencil, PiggyBank, Plus, Trash2, X } from "lucide-react";
+import ConfirmDialog from "@/components/ConfirmDialog";
 import { Button } from "@/components/ui/button";
 import EmptyState from "@/components/ui/empty-state";
 import ErrorState from "@/components/ui/error-state";
@@ -55,6 +56,7 @@ function GoalForm({ initial, onSaved, onDeleted }: GoalFormProps) {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -92,107 +94,114 @@ function GoalForm({ initial, onSaved, onDeleted }: GoalFormProps) {
 
   async function handleDelete() {
     if (!initial) return;
-    if (!window.confirm(`Delete the goal "${initial.name}"?`)) return;
     setDeleting(true);
     setError(null);
     try {
       await api.goals.remove(initial.id);
       setDeleting(false);
       onDeleted();
-    } catch (err) {
-      setError(message(err));
+    } finally {
       setDeleting(false);
     }
   }
 
   return (
-    <form onSubmit={handleSubmit}>
-      <SheetHeader>
-        <SheetTitle>{initial ? "Edit goal" : "Create goal"}</SheetTitle>
-        <SheetDescription>
-          A savings target with an optional due date and note.
-        </SheetDescription>
-      </SheetHeader>
-      <div className="flex flex-col gap-4 px-4">
-        <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-medium">Name</label>
-          <Input
-            value={form.name}
-            onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-            placeholder="e.g. Emergency fund"
-            required
-          />
-        </div>
-        <div className="grid grid-cols-2 gap-3">
+    <>
+      <form onSubmit={handleSubmit}>
+        <SheetHeader>
+          <SheetTitle>{initial ? "Edit goal" : "Create goal"}</SheetTitle>
+          <SheetDescription>
+            A savings target with an optional due date and note.
+          </SheetDescription>
+        </SheetHeader>
+        <div className="flex flex-col gap-4 px-4">
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium">Target amount</label>
+            <label className="text-xs font-medium">Name</label>
             <Input
-              type="number"
-              inputMode="decimal"
-              step="0.01"
-              min="0"
-              value={form.targetAmount}
-              onChange={(e) => setForm((f) => ({ ...f, targetAmount: e.target.value }))}
-              placeholder="0.00"
+              value={form.name}
+              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+              placeholder="e.g. Emergency fund"
               required
             />
           </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-medium">Target amount</label>
+              <Input
+                type="number"
+                inputMode="decimal"
+                step="0.01"
+                min="0"
+                value={form.targetAmount}
+                onChange={(e) => setForm((f) => ({ ...f, targetAmount: e.target.value }))}
+                placeholder="0.00"
+                required
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-medium">Current amount</label>
+              <Input
+                type="number"
+                inputMode="decimal"
+                step="0.01"
+                min="0"
+                value={form.currentAmount}
+                onChange={(e) => setForm((f) => ({ ...f, currentAmount: e.target.value }))}
+                placeholder="0.00"
+              />
+            </div>
+          </div>
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium">Current amount</label>
+            <label className="text-xs font-medium">Due date (optional)</label>
             <Input
-              type="number"
-              inputMode="decimal"
-              step="0.01"
-              min="0"
-              value={form.currentAmount}
-              onChange={(e) => setForm((f) => ({ ...f, currentAmount: e.target.value }))}
-              placeholder="0.00"
+              type="date"
+              value={form.dueDate}
+              onChange={(e) => setForm((f) => ({ ...f, dueDate: e.target.value }))}
             />
           </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-medium">Note (optional)</label>
+            <textarea
+              value={form.note}
+              onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))}
+              rows={3}
+              placeholder="Add a note to yourself"
+              className="w-full rounded-lg border border-input bg-transparent px-2.5 py-1.5 text-sm transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
+            />
+          </div>
+          {error && (
+            <p role="alert" className="text-xs text-destructive">
+              {error}
+            </p>
+          )}
         </div>
-        <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-medium">Due date (optional)</label>
-          <Input
-            type="date"
-            value={form.dueDate}
-            onChange={(e) => setForm((f) => ({ ...f, dueDate: e.target.value }))}
-          />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-medium">Note (optional)</label>
-          <textarea
-            value={form.note}
-            onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))}
-            rows={3}
-            placeholder="Add a note to yourself"
-            className="w-full rounded-lg border border-input bg-transparent px-2.5 py-1.5 text-sm transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
-          />
-        </div>
-        {error && (
-          <p role="alert" className="text-xs text-destructive">
-            {error}
-          </p>
-        )}
-      </div>
-      <SheetFooter className="flex-row justify-between">
-        {initial ? (
-          <Button
-            type="button"
-            variant="destructive"
-            onClick={handleDelete}
-            disabled={deleting}
-          >
-            <Trash2 />
-            {deleting ? "Deleting…" : "Delete goal"}
+        <SheetFooter className="flex-row justify-between">
+          {initial ? (
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={() => setConfirmingDelete(true)}
+              disabled={deleting}
+            >
+              <Trash2 />
+              {deleting ? "Deleting…" : "Delete goal"}
+            </Button>
+          ) : (
+            <span />
+          )}
+          <Button type="submit" disabled={saving}>
+            {saving ? "Saving…" : initial ? "Save changes" : "Create goal"}
           </Button>
-        ) : (
-          <span />
-        )}
-        <Button type="submit" disabled={saving}>
-          {saving ? "Saving…" : initial ? "Save changes" : "Create goal"}
-        </Button>
-      </SheetFooter>
-    </form>
+        </SheetFooter>
+      </form>
+      <ConfirmDialog
+        open={confirmingDelete}
+        title={`Delete the goal "${initial?.name}"?`}
+        description="This permanently removes the goal and its saved amounts. It cannot be undone."
+        onOpenChange={setConfirmingDelete}
+        onConfirm={handleDelete}
+      />
+    </>
   );
 }
 
@@ -203,6 +212,7 @@ export default function GoalsPage() {
   const [addOpen, setAddOpen] = useState(false);
   const [editing, setEditing] = useState<Goal | null>(null);
   const [mutationError, setMutationError] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<Goal | null>(null);
 
   const goals = useQuery<Goal[]>(() => api.goals.list(), []);
 
@@ -223,14 +233,9 @@ export default function GoalsPage() {
   }
 
   async function handleDelete(item: Goal) {
-    if (!window.confirm(`Delete the goal "${item.name}"?`)) return;
     setMutationError(null);
-    try {
-      await api.goals.remove(item.id);
-      goals.refetch();
-    } catch (error) {
-      setMutationError(message(error));
-    }
+    await api.goals.remove(item.id);
+    goals.refetch();
   }
 
   function handleSaved() {
@@ -341,7 +346,7 @@ export default function GoalsPage() {
                         <Button
                           size="icon-sm"
                           variant="ghost"
-                          onClick={() => handleDelete(goal)}
+                          onClick={() => setPendingDelete(goal)}
                           aria-label={`Delete ${goal.name}`}
                           className="text-destructive hover:text-destructive"
                         >
@@ -398,6 +403,19 @@ export default function GoalsPage() {
           />
         </SheetContent>
       </Sheet>
+
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        title={`Delete the goal "${pendingDelete?.name}"?`}
+        description="This permanently removes the goal and its saved amounts. It cannot be undone."
+        onOpenChange={(open) => {
+          if (!open) setPendingDelete(null);
+        }}
+        onConfirm={() => {
+          if (!pendingDelete) return;
+          return handleDelete(pendingDelete);
+        }}
+      />
     </div>
   );
 }

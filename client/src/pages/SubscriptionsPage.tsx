@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { CalendarClock, CreditCard, Pencil, Plus, ShieldCheck, Sparkles, Trash2, X } from "lucide-react";
 import ConfidenceBadge from "@/components/ConfidenceBadge";
+import ConfirmDialog from "@/components/ConfirmDialog";
 import SummaryCard from "@/components/SummaryCard";
 import { Button } from "@/components/ui/button";
 import EmptyState from "@/components/ui/empty-state";
@@ -327,6 +328,7 @@ export default function SubscriptionsPage() {
   const [editing, setEditing] = useState<Subscription | null>(null);
   const [pendingKey, setPendingKey] = useState<string | null>(null);
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<Subscription | null>(null);
   const [mutationError, setMutationError] = useState<string | null>(null);
 
   const suggestions = useQuery<DetectionSuggestion[]>(() => api.detection.suggestions(), []);
@@ -414,17 +416,12 @@ export default function SubscriptionsPage() {
   }
 
   async function handleDelete(item: Subscription) {
-    if (!window.confirm(`Delete "${item.name}"? This does not delete matching transactions.`)) {
-      return;
-    }
     setSavingId(item.id);
     setMutationError(null);
     try {
       await api.subscriptions.remove(item.id);
       subscriptions.refetch();
       suggestions.refetch();
-    } catch (error) {
-      setMutationError(message(error));
     } finally {
       setSavingId(null);
     }
@@ -584,7 +581,7 @@ export default function SubscriptionsPage() {
                   busy={savingId === item.id}
                   onToggleActive={() => handleToggleActive(item)}
                   onEdit={() => openEdit(item)}
-                  onDelete={() => handleDelete(item)}
+                  onDelete={() => setPendingDelete(item)}
                 />
               ))}
             </div>
@@ -602,6 +599,19 @@ export default function SubscriptionsPage() {
           />
         </SheetContent>
       </Sheet>
+
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        title={`Delete "${pendingDelete?.name}"?`}
+        description="This removes the subscription. Transactions already created from it are kept."
+        onOpenChange={(open) => {
+          if (!open) setPendingDelete(null);
+        }}
+        onConfirm={() => {
+          if (!pendingDelete) return;
+          return handleDelete(pendingDelete);
+        }}
+      />
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Plus, RefreshCw, Trash2, Wallet, Upload } from "lucide-react";
+import ConfirmDialog from "@/components/ConfirmDialog";
 import { Button } from "@/components/ui/button";
 import EmptyState from "@/components/ui/empty-state";
 import ErrorState from "@/components/ui/error-state";
@@ -453,6 +454,7 @@ export default function InvestmentsPage() {
   const [importOpen, setImportOpen] = useState(false);
   const [selectedAccount, setSelectedAccount] = useState<string>("all");
   const [refreshing, setRefreshing] = useState(false);
+  const [pendingTradeDelete, setPendingTradeDelete] = useState<Trade | null>(null);
 
   const accounts = useQuery<Account[]>(() => api.accounts.list(), []);
   const positions = useQuery<Position[]>(
@@ -517,20 +519,10 @@ export default function InvestmentsPage() {
   }
 
   async function handleDeleteTrade(trade: Trade) {
-    if (
-      !window.confirm(
-        `Delete the ${trade.side} of "${trade.security}" from ${formatDate(trade.date)}? This cannot be undone.`,
-      )
-    )
-      return;
-    try {
-      await api.investments.deleteTrade(trade.id);
-      positions.refetch();
-      summary.refetch();
-      trades.refetch();
-    } catch (err) {
-      window.alert(message(err));
-    }
+    await api.investments.deleteTrade(trade.id);
+    positions.refetch();
+    summary.refetch();
+    trades.refetch();
   }
 
   async function handleRefreshPrices() {
@@ -741,7 +733,7 @@ export default function InvestmentsPage() {
               trades={secTrades}
               security={security}
               currency={currency}
-              onDelete={handleDeleteTrade}
+              onDelete={setPendingTradeDelete}
             />
           ))}
         </div>
@@ -764,6 +756,23 @@ export default function InvestmentsPage() {
           positions.refetch();
           summary.refetch();
           trades.refetch();
+        }}
+      />
+
+      <ConfirmDialog
+        open={pendingTradeDelete !== null}
+        title={
+          pendingTradeDelete
+            ? `Delete the ${pendingTradeDelete.side} of "${pendingTradeDelete.security}" from ${formatDate(pendingTradeDelete.date)}?`
+            : "Delete trade?"
+        }
+        description="This removes the trade and updates your position and summary. It cannot be undone."
+        onOpenChange={(open) => {
+          if (!open) setPendingTradeDelete(null);
+        }}
+        onConfirm={() => {
+          if (!pendingTradeDelete) return;
+          return handleDeleteTrade(pendingTradeDelete);
         }}
       />
     </div>

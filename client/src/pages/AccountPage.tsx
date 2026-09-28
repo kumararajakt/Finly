@@ -11,6 +11,7 @@ import {
   TrendingUp,
   Wallet,
 } from "lucide-react";
+import ConfirmDialog from "@/components/ConfirmDialog";
 import { Button } from "@/components/ui/button";
 import EmptyState from "@/components/ui/empty-state";
 import ErrorState from "@/components/ui/error-state";
@@ -143,6 +144,7 @@ export default function AccountPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<Account | null>(null);
   const [editing, setEditing] = useState<Account | null>(null);
   const [editName, setEditName] = useState("");
   const [editType, setEditType] = useState<AccountType>("cash");
@@ -257,20 +259,11 @@ export default function AccountPage() {
   }
 
   async function handleDelete(account: Account) {
-    if (
-      !window.confirm(
-        `Delete "${account.name}"? Existing transactions keep the label.`,
-      )
-    ) {
-      return;
-    }
     setDeletingId(account.id);
     try {
       await api.accounts.remove(account.id);
       accountsQuery.refetch();
       balancesQuery.refetch();
-    } catch (err) {
-      window.alert(message(err));
     } finally {
       setDeletingId(null);
     }
@@ -479,7 +472,7 @@ export default function AccountPage() {
                       <Button
                         size="icon-sm"
                         variant="ghost"
-                        onClick={() => handleDelete(account)}
+                        onClick={() => setPendingDelete(account)}
                         disabled={deletingId === account.id}
                         aria-label={`Delete ${account.name}`}
                         className="text-destructive hover:text-destructive"
@@ -630,6 +623,19 @@ export default function AccountPage() {
           </form>
         </SheetContent>
       </Sheet>
+
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        title={`Delete "${pendingDelete?.name}"?`}
+        description="The account is removed from future entries. Existing transactions keep the label and are still counted."
+        onOpenChange={(open) => {
+          if (!open) setPendingDelete(null);
+        }}
+        onConfirm={() => {
+          if (!pendingDelete) return;
+          return handleDelete(pendingDelete);
+        }}
+      />
     </div>
   );
 }

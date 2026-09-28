@@ -7,6 +7,7 @@ import EmptyState from "@/components/ui/empty-state";
 import ErrorState from "@/components/ui/error-state";
 import { Input } from "@/components/ui/input";
 import LoadingState from "@/components/ui/loading-state";
+import ConfirmDialog from "@/components/ConfirmDialog";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -395,6 +396,7 @@ export default function TransactionPage() {
   const [removingTag, setRemovingTag] = useState<string | null>(null);
   const [savingCategory, setSavingCategory] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<Transaction | null>(null);
   const [mutationError, setMutationError] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
 
@@ -501,7 +503,6 @@ export default function TransactionPage() {
   }
 
   async function handleDeleteTransaction(tx: Transaction) {
-    if (!window.confirm(`Delete the transaction "${tx.merchant}"? This cannot be undone.`)) return;
     setDeletingId(tx.id);
     setMutationError(null);
     try {
@@ -509,8 +510,6 @@ export default function TransactionPage() {
       transactions.setData((list) =>
         (list ?? []).filter((item) => item.id !== tx.id)
       );
-    } catch (error) {
-      setMutationError(message(error));
     } finally {
       setDeletingId(null);
     }
@@ -805,7 +804,7 @@ export default function TransactionPage() {
                       onCategoryChange={handleCategoryChange}
                       onRemoveTag={handleRemoveTag}
                       onEdit={setEditTx}
-                      onDelete={handleDeleteTransaction}
+                      onDelete={setPendingDelete}
                       onAddTag={setEditorTx}
                     />
                   ))}
@@ -932,7 +931,7 @@ export default function TransactionPage() {
                           <Button
                             size="icon-sm"
                             variant="ghost"
-                            onClick={() => handleDeleteTransaction(tx)}
+                            onClick={() => setPendingDelete(tx)}
                             disabled={deletingId === tx.id}
                             aria-label={`Delete ${tx.merchant}`}
                             className="text-destructive hover:text-destructive"
@@ -990,6 +989,19 @@ export default function TransactionPage() {
           </Suspense>
         </SheetContent>
       </Sheet>
+
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        title={`Delete "${pendingDelete?.merchant}"?`}
+        description="This permanently removes the transaction. It cannot be undone."
+        onOpenChange={(open) => {
+          if (!open) setPendingDelete(null);
+        }}
+        onConfirm={() => {
+          if (!pendingDelete) return;
+          return handleDeleteTransaction(pendingDelete);
+        }}
+      />
 
       <Dialog open={importOpen} onOpenChange={setImportOpen}>
         {/* Centered and wide: the preview table is 7 columns, which the old

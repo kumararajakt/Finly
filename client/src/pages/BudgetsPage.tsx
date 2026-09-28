@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
+import ConfirmDialog from "@/components/ConfirmDialog";
 import { ChevronLeft, ChevronRight, Pencil, Plus, Target, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import EmptyState from "@/components/ui/empty-state";
@@ -65,6 +66,7 @@ function BudgetForm({ initial, categories, onSaved, onDeleted }: BudgetFormProps
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   useEffect(() => {
     if (!form.category && categories.length > 0) {
@@ -98,15 +100,12 @@ function BudgetForm({ initial, categories, onSaved, onDeleted }: BudgetFormProps
 
   async function handleDelete() {
     if (!initial) return;
-    if (!window.confirm(`Delete the budget for "${initial.category}"?`)) return;
     setDeleting(true);
     setError(null);
     try {
       await api.budgets.remove(initial.id);
-      setDeleting(false);
       onDeleted();
-    } catch (err) {
-      setError(message(err));
+    } finally {
       setDeleting(false);
     }
   }
@@ -114,7 +113,8 @@ function BudgetForm({ initial, categories, onSaved, onDeleted }: BudgetFormProps
   const knownCategory = form.category && !categories.some((c) => c.name === form.category);
 
   return (
-    <form onSubmit={handleSubmit}>
+    <>
+      <form onSubmit={handleSubmit}>
       <SheetHeader>
         <SheetTitle>{initial ? "Adjust budget" : "Create budget"}</SheetTitle>
         <SheetDescription>
@@ -176,7 +176,7 @@ function BudgetForm({ initial, categories, onSaved, onDeleted }: BudgetFormProps
           <Button
             type="button"
             variant="destructive"
-            onClick={handleDelete}
+            onClick={() => setConfirmingDelete(true)}
             disabled={deleting}
           >
             <Trash2 />
@@ -190,6 +190,14 @@ function BudgetForm({ initial, categories, onSaved, onDeleted }: BudgetFormProps
         </Button>
       </SheetFooter>
     </form>
+      <ConfirmDialog
+        open={confirmingDelete}
+        title={`Delete the budget for "${initial?.category}"?`}
+        description="Spending in this category stays recorded; only the monthly limit is removed."
+        onOpenChange={setConfirmingDelete}
+        onConfirm={handleDelete}
+      />
+    </>
   );
 }
 

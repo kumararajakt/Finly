@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { CalendarClock, Pencil, Plus, Repeat, ShieldCheck, Sparkles, Trash2, X } from "lucide-react";
 import ConfidenceBadge from "@/components/ConfidenceBadge";
+import ConfirmDialog from "@/components/ConfirmDialog";
 import SummaryCard from "@/components/SummaryCard";
 import { Button } from "@/components/ui/button";
 import EmptyState from "@/components/ui/empty-state";
@@ -327,6 +328,7 @@ export default function RecurringPage() {
   const [editing, setEditing] = useState<Recurring | null>(null);
   const [pendingKey, setPendingKey] = useState<string | null>(null);
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<Recurring | null>(null);
   const [mutationError, setMutationError] = useState<string | null>(null);
 
   const suggestions = useQuery<DetectionSuggestion[]>(() => api.detection.suggestions(), []);
@@ -412,17 +414,12 @@ export default function RecurringPage() {
   }
 
   async function handleDelete(item: Recurring) {
-    if (!window.confirm(`Delete "${item.name}"? This does not delete matching transactions.`)) {
-      return;
-    }
     setSavingId(item.id);
     setMutationError(null);
     try {
       await api.recurring.remove(item.id);
       recurring.refetch();
       suggestions.refetch();
-    } catch (error) {
-      setMutationError(message(error));
     } finally {
       setSavingId(null);
     }
@@ -582,7 +579,7 @@ export default function RecurringPage() {
                   busy={savingId === item.id}
                   onToggleActive={() => handleToggleActive(item)}
                   onEdit={() => openEdit(item)}
-                  onDelete={() => handleDelete(item)}
+                  onDelete={() => setPendingDelete(item)}
                 />
               ))}
             </div>
@@ -600,6 +597,19 @@ export default function RecurringPage() {
           />
         </SheetContent>
       </Sheet>
+
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        title={`Delete "${pendingDelete?.name}"?`}
+        description="This removes the recurring entry. Transactions already created from it are kept."
+        onOpenChange={(open) => {
+          if (!open) setPendingDelete(null);
+        }}
+        onConfirm={() => {
+          if (!pendingDelete) return;
+          return handleDelete(pendingDelete);
+        }}
+      />
     </div>
   );
 }
