@@ -443,7 +443,10 @@ export default function CsvImportCard({ onNavigate, onImported }: CsvImportCardP
               : "Check the dates in the preview before importing.";
 
     return (
-      <section className="rounded-xl border bg-card p-4 sm:p-5">
+      // The whole step scrolls (unlike the preview step, which pins its chrome
+      // and scrolls only the rows): it's one long form, so min-h-0 + flex-1
+      // inside the dialog's max-height box is what keeps the bottom reachable.
+      <section className="min-h-0 flex-1 overflow-y-auto rounded-xl border bg-card p-4 sm:p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
             <h3 className="flex items-center gap-2 text-sm font-medium">
@@ -774,8 +777,12 @@ export default function CsvImportCard({ onNavigate, onImported }: CsvImportCardP
       .join(" and ");
 
     return (
-      <section className="rounded-xl border bg-card p-4 sm:p-5">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+      /* This step is why the card is a flex column: everything around the
+         table is shrink-0, so the rows table is the only scroll region and the
+         dialog chrome (header, stats, notes, the Import button) stays put while
+         you read through hundreds of rows. */
+      <section className="flex min-h-0 flex-1 flex-col rounded-xl border bg-card p-4 sm:p-5">
+        <div className="flex shrink-0 flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
             <h3 className="flex items-center gap-2 text-sm font-medium">
               <Eye className="size-4 text-muted-foreground" aria-hidden="true" />
@@ -796,7 +803,7 @@ export default function CsvImportCard({ onNavigate, onImported }: CsvImportCardP
           </Button>
         </div>
 
-        <div className="mt-4 grid gap-2 sm:grid-cols-4">
+        <div className="mt-4 grid shrink-0 gap-2 sm:grid-cols-4">
           <ResultStat label="Will be imported" value={inserted} tone="default" />
           <ResultStat label="Duplicates skipped" value={duplicates} tone="muted" />
           <ResultStat label="Invalid rows" value={skipped} tone="muted" />
@@ -806,7 +813,7 @@ export default function CsvImportCard({ onNavigate, onImported }: CsvImportCardP
         {needsReview > 0 && (
           <p
             role="alert"
-            className="mt-3 flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-400"
+            className="mt-3 flex shrink-0 items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-400"
           >
             <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
             <span>
@@ -819,7 +826,7 @@ export default function CsvImportCard({ onNavigate, onImported }: CsvImportCardP
         {createdNote && (
           <p
             role="status"
-            className="mt-3 flex items-start gap-2 text-xs text-muted-foreground"
+            className="mt-3 flex shrink-0 items-start gap-2 text-xs text-muted-foreground"
           >
             <Plus className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
             <span>Will also create {createdNote}.</span>
@@ -830,7 +837,7 @@ export default function CsvImportCard({ onNavigate, onImported }: CsvImportCardP
           importPreview.unknownDirectionValues.length > 0 && (
             <p
               role="alert"
-              className="mt-3 flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-400"
+              className="mt-3 flex shrink-0 items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-400"
             >
               <AlertTriangle
                 className="mt-0.5 size-4 shrink-0"
@@ -847,9 +854,12 @@ export default function CsvImportCard({ onNavigate, onImported }: CsvImportCardP
 
         {/* At sm+ all seven columns render, and the max-w-* cells are only
             maxima, so a narrow container would crush Category/Account into
-            nothing. The floor makes `overflow-auto` scroll instead. Below sm
-            only four columns show and they fit, so no floor is applied. */}
-        <div className="mt-4 overflow-auto rounded-lg border">
+            nothing. The min-w-* floor makes `overflow-auto` scroll instead.
+            Below sm only four columns show and they fit, so no floor is
+            applied. flex-1 gives the rows the height the pinned chrome leaves;
+            the 8rem floor stops a short window collapsing them to nothing
+            (min-h-0 would). */}
+        <div className="mt-4 min-h-[8rem] flex-1 overflow-auto rounded-lg border">
           <table className="w-full text-left text-sm sm:min-w-[52rem]">
             <thead className="sticky top-0 bg-muted/50">
               <tr className="text-xs uppercase tracking-wide text-muted-foreground">
@@ -899,19 +909,19 @@ export default function CsvImportCard({ onNavigate, onImported }: CsvImportCardP
           </table>
         </div>
         {truncated && (
-          <p className="mt-2 text-xs text-muted-foreground">
+          <p className="mt-2 shrink-0 text-xs text-muted-foreground">
             Showing the first {MAX_PREVIEW_ROWS} of {importPreview.rows.length}{" "}
             rows.
           </p>
         )}
 
         {error && (
-          <p role="alert" className="mt-4 text-xs text-destructive">
+          <p role="alert" className="mt-4 shrink-0 text-xs text-destructive">
             {error}
           </p>
         )}
 
-        <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t pt-4">
+        <div className="mt-5 flex shrink-0 flex-wrap items-center justify-between gap-3 border-t pt-4">
           <p className="text-xs text-muted-foreground">
             Import runs duplicate detection — matching transactions are skipped.
           </p>

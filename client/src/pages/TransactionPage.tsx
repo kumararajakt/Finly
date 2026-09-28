@@ -1123,12 +1123,17 @@ export default function TransactionPage() {
 
       <Dialog open={importOpen} onOpenChange={setImportOpen}>
         {/* Centered and wide: the preview table is 7 columns, which the old
-            36rem right-side drawer crushed instead of scrolling. pt reserves
-            the band DialogContent's absolute close button sits in, so it never
-            overlaps the card's right-aligned header button. */}
+            36rem right-side drawer crushed instead of scrolling. */}
         <DialogContent className="max-w-5xl gap-0 p-0">
           <DialogTitle className="sr-only">Import transactions</DialogTitle>
-          <div className="max-h-[85vh] overflow-y-auto px-4 pt-10 pb-4 sm:px-5 sm:pt-11 sm:pb-5">
+          {/* A max-height flex box, not an overflow-y-auto one: the card fills
+              it and decides what scrolls, so the preview step can pin its
+              header/stats/footer and scroll the rows table on its own.
+              overflow-hidden stops an over-tall preview from spilling out past
+              the dialog. pt reserves the band DialogContent's absolute close
+              button sits in, so it never overlaps the card's right-aligned
+              header button. */}
+          <div className="flex max-h-[85vh] flex-col overflow-hidden px-4 pt-10 pb-4 sm:px-5 sm:pt-11 sm:pb-5">
             <Suspense fallback={<LoadingState className="py-8" label="Loading importer…" />}>
               <CsvImportCard
                 onNavigate={() => setImportOpen(false)}
