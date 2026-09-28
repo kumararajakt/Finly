@@ -153,7 +153,10 @@ export default function CsvImportCard({ onNavigate, onImported }: CsvImportCardP
   const [hasHeader, setHasHeader] = useState(true);
   const [signConvention, setSignConvention] =
     useState<SignConvention>("negative-expense");
-  const [dateOrder, setDateOrder] = useState<DateOrder | null>(null);
+  // "auto" is the default, not an empty select: the server falls back to the
+  // same per-cell guess for an unset order, so a blank field only ever blocked
+  // a valid import. The hint below still nudges when the file looks ambiguous.
+  const [dateOrder, setDateOrder] = useState<DateOrder>("auto");
   const [detectedDateOrder, setDetectedDateOrder] = useState<DateOrder | null>(
     null
   );
@@ -339,9 +342,6 @@ export default function CsvImportCard({ onNavigate, onImported }: CsvImportCardP
         problems.push(ROLE_LABELS.direction);
       }
     }
-    if (dateOrder === null) {
-      problems.push("date format");
-    }
     return problems;
   }
 
@@ -376,7 +376,7 @@ export default function CsvImportCard({ onNavigate, onImported }: CsvImportCardP
         csvText,
         payload,
         signConvention,
-        dateOrder ?? "auto"
+        dateOrder
       );
       setImportPreview(data);
       setStep("preview");
@@ -398,7 +398,7 @@ export default function CsvImportCard({ onNavigate, onImported }: CsvImportCardP
         csvText,
         payload,
         signConvention,
-        dateOrder ?? "auto"
+        dateOrder
       );
       setResult(outcome);
       setStep("result");
@@ -421,7 +421,7 @@ export default function CsvImportCard({ onNavigate, onImported }: CsvImportCardP
     setResult(null);
     setDirection({ expense: "", income: "" });
     setDirectionDetection(null);
-    setDateOrder(null);
+    setDateOrder("auto");
     setDetectedDateOrder(null);
   }
 
@@ -438,7 +438,7 @@ export default function CsvImportCard({ onNavigate, onImported }: CsvImportCardP
           ? "Rows like 12/31/2026 suggest month first — still check the dates in the preview."
           : detectedDateOrder === "ymd"
             ? "These dates look year first, so the order does not affect them."
-            : dateOrder === null
+            : dateOrder === "auto"
               ? "Dates like 03/04/2026 are ambiguous, so the app cannot tell. Pick the format your bank uses."
               : "Check the dates in the preview before importing.";
 
@@ -694,31 +694,15 @@ export default function CsvImportCard({ onNavigate, onImported }: CsvImportCardP
             </div>
           )}
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium">
-              Date format <span className="text-destructive">*</span>
-            </label>
+            <label className="text-xs font-medium">Date format</label>
             <select
-              value={dateOrder ?? ""}
+              value={dateOrder}
               onChange={(event) =>
-                setDateOrder(
-                  event.target.value === ""
-                    ? null
-                    : (event.target.value as DateOrder)
-                )
+                setDateOrder(event.target.value as DateOrder)
               }
               aria-label="Date format"
-              aria-required="true"
-              aria-invalid={dateOrder === null}
-              className={cn(
-                "w-full rounded-lg border bg-background px-2.5 py-1.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50",
-                dateOrder === null
-                  ? "border-destructive"
-                  : "border-input"
-              )}
+              className="w-full rounded-lg border border-input bg-background px-2.5 py-1.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
             >
-              <option value="" disabled>
-                Select the format your bank uses…
-              </option>
               <option value="dmy">Day first (31/12/2026)</option>
               <option value="mdy">Month first (12/31/2026)</option>
               <option value="ymd">Year first (2026-12-31)</option>
