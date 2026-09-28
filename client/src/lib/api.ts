@@ -33,6 +33,7 @@ import type {
   TransactionFilters,
   TransactionPatch,
 } from "./types";
+import { filenameFromDisposition, saveDownload } from "./download";
 
 export class ApiError extends Error {
   status: number;
@@ -48,6 +49,23 @@ export class ApiError extends Error {
 
 const API_BASE = (import.meta.env.VITE_API_URL as string | undefined)
   ?.replace(/\/+$/, "") ?? "";
+
+/** Turns a failed response into an `ApiError`, preserving the app's 401 redirect. */
+async function apiError(response: Response): Promise<ApiError> {
+  if (response.status === 401) {
+    window.dispatchEvent(new Event("finly:unauthorized"));
+  }
+  let message = `Request failed with status ${response.status}`;
+  let code: string | undefined;
+  try {
+    const data = (await response.json()) as { error?: { message?: string; code?: string } };
+    if (data.error?.message) message = data.error.message;
+    code = data.error?.code;
+  } catch {
+    // Non-JSON error body; keep the generic message.
+  }
+  return new ApiError(message, response.status, code);
+}
 
 async function apiFetch<T>(
   path: string,
@@ -65,19 +83,7 @@ async function apiFetch<T>(
   });
 
   if (!response.ok) {
-    if (response.status === 401) {
-      window.dispatchEvent(new Event("finly:unauthorized"));
-    }
-    let message = `Request failed with status ${response.status}`;
-    let code: string | undefined;
-    try {
-      const data = (await response.json()) as { error?: { message?: string; code?: string } };
-      if (data.error?.message) message = data.error.message;
-      code = data.error?.code;
-    } catch {
-      // Non-JSON error body; keep the generic message.
-    }
-    throw new ApiError(message, response.status, code);
+    throw await apiError(response);
   }
 
   if (response.status === 204) {
@@ -85,6 +91,20 @@ async function apiFetch<T>(
   }
 
   return (await response.json()) as T;
+}
+
+/** Fetches a non-JSON response (a file download) and saves it to disk. */
+async function apiDownload(path: string, fallbackFilename: string): Promise<string> {
+  const response = await fetch(`${API_BASE}/api${path}`, { credentials: "include" });
+  if (!response.ok) {
+    throw await apiError(response);
+  }
+  const filename = filenameFromDisposition(
+    response.headers.get("Content-Disposition"),
+    fallbackFilename,
+  );
+  saveDownload(await response.blob(), filename);
+  return filename;
 }
 
 function buildQuery(params: Record<string, string | number | boolean | undefined>): string {
@@ -140,6 +160,11 @@ export const api = {
       }),
     remove: (id: string) =>
       apiFetch<void>(`/transactions/${encodeURIComponent(id)}`, { method: "DELETE" }),
+    exportCsv: (filters: TransactionFilters = {}) =>
+      apiDownload(
+        `/transactions/export${buildQuery({ ...filters })}`,
+        "transactions.csv",
+      ),
   },
 
   categories: {

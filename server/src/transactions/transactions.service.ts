@@ -27,6 +27,7 @@ import {
 import { computeFingerprint } from '../common/fingerprint';
 import { periodRange, type DateRange } from '../summary/period';
 import { SettingsService } from '../settings/settings.service';
+import { transactionsToCsv } from './transactions-csv';
 import {
   CreateTransactionDto,
   TransactionQueryDto,
@@ -142,6 +143,14 @@ export class TransactionsService {
       .from(transactions)
       .where(conditions.length > 0 ? and(...conditions) : undefined)
       .orderBy(order, desc(transactions.createdAt));
+  }
+
+  /**
+   * Reuses `list` so an export always matches exactly what the filters and
+   * sorting on screen produce.
+   */
+  async exportCsv(userId: string, query: TransactionQueryDto): Promise<string> {
+    return transactionsToCsv(await this.list(userId, query));
   }
 
   private async customRange(userId: string): Promise<DateRange> {

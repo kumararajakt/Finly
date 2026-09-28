@@ -87,6 +87,47 @@ describe('TransactionsService', () => {
     expect(sql.sql).toContain('"date" <=');
   });
 
+  it('exports through the same filters and scope as list', async () => {
+    const chain = makeSelectChain([]);
+    db.select.mockReturnValue(chain);
+    const query = {
+      period: 'last-month' as const,
+      type: 'expense' as const,
+      category: 'Groceries',
+    };
+    await service.exportCsv(USER_ID, query);
+    const sql = whereSql(chain);
+    expect(sql.params).toEqual(expect.arrayContaining([USER_ID, 'Groceries']));
+    expect(sql.sql).toContain('"category" =');
+    expect(sql.sql).toContain('"type" =');
+    expect(sql.sql).toContain('"date" >=');
+  });
+
+  it('renders exported rows as CSV', async () => {
+    db.select.mockReturnValue(
+      makeSelectChain([
+        {
+          id: 't1',
+          date: '2026-01-15',
+          merchant: 'Whole Foods',
+          category: 'Groceries',
+          amount: 84.5,
+          type: 'expense',
+          fromAccount: 'Checking',
+          toAccount: null,
+          side: null,
+          tags: ['weekly'],
+          notes: null,
+          receipt: false,
+          source: 'manual',
+        },
+      ]),
+    );
+    const csv = await service.exportCsv(USER_ID, {});
+    expect(csv).toContain('Whole Foods');
+    expect(csv).toContain('weekly');
+  });
+
   it('applies custom period bounds from settings', async () => {
     const chain = makeSelectChain([]);
     db.select.mockReturnValue(chain);

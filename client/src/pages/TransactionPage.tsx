@@ -1,6 +1,6 @@
 import { Suspense, lazy, useEffect, useState } from "react";
 import { useSearchParams } from "react-router";
-import { ArrowDown, ArrowUp, ChevronsUpDown, Paperclip, Pencil, Plus, Receipt, Search, SlidersHorizontal, Trash2, Upload, X } from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronsUpDown, Download, Paperclip, Pencil, Plus, Receipt, Search, SlidersHorizontal, Trash2, Upload, X } from "lucide-react";
 import PeriodSelector from "@/components/PeriodSelector";
 import { Button } from "@/components/ui/button";
 import EmptyState from "@/components/ui/empty-state";
@@ -15,7 +15,7 @@ import { useSettings } from "@/contexts/SettingsContext";
 import { useQuery } from "@/hooks/use-query";
 import { api } from "@/lib/api";
 import { formatDate, formatSignedAmount } from "@/lib/format";
-import type { Account, Category, SortOrder, Tag, Transaction, TransactionSortBy } from "@/lib/types";
+import type { Account, Category, SortOrder, Tag, Transaction, TransactionFilters, TransactionSortBy } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const CsvImportCard = lazy(() => import("@/components/CsvImportCard"));
@@ -418,29 +418,32 @@ export default function TransactionPage() {
   const [savingCategory, setSavingCategory] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [mutationError, setMutationError] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(search.trim()), 300);
     return () => clearTimeout(timer);
   }, [search]);
 
+  // Shared by the list query and the CSV export so an export always matches the view.
+  const filters: TransactionFilters = {
+    period,
+    ...(accountFilter !== "all" ? { account: accountFilter } : {}),
+    ...(categoryFilter !== "all" ? { category: categoryFilter } : {}),
+    ...(debouncedSearch ? { search: debouncedSearch } : {}),
+    ...(typeFilter !== "all" ? { type: typeFilter } : {}),
+    ...(tagFilter !== "all" ? { tag: tagFilter } : {}),
+    ...(dateFrom ? { dateFrom } : {}),
+    ...(dateTo ? { dateTo } : {}),
+    ...(minAmount !== "" ? { minAmount: Number(minAmount) } : {}),
+    ...(maxAmount !== "" ? { maxAmount: Number(maxAmount) } : {}),
+    ...(receiptFilter !== "all" ? { receipt: receiptFilter === "yes" } : {}),
+    sortBy,
+    sortOrder,
+  };
+
   const transactions = useQuery<Transaction[]>(
-    () =>
-      api.transactions.list({
-        period,
-        ...(accountFilter !== "all" ? { account: accountFilter } : {}),
-        ...(categoryFilter !== "all" ? { category: categoryFilter } : {}),
-        ...(debouncedSearch ? { search: debouncedSearch } : {}),
-        ...(typeFilter !== "all" ? { type: typeFilter } : {}),
-        ...(tagFilter !== "all" ? { tag: tagFilter } : {}),
-        ...(dateFrom ? { dateFrom } : {}),
-        ...(dateTo ? { dateTo } : {}),
-        ...(minAmount !== "" ? { minAmount: Number(minAmount) } : {}),
-        ...(maxAmount !== "" ? { maxAmount: Number(maxAmount) } : {}),
-        ...(receiptFilter !== "all" ? { receipt: receiptFilter === "yes" } : {}),
-        sortBy,
-        sortOrder,
-      }),
+    () => api.transactions.list(filters),
     [period, settings.customDateFrom, settings.customDateTo, accountFilter, categoryFilter, debouncedSearch, typeFilter, tagFilter, dateFrom, dateTo, minAmount, maxAmount, receiptFilter, sortBy, sortOrder]
   );
   const categories = useQuery<Category[]>(() => api.categories.list(), []);
@@ -470,6 +473,19 @@ export default function TransactionPage() {
     } else {
       setSortBy(column);
       setSortOrder(column === "merchant" || column === "category" ? "asc" : "desc");
+    }
+  }
+
+  /** Downloads exactly the rows currently shown, using the same filters and sort. */
+  async function handleExport() {
+    setExporting(true);
+    setMutationError(null);
+    try {
+      await api.transactions.exportCsv(filters);
+    } catch (error) {
+      setMutationError(message(error));
+    } finally {
+      setExporting(false);
     }
   }
 
@@ -568,6 +584,19 @@ export default function TransactionPage() {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <PeriodSelector />
+          <Button
+            variant="outline"
+            onClick={() => void handleExport()}
+            disabled={exporting || transactions.data?.length === 0}
+            title={
+              transactions.data?.length === 0
+                ? "No transactions match the current filters"
+                : undefined
+            }
+          >
+            <Download />
+            <span>{exporting ? "Exporting…" : "Export"}</span>
+          </Button>
           <Button variant="outline" onClick={() => setImportOpen(true)}>
             <Upload />
             <span>Import</span>
