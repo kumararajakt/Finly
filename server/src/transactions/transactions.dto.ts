@@ -1,11 +1,13 @@
 import {
   ArrayMaxSize,
+  ArrayNotEmpty,
   IsArray,
   IsIn,
   IsNotEmpty,
   IsNumber,
   IsOptional,
   IsString,
+  IsUUID,
   Max,
   MaxLength,
   Min,
@@ -168,4 +170,14 @@ export class UpdateTransactionDto {
   @IsString()
   @MaxLength(2000, { message: 'Notes must be at most 2000 characters.' })
   notes?: string;
+}
+
+export class BulkDeleteTransactionsDto {
+  @IsArray({ message: 'ids must be an array.' })
+  @ArrayNotEmpty({ message: 'At least one transaction id is required.' })
+  @ArrayMaxSize(1000, {
+    message: 'Cannot delete more than 1000 transactions at once.',
+  })
+  @IsUUID('4', { each: true, message: 'Each id must be a valid UUID.' })
+  ids: string[];
 }

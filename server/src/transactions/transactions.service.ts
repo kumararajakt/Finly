@@ -12,6 +12,7 @@ import {
   eq,
   gte,
   ilike,
+  inArray,
   lte,
   or,
   sql,
@@ -272,5 +273,13 @@ export class TransactionsService {
         code: 'NOT_FOUND',
       });
     }
+  }
+
+  async removeMany(userId: string, ids: string[]): Promise<void> {
+    await this.db
+      .delete(transactions)
+      .where(
+        and(eq(transactions.userId, userId), inArray(transactions.id, ids)),
+      );
   }
 }

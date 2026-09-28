@@ -50,6 +50,14 @@ function whereSql(chain: ReturnType<typeof makeSelectChain>): {
   return new PgDialect().sqlToQuery(sqlWhere);
 }
 
+function deleteWhereSql(chain: ReturnType<typeof deleteChain>): {
+  sql: string;
+  params: unknown[];
+} {
+  const sqlWhere = chain.where.mock.calls[0][0];
+  return new PgDialect().sqlToQuery(sqlWhere);
+}
+
 describe('TransactionsService', () => {
   let service: TransactionsService;
   let db: ReturnType<typeof dbMock>;
@@ -269,5 +277,26 @@ describe('TransactionsService', () => {
     await expect(service.remove(USER_ID, 't1')).rejects.toBeInstanceOf(
       NotFoundException,
     );
+  });
+
+  it('removes many transactions scoped to the user', async () => {
+    db.delete.mockReturnValue(deleteChain([]));
+    await expect(
+      service.removeMany(USER_ID, ['t1', 't2', 't3']),
+    ).resolves.toBeUndefined();
+    const conditions = db.delete.mock.results[0].value as ReturnType<
+      typeof deleteChain
+    >;
+    const sql = deleteWhereSql(conditions);
+    expect(sql.sql).toContain('"user_id" = $1');
+    expect(sql.sql).toContain('"id" in ($2, $3, $4)');
+    expect(sql.params).toEqual(['user-1', 't1', 't2', 't3']);
+  });
+
+  it('removeMany deletes nothing for an empty match (no throw)', async () => {
+    db.delete.mockReturnValue(deleteChain([]));
+    await expect(
+      service.removeMany(USER_ID, ['t1', 't2']),
+    ).resolves.toBeUndefined();
   });
 });

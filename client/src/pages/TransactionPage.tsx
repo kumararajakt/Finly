@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router";
 import { ArrowDown, ArrowUp, ChevronsUpDown, Download, Pencil, Plus, Receipt, Search, SlidersHorizontal, Trash2, Upload, X } from "lucide-react";
 import PeriodSelector from "@/components/PeriodSelector";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import EmptyState from "@/components/ui/empty-state";
 import ErrorState from "@/components/ui/error-state";
 import { Input } from "@/components/ui/input";
@@ -135,6 +136,8 @@ interface TransactionCardProps {
   savingCategory: string | null;
   removingTag: string | null;
   deletingId: string | null;
+  selected: boolean;
+  onSelectChange: (id: string) => void;
   onCategoryChange: (tx: Transaction, name: string) => void;
   onRemoveTag: (tx: Transaction, tag: string) => void;
   onEdit: (tx: Transaction) => void;
@@ -149,6 +152,8 @@ function TransactionCard({
   savingCategory,
   removingTag,
   deletingId,
+  selected,
+  onSelectChange,
   onCategoryChange,
   onRemoveTag,
   onEdit,
@@ -158,11 +163,19 @@ function TransactionCard({
   return (
     <div className="rounded-xl border bg-card p-3">
       <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <div className="flex items-center gap-1.5">
-            <span className="font-medium">{tx.merchant}</span>
+        <div className="flex min-w-0 items-start gap-2">
+          <Checkbox
+            checked={selected}
+            onCheckedChange={() => onSelectChange(tx.id)}
+            aria-label={`Select ${tx.merchant} for bulk actions`}
+            className="mt-0.5 shrink-0"
+          />
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5">
+              <span className="font-medium">{tx.merchant}</span>
+            </div>
+            <p className="text-xs text-muted-foreground">{formatDate(tx.date)}</p>
           </div>
-          <p className="text-xs text-muted-foreground">{formatDate(tx.date)}</p>
         </div>
         <span
           className={cn(
@@ -397,6 +410,8 @@ export default function TransactionPage() {
   const [savingCategory, setSavingCategory] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Transaction | null>(null);
+  const [selected, setSelected] = useState<string[]>([]);
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [mutationError, setMutationError] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
 
@@ -428,6 +443,48 @@ export default function TransactionPage() {
   const categories = useQuery<Category[]>(() => api.categories.list(), []);
   const accounts = useQuery<Account[]>(() => api.accounts.list(), []);
   const tags = useQuery<Tag[]>(() => api.tags.list(), []);
+
+  // Prune selections that no longer exist in the loaded rows (filter changes,
+  // individual deletes, etc.). Only prunes on success so a refetch's brief
+  // loading state never flashes the selection away.
+  useEffect(() => {
+    if (transactions.status !== "success" || !transactions.data) return;
+    const ids = new Set(transactions.data.map((tx) => tx.id));
+    setSelected((current) => {
+      if (current.length === 0) return current;
+      const kept = current.filter((id) => ids.has(id));
+      return kept.length === current.length ? current : kept;
+    });
+  }, [transactions.status, transactions.data]);
+
+  const selectedSet = new Set(selected);
+
+  function toggleSelected(id: string) {
+    setSelected((current) =>
+      current.includes(id) ? current.filter((x) => x !== id) : [...current, id]
+    );
+  }
+
+  function toggleSelectAll() {
+    const rows = transactions.data ?? [];
+    if (rows.length === 0) return;
+    if (rows.every((tx) => selectedSet.has(tx.id))) {
+      setSelected([]);
+    } else {
+      setSelected(rows.map((tx) => tx.id));
+    }
+  }
+
+  async function handleBulkDelete() {
+    const ids = [...selectedSet];
+    if (ids.length === 0) return;
+    await api.transactions.removeMany(ids);
+    const removed = new Set(ids);
+    transactions.setData((list) =>
+      (list ?? []).filter((item) => !removed.has(item.id))
+    );
+    setSelected([]);
+  }
 
   const categoryNames = (categories.data ?? []).map((category) => category.name);
   const accountNames = (accounts.data ?? []).map((account) => account.name);
@@ -790,6 +847,27 @@ export default function TransactionPage() {
             )
           ) : (
             <>
+              {selected.length > 0 && (
+                <div className="flex shrink-0 items-center justify-between gap-2 rounded-lg border bg-card px-3 py-2">
+                  <span className="text-sm">
+                    <span className="font-semibold tabular-nums">{selected.length}</span>{" "}
+                    {selected.length === 1 ? "transaction" : "transactions"} selected
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <Button variant="ghost" size="sm" onClick={() => setSelected([])}>
+                      Clear
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => setBulkDeleteOpen(true)}
+                    >
+                      <Trash2 />
+                      Delete
+                    </Button>
+                  </div>
+                </div>
+              )}
               <div className="rounded-xl border bg-card p-2 md:hidden">
                 <div className="flex flex-col gap-1.5">
                   {transactions.data.map((tx) => (
@@ -801,6 +879,8 @@ export default function TransactionPage() {
                       savingCategory={savingCategory}
                       removingTag={removingTag}
                       deletingId={deletingId}
+                      selected={selectedSet.has(tx.id)}
+                      onSelectChange={toggleSelected}
                       onCategoryChange={handleCategoryChange}
                       onRemoveTag={handleRemoveTag}
                       onEdit={setEditTx}
@@ -820,6 +900,26 @@ export default function TransactionPage() {
                 <Table>
                 <TableHeader className="sticky top-0 z-10 bg-card">
                   <TableRow>
+                    <TableHead className="w-10">
+                      <Checkbox
+                        checked={
+                          transactions.data.length > 0 &&
+                          transactions.data.every((tx) => selectedSet.has(tx.id))
+                        }
+                        indeterminate={
+                          selected.length > 0 &&
+                          !(transactions.data.length > 0 &&
+                            transactions.data.every((tx) => selectedSet.has(tx.id)))
+                        }
+                        onCheckedChange={toggleSelectAll}
+                        aria-label={
+                          transactions.data.length > 0 &&
+                          transactions.data.every((tx) => selectedSet.has(tx.id))
+                            ? "Clear all selected transactions"
+                            : "Select all transactions"
+                        }
+                      />
+                    </TableHead>
                     <SortableHeader
                       column="date"
                       label="Date"
@@ -859,7 +959,17 @@ export default function TransactionPage() {
                 </TableHeader>
                 <TableBody>
                   {transactions.data.map((tx) => (
-                    <TableRow key={tx.id}>
+                    <TableRow
+                      key={tx.id}
+                      data-state={selectedSet.has(tx.id) ? "selected" : undefined}
+                    >
+                      <TableCell className="w-10">
+                        <Checkbox
+                          checked={selectedSet.has(tx.id)}
+                          onCheckedChange={() => toggleSelected(tx.id)}
+                          aria-label={`Select ${tx.merchant} for bulk actions`}
+                        />
+                      </TableCell>
                       <TableCell className="text-muted-foreground">
                         {formatDate(tx.date)}
                       </TableCell>
@@ -1001,6 +1111,14 @@ export default function TransactionPage() {
           if (!pendingDelete) return;
           return handleDeleteTransaction(pendingDelete);
         }}
+      />
+
+      <ConfirmDialog
+        open={bulkDeleteOpen}
+        title={`Delete ${selected.length} transaction${selected.length === 1 ? "" : "s"}?`}
+        description={`This permanently removes ${selected.length} selected transaction${selected.length === 1 ? "" : "s"}. It cannot be undone.`}
+        onOpenChange={setBulkDeleteOpen}
+        onConfirm={handleBulkDelete}
       />
 
       <Dialog open={importOpen} onOpenChange={setImportOpen}>

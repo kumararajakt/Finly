@@ -18,6 +18,7 @@ import type { Transaction } from '../database/schema';
 import { localDateISO } from '../summary/period';
 import {
   CreateTransactionDto,
+  BulkDeleteTransactionsDto,
   TransactionQueryDto,
   UpdateTransactionDto,
 } from './transactions.dto';
@@ -69,6 +70,15 @@ export class TransactionsController {
     @Body() body: UpdateTransactionDto,
   ): Promise<Transaction> {
     return this.transactionsService.update(userId, id, body);
+  }
+
+  @Delete()
+  @HttpCode(204)
+  async removeMany(
+    @CurrentUser() userId: string,
+    @Body() body: BulkDeleteTransactionsDto,
+  ): Promise<void> {
+    await this.transactionsService.removeMany(userId, body.ids);
   }
 
   @Delete(':id')

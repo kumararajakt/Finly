@@ -162,6 +162,8 @@ export const api = {
       }),
     remove: (id: string) =>
       apiFetch<void>(`/transactions/${encodeURIComponent(id)}`, { method: "DELETE" }),
+    removeMany: (ids: string[]) =>
+      apiFetch<void>("/transactions", { method: "DELETE", body: { ids } }),
     exportCsv: (filters: TransactionFilters = {}) =>
       apiDownload(
         `/transactions/export${buildQuery({ ...filters })}`,
