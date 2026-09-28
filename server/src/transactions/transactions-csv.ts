@@ -18,7 +18,6 @@ export const CSV_COLUMNS = [
   'side',
   'tags',
   'notes',
-  'receipt',
   'source',
 ] as const;
 
@@ -42,7 +41,6 @@ export function transactionToRow(
     side: cell(transaction.side),
     tags: transaction.tags.join(';'),
     notes: cell(transaction.notes),
-    receipt: transaction.receipt ? 'true' : 'false',
     source: transaction.source,
   };
 }

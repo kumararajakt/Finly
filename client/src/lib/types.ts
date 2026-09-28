@@ -65,7 +65,6 @@ export interface Transaction {
   side: TradeSide | null;
   tags: string[];
   notes: string | null;
-  receipt: boolean;
   source: TransactionSource;
   fingerprint: string;
   createdAt: string;
@@ -219,7 +218,6 @@ export interface TransactionFilters {
   dateTo?: string;
   minAmount?: number;
   maxAmount?: number;
-  receipt?: boolean;
   sortBy?: TransactionSortBy;
   sortOrder?: SortOrder;
 }
@@ -237,7 +235,6 @@ export interface NewTransaction {
   toAccount?: string;
   tags?: string[];
   notes?: string;
-  receipt?: boolean;
 }
 
 export type TransactionPatch = Partial<

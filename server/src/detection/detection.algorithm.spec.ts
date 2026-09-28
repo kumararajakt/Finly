@@ -146,7 +146,6 @@ describe('detection.algorithm', () => {
       category: partial.category ?? 'Needs review',
       fromAccount: partial.fromAccount ?? 'Checking',
       tags: partial.tags ?? [],
-      receipt: false,
       source: 'manual',
       fingerprint: 'test',
       createdAt: new Date(),

@@ -406,7 +406,6 @@ export class ImportService {
         fromAccount: parsed.fromAccount,
         notes: parsed.notes,
         tags: [] as string[],
-        receipt: false,
         source: 'csv',
         fingerprint: parsed.fingerprint,
       } satisfies NewTransaction;

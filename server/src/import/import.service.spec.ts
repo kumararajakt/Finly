@@ -143,7 +143,6 @@ describe('ImportService', () => {
         amount: 5.5,
         type: 'income',
         source: 'csv',
-        receipt: false,
         tags: [],
       });
       expect(salary).toMatchObject({
@@ -151,7 +150,6 @@ describe('ImportService', () => {
         amount: 3000,
         type: 'expense',
         source: 'csv',
-        receipt: false,
       });
     });
 

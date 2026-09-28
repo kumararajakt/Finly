@@ -20,7 +20,6 @@ function transaction(overrides: Partial<Transaction> = {}): Transaction {
     side: null,
     tags: [],
     notes: null,
-    receipt: false,
     source: 'manual',
     fingerprint: 'fp1',
     createdAt: new Date('2026-01-15T10:00:00Z'),
@@ -57,7 +56,6 @@ describe('transactionsToCsv', () => {
           side: 'buy',
           tags: ['weekly', 'shared'],
           notes: 'Split with Sam',
-          receipt: true,
           source: 'csv',
         }),
       ]),
@@ -73,7 +71,6 @@ describe('transactionsToCsv', () => {
       side: 'buy',
       tags: 'weekly;shared',
       notes: 'Split with Sam',
-      receipt: 'true',
       source: 'csv',
     });
   });
@@ -84,7 +81,6 @@ describe('transactionsToCsv', () => {
     expect(row.side).toBe('');
     expect(row.notes).toBe('');
     expect(row.tags).toBe('');
-    expect(row.receipt).toBe('false');
   });
 
   it('quotes values containing commas, quotes and newlines', () => {

@@ -118,7 +118,6 @@ describe('TransactionsService', () => {
           side: null,
           tags: ['weekly'],
           notes: null,
-          receipt: false,
           source: 'manual',
         },
       ]),
@@ -142,7 +141,7 @@ describe('TransactionsService', () => {
     );
   });
 
-  it('applies type, tag, date, amount, and receipt filters', async () => {
+  it('applies type, tag, date, and amount filters', async () => {
     const chain = makeSelectChain([]);
     db.select.mockReturnValue(chain);
     await service.list(USER_ID, {
@@ -152,7 +151,6 @@ describe('TransactionsService', () => {
       dateTo: '2026-01-31',
       minAmount: 10,
       maxAmount: 100,
-      receipt: 'true',
     });
     const sql = whereSql(chain);
     expect(sql.sql).toContain('"type" =');
@@ -161,7 +159,6 @@ describe('TransactionsService', () => {
     expect(sql.sql).toContain('"date" <=');
     expect(sql.sql).toContain('"amount" >=');
     expect(sql.sql).toContain('"amount" <=');
-    expect(sql.sql).toContain('"receipt" =');
     expect(sql.params).toEqual(
       expect.arrayContaining([
         USER_ID,
@@ -171,18 +168,8 @@ describe('TransactionsService', () => {
         '2026-01-31',
         10,
         100,
-        true,
       ]),
     );
-  });
-
-  it('maps receipt=false to a false equality', async () => {
-    const chain = makeSelectChain([]);
-    db.select.mockReturnValue(chain);
-    await service.list(USER_ID, { receipt: 'false' });
-    const sql = whereSql(chain);
-    expect(sql.sql).toContain('"receipt" =');
-    expect(sql.params).toEqual(expect.arrayContaining([USER_ID, false]));
   });
 
   function orderBySql(chain: ReturnType<typeof makeSelectChain>): string[] {

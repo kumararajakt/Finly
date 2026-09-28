@@ -125,9 +125,6 @@ export class TransactionsService {
     if (query.maxAmount !== undefined) {
       conditions.push(lte(transactions.amount, query.maxAmount));
     }
-    if (query.receipt) {
-      conditions.push(eq(transactions.receipt, query.receipt === 'true'));
-    }
 
     const sortBy = query.sortBy ?? 'date';
     const sortCol = {
@@ -177,7 +174,6 @@ export class TransactionsService {
       side: (dto.side as Transaction['side']) ?? null,
       tags: normalizeTags(dto.tags),
       notes: dto.notes?.trim() || null,
-      receipt: dto.receipt ?? false,
       source: 'manual',
       fingerprint: computeFingerprint({
         type: dto.type,
@@ -241,7 +237,6 @@ export class TransactionsService {
           : current.side,
       tags: dto.tags !== undefined ? normalizeTags(dto.tags) : current.tags,
       notes: dto.notes !== undefined ? dto.notes.trim() || null : current.notes,
-      receipt: current.receipt,
       source: current.source,
       fingerprint: computeFingerprint({
         type: dto.type ?? current.type,

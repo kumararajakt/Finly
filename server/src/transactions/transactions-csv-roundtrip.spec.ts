@@ -15,7 +15,6 @@ const BASE: Transaction = {
   side: null,
   tags: ['weekly'],
   notes: null,
-  receipt: false,
   source: 'manual',
   fingerprint: 'fp1',
   createdAt: new Date('2026-01-15T10:00:00Z'),
@@ -34,7 +33,8 @@ describe('transactions export → import round trip', () => {
 
   it('maps date, merchant, amount, category, type, account and notes to the right columns', () => {
     const { mapping } = detectColumns(headersOf(transactionsToCsv([BASE])));
-    const index = (name: string) => CSV_COLUMNS.indexOf(name);
+    const index = (name: (typeof CSV_COLUMNS)[number]) =>
+      CSV_COLUMNS.indexOf(name);
 
     expect(mapping.date).toBe(index('date'));
     expect(mapping.merchant).toBe(index('merchant'));

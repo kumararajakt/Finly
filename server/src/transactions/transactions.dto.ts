@@ -1,7 +1,6 @@
 import {
   ArrayMaxSize,
   IsArray,
-  IsBoolean,
   IsIn,
   IsNotEmpty,
   IsNumber,
@@ -63,10 +62,6 @@ export class TransactionQueryDto {
   maxAmount?: number;
 
   @IsOptional()
-  @IsIn(['true', 'false'])
-  receipt?: string;
-
-  @IsOptional()
   @IsIn(['date', 'amount', 'merchant', 'category'])
   sortBy?: 'date' | 'amount' | 'merchant' | 'category';
 
@@ -121,10 +116,6 @@ export class CreateTransactionDto {
   @IsString()
   @MaxLength(2000, { message: 'Notes must be at most 2000 characters.' })
   notes?: string;
-
-  @IsOptional()
-  @IsBoolean()
-  receipt?: boolean;
 }
 
 export class UpdateTransactionDto {

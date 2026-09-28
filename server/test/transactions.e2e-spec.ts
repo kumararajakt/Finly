@@ -24,7 +24,6 @@ interface TransactionBody {
   type: string;
   account: string;
   tags: string[];
-  receipt: boolean;
   source: string;
   fingerprint: string;
 }
@@ -117,7 +116,6 @@ describe('Transactions (e2e)', () => {
       type: 'expense',
       account: 'Checking',
       tags: ['daily'],
-      receipt: false,
       source: 'manual',
     });
     expect(body.id).toMatch(

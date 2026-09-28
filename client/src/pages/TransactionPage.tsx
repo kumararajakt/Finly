@@ -1,6 +1,6 @@
 import { Suspense, lazy, useEffect, useState } from "react";
 import { useSearchParams } from "react-router";
-import { ArrowDown, ArrowUp, ChevronsUpDown, Download, Paperclip, Pencil, Plus, Receipt, Search, SlidersHorizontal, Trash2, Upload, X } from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronsUpDown, Download, Pencil, Plus, Receipt, Search, SlidersHorizontal, Trash2, Upload, X } from "lucide-react";
 import PeriodSelector from "@/components/PeriodSelector";
 import { Button } from "@/components/ui/button";
 import EmptyState from "@/components/ui/empty-state";
@@ -159,11 +159,6 @@ function TransactionCard({
         <div className="min-w-0">
           <div className="flex items-center gap-1.5">
             <span className="font-medium">{tx.merchant}</span>
-            {tx.receipt && (
-              <span title="Has receipt attached">
-                <Paperclip className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
-              </span>
-            )}
           </div>
           <p className="text-xs text-muted-foreground">{formatDate(tx.date)}</p>
         </div>
@@ -240,8 +235,6 @@ interface FilterSheetProps {
   onTypeFilterChange: (value: string) => void;
   tagFilter: string;
   onTagFilterChange: (value: string) => void;
-  receiptFilter: string;
-  onReceiptFilterChange: (value: string) => void;
   dateFrom: string;
   onDateFromChange: (value: string) => void;
   dateTo: string;
@@ -261,8 +254,6 @@ function FilterSheet({
   onTypeFilterChange,
   tagFilter,
   onTagFilterChange,
-  receiptFilter,
-  onReceiptFilterChange,
   dateFrom,
   onDateFromChange,
   dateTo,
@@ -311,19 +302,6 @@ function FilterSheet({
                   {tag.name}
                 </option>
               ))}
-            </select>
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium">Receipt</label>
-            <select
-              value={receiptFilter}
-              onChange={(e) => onReceiptFilterChange(e.target.value)}
-              aria-label="Receipt filter"
-              className="h-9 w-full rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-            >
-              <option value="all">With or without receipts</option>
-              <option value="yes">With receipts</option>
-              <option value="no">Without receipts</option>
             </select>
           </div>
           <div className="grid grid-cols-2 gap-3">
@@ -407,7 +385,6 @@ export default function TransactionPage() {
   const [dateTo, setDateTo] = useState("");
   const [minAmount, setMinAmount] = useState("");
   const [maxAmount, setMaxAmount] = useState("");
-  const [receiptFilter, setReceiptFilter] = useState<"all" | "yes" | "no">("all");
   const [sortBy, setSortBy] = useState<TransactionSortBy>("date");
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
   const [addOpen, setAddOpen] = useState(false);
@@ -437,14 +414,13 @@ export default function TransactionPage() {
     ...(dateTo ? { dateTo } : {}),
     ...(minAmount !== "" ? { minAmount: Number(minAmount) } : {}),
     ...(maxAmount !== "" ? { maxAmount: Number(maxAmount) } : {}),
-    ...(receiptFilter !== "all" ? { receipt: receiptFilter === "yes" } : {}),
     sortBy,
     sortOrder,
   };
 
   const transactions = useQuery<Transaction[]>(
     () => api.transactions.list(filters),
-    [period, settings.customDateFrom, settings.customDateTo, accountFilter, categoryFilter, debouncedSearch, typeFilter, tagFilter, dateFrom, dateTo, minAmount, maxAmount, receiptFilter, sortBy, sortOrder]
+    [period, settings.customDateFrom, settings.customDateTo, accountFilter, categoryFilter, debouncedSearch, typeFilter, tagFilter, dateFrom, dateTo, minAmount, maxAmount, sortBy, sortOrder]
   );
   const categories = useQuery<Category[]>(() => api.categories.list(), []);
   const accounts = useQuery<Account[]>(() => api.accounts.list(), []);
@@ -464,7 +440,6 @@ export default function TransactionPage() {
     setDateTo("");
     setMinAmount("");
     setMaxAmount("");
-    setReceiptFilter("all");
   }
 
   function handleSort(column: TransactionSortBy) {
@@ -563,13 +538,11 @@ export default function TransactionPage() {
     dateFrom !== "" ||
     dateTo !== "" ||
     minAmount !== "" ||
-    maxAmount !== "" ||
-    receiptFilter !== "all";
+    maxAmount !== "";
 
   const activeAdvancedFilterCount =
     (typeFilter !== "all" ? 1 : 0) +
     (tagFilter !== "all" ? 1 : 0) +
-    (receiptFilter !== "all" ? 1 : 0) +
     (dateFrom !== "" ? 1 : 0) +
     (dateTo !== "" ? 1 : 0) +
     (minAmount !== "" ? 1 : 0) +
@@ -716,16 +689,6 @@ export default function TransactionPage() {
                 {tag.name}
               </option>
             ))}
-          </select>
-          <select
-            value={receiptFilter}
-            onChange={(e) => setReceiptFilter(e.target.value as "all" | "yes" | "no")}
-            aria-label="Receipt filter"
-            className="h-8 rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-          >
-            <option value="all">With or without receipts</option>
-            <option value="yes">With receipts</option>
-            <option value="no">Without receipts</option>
           </select>
           <Input
             type="date"
@@ -892,11 +855,6 @@ export default function TransactionPage() {
                       <TableCell>
                         <div className="flex items-center gap-1.5">
                           <span className="font-medium">{tx.merchant}</span>
-                          {tx.receipt && (
-                            <span title="Has receipt attached">
-                              <Paperclip className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
-                            </span>
-                          )}
                           {tx.type === "investment" && tx.side && (
                             <span className="inline-flex items-center rounded-full bg-purple-500/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-purple-600">
                               {tx.side}
@@ -1041,8 +999,6 @@ export default function TransactionPage() {
         onTypeFilterChange={(v) => setTypeFilter(v as typeof typeFilter)}
         tagFilter={tagFilter}
         onTagFilterChange={setTagFilter}
-        receiptFilter={receiptFilter}
-        onReceiptFilterChange={(v) => setReceiptFilter(v as typeof receiptFilter)}
         dateFrom={dateFrom}
         onDateFromChange={setDateFrom}
         dateTo={dateTo}
@@ -1055,7 +1011,6 @@ export default function TransactionPage() {
         onClear={() => {
           setTypeFilter("all");
           setTagFilter("all");
-          setReceiptFilter("all");
           setDateFrom("");
           setDateTo("");
           setMinAmount("");
