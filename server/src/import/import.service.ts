@@ -20,6 +20,7 @@ import {
 import { computeFingerprint } from '../common/fingerprint';
 import {
   detectColumns,
+  detectDateOrder,
   detectDirection,
   detectHeaderRow,
   detectTradeColumns,
@@ -28,6 +29,7 @@ import {
   parseAmount,
   parseCsv,
   type ColumnMapping,
+  type DateOrder,
   type DirectionDetection,
   type DirectionValues,
   type SignConvention,
@@ -37,6 +39,7 @@ import {
   ColumnMappingDto,
   CsvImportDto,
   CsvPreviewDto,
+  TradeColumnMappingDto,
   TradeImportDto,
   TradeImportPreviewDto,
 } from './import.dto';
@@ -56,6 +59,8 @@ export interface CsvPreviewResult {
   mapping: ColumnMapping;
   ambiguous: string[];
   direction: DirectionDetection | null;
+  /** What the date column will be read as; `auto` means not determinable. */
+  dateOrder: DateOrder;
 }
 
 export interface CsvImportResult {
@@ -74,6 +79,8 @@ export interface TradeImportPreviewResult {
   hasHeader: boolean;
   mapping: TradeColumnMapping;
   ambiguous: string[];
+  /** What the date column will be read as; `auto` means not determinable. */
+  dateOrder: DateOrder;
 }
 
 export interface TradeImportResult {
@@ -105,6 +112,21 @@ export interface CsvImportPreview {
   newCategories: string[];
   newAccounts: string[];
   unknownDirectionValues: string[];
+}
+
+/** The trade DTO uses `undefined` for absent columns; the mapping uses `null`. */
+function toTradeColumnMapping(dto: TradeColumnMappingDto): TradeColumnMapping {
+  return {
+    date: dto.date,
+    security: dto.security,
+    side: dto.side,
+    units: dto.units,
+    price: dto.price,
+    amount: dto.amount ?? null,
+    fee: dto.fee ?? null,
+    account: dto.account ?? null,
+    notes: dto.notes ?? null,
+  };
 }
 
 interface ParsedRow {
@@ -164,6 +186,11 @@ export class ImportService {
         ? detectDirection(dataRows, mapping.type)
         : null;
     const sampleRows = dataRows.slice(0, SAMPLE_ROWS);
+    const dateOrder = this.resolveDateOrder(
+      dto.dateOrder,
+      dataRows,
+      mapping.date,
+    );
 
     return {
       headers: headerCells,
@@ -174,6 +201,7 @@ export class ImportService {
       mapping,
       ambiguous,
       direction,
+      dateOrder,
     };
   }
 
@@ -335,6 +363,25 @@ export class ImportService {
     };
   }
 
+  /**
+   * Day/month order is a property of the file, not of a single cell, so it is
+   * decided once here from every date cell and then applied to all rows. An
+   * explicit `dmy`/`mdy` from the client wins; otherwise detect, falling back
+   * to the per-cell guess when no cell is decisive.
+   */
+  private resolveDateOrder(
+    requested: DateOrder | undefined,
+    dataRows: string[][],
+    dateIndex: number,
+  ): DateOrder {
+    if (requested === 'dmy' || requested === 'mdy') {
+      return requested;
+    }
+    return (
+      detectDateOrder(dataRows.map((row) => row[dateIndex] ?? '')) ?? 'auto'
+    );
+  }
+
   private async buildPlan(
     userId: string,
     dto: CsvImportDto,
@@ -377,6 +424,11 @@ export class ImportService {
 
     const signConvention: SignConvention =
       dto.signConvention ?? 'negative-expense';
+    const dateOrder = this.resolveDateOrder(
+      dto.dateOrder,
+      dataRows,
+      mapping.date,
+    );
     const [categoryMap, accountMap] = await Promise.all([
       this.categoryLookup(userId),
       this.accountLookup(userId),
@@ -389,6 +441,7 @@ export class ImportService {
         mapping,
         direction,
         signConvention,
+        dateOrder,
         categoryMap,
         accountMap,
       );
@@ -631,6 +684,7 @@ export class ImportService {
     mapping: ColumnMapping,
     direction: DirectionValues | null,
     signConvention: SignConvention,
+    dateOrder: DateOrder,
     categoryMap: Map<string, string>,
     accountMap: Map<string, string>,
   ): ParsedRow | null {
@@ -639,7 +693,7 @@ export class ImportService {
       return null;
     }
 
-    const date = normalizeDate(row[mapping.date] ?? '');
+    const date = normalizeDate(row[mapping.date] ?? '', dateOrder);
     if (date === null) {
       return null;
     }
@@ -830,6 +884,16 @@ export class ImportService {
       hasHeader ? headerCells : (rows[0] ?? []),
     );
     const sampleRows = dataRows.slice(0, SAMPLE_ROWS);
+    // Detection reads the mapped date column, so honour a client-supplied
+    // mapping — otherwise re-detection after a manual remap would lie.
+    const mapping = dto.mapping
+      ? toTradeColumnMapping(dto.mapping)
+      : detection.mapping;
+    const dateOrder = this.resolveDateOrder(
+      dto.dateOrder,
+      dataRows,
+      mapping.date,
+    );
 
     return {
       headers: headerCells,
@@ -837,8 +901,9 @@ export class ImportService {
       sampleRows,
       rowCount: dataRows.length,
       hasHeader,
-      mapping: detection.mapping,
+      mapping,
       ambiguous: detection.ambiguous,
+      dateOrder,
     };
   }
 
@@ -905,6 +970,11 @@ export class ImportService {
     const hasHeader = detectHeaderRow(rows);
     const dataRows = hasHeader ? rows.slice(1) : rows;
     const { mapping } = dto;
+    const dateOrder = this.resolveDateOrder(
+      dto.dateOrder,
+      dataRows,
+      mapping.date,
+    );
 
     const accountLookup = await this.accountLookup(userId);
     const accountMap = new Map(accountLookup);
@@ -940,7 +1010,7 @@ export class ImportService {
           continue;
         }
 
-        const date = normalizeDate(dateStr);
+        const date = normalizeDate(dateStr, dateOrder);
         if (!date) {
           skipped++;
           continue;

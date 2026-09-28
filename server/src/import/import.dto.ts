@@ -10,7 +10,7 @@ import {
   Min,
   ValidateNested,
 } from 'class-validator';
-import type { SignConvention } from './csv';
+import type { DateOrder, SignConvention } from './csv';
 
 export class DirectionValuesDto {
   @IsOptional()
@@ -86,6 +86,10 @@ export class CsvPreviewDto {
   @ValidateNested()
   @Type(() => ColumnMappingDto)
   mapping?: ColumnMappingDto;
+
+  @IsOptional()
+  @IsIn(['auto', 'dmy', 'mdy', 'ymd'])
+  dateOrder?: DateOrder;
 }
 
 export class CsvImportDto {
@@ -101,6 +105,10 @@ export class CsvImportDto {
   @IsOptional()
   @IsIn(['negative-expense', 'negative-income'])
   signConvention?: SignConvention;
+
+  @IsOptional()
+  @IsIn(['auto', 'dmy', 'mdy', 'ymd'])
+  dateOrder?: DateOrder;
 }
 
 export class TradeColumnMappingDto {
@@ -153,6 +161,16 @@ export class TradeImportPreviewDto {
   @IsString()
   @IsNotEmpty({ message: 'CSV content is required.' })
   csv: string;
+
+  @IsOptional()
+  @IsObject()
+  @ValidateNested()
+  @Type(() => TradeColumnMappingDto)
+  mapping?: TradeColumnMappingDto;
+
+  @IsOptional()
+  @IsIn(['auto', 'dmy', 'mdy', 'ymd'])
+  dateOrder?: DateOrder;
 }
 
 export class TradeImportDto {
@@ -164,4 +182,8 @@ export class TradeImportDto {
   @ValidateNested()
   @Type(() => TradeColumnMappingDto)
   mapping: TradeColumnMappingDto;
+
+  @IsOptional()
+  @IsIn(['auto', 'dmy', 'mdy', 'ymd'])
+  dateOrder?: DateOrder;
 }

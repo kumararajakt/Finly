@@ -18,7 +18,11 @@ import {
 } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { ApiError, api } from "@/lib/api";
-import type { TradeColumnMapping, TradeImportPreview } from "@/lib/types";
+import type {
+  DateOrder,
+  TradeColumnMapping,
+  TradeImportPreview,
+} from "@/lib/types";
 
 function message(error: unknown): string {
   if (error instanceof ApiError) return error.message;
@@ -44,6 +48,10 @@ export function TradeImportModal({
   const [csv, setCsv] = useState("");
   const [preview, setPreview] = useState<TradeImportPreview | null>(null);
   const [mapping, setMapping] = useState<TradeColumnMapping | null>(null);
+  const [dateOrder, setDateOrder] = useState<DateOrder | null>(null);
+  const [detectedDateOrder, setDetectedDateOrder] = useState<DateOrder | null>(
+    null
+  );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<{
@@ -62,6 +70,7 @@ export function TradeImportModal({
       const result = await api.investments.importTradesPreview(text);
       setPreview(result);
       setMapping(result.mapping);
+      setDetectedDateOrder(result.dateOrder);
       setStep("mapping");
     } catch (err) {
       setError(message(err));
@@ -76,7 +85,11 @@ export function TradeImportModal({
     try {
       setLoading(true);
       setError(null);
-      const res = await api.investments.importTrades(csv, mapping);
+      const res = await api.investments.importTrades(
+        csv,
+        mapping,
+        dateOrder ?? "auto"
+      );
       setResult(res);
       setStep("result");
       onImported();
@@ -94,6 +107,8 @@ export function TradeImportModal({
     setMapping(null);
     setError(null);
     setResult(null);
+    setDateOrder(null);
+    setDetectedDateOrder(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
@@ -172,13 +187,62 @@ export function TradeImportModal({
                   <Input
                     type="number"
                     value={mapping.date}
-                    onChange={(e) =>
-                      setMapping({
-                        ...mapping,
-                        date: Number(e.target.value),
-                      })
-                    }
+                    onChange={(e) => {
+                      const date = Number(e.target.value);
+                      setMapping({ ...mapping, date });
+                      // Detection reads the mapped date column, so a new index
+                      // needs a fresh preview.
+                      void api.investments
+                        .importTradesPreview(
+                          csv,
+                          { ...mapping, date },
+                          dateOrder ?? undefined
+                        )
+                        .then((r) => setDetectedDateOrder(r.dateOrder))
+                        .catch(() => setDetectedDateOrder(null));
+                    }}
                   />
+                </div>
+                <div>
+                  <label className="block font-medium mb-1">
+                    Date format{" "}
+                    <span className="text-red-600">*</span>
+                  </label>
+                  <select
+                    value={dateOrder ?? ""}
+                    onChange={(e) =>
+                      setDateOrder(
+                        e.target.value === ""
+                          ? null
+                          : (e.target.value as DateOrder)
+                      )
+                    }
+                    aria-label="Date format"
+                    aria-required="true"
+                    aria-invalid={dateOrder === null}
+                    className={`w-full rounded-lg border bg-background px-2.5 py-1.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 ${
+                      dateOrder === null ? "border-red-500" : "border-input"
+                    }`}
+                  >
+                    <option value="" disabled>
+                      Select the format your broker uses…
+                    </option>
+                    <option value="dmy">Day first (31/12/2026)</option>
+                    <option value="mdy">Month first (12/31/2026)</option>
+                    <option value="ymd">Year first (2026-12-31)</option>
+                    <option value="auto">Not sure — decide for me</option>
+                  </select>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {detectedDateOrder === "dmy"
+                      ? "Rows like 31/12/2026 suggest day first — still check the sample rows below."
+                      : detectedDateOrder === "mdy"
+                        ? "Rows like 12/31/2026 suggest month first — still check the sample rows below."
+                        : detectedDateOrder === "ymd"
+                          ? "These dates look year first, so the order does not affect them."
+                          : dateOrder === null
+                            ? "Dates like 03/04/2026 are ambiguous, so the app cannot tell. Pick the format your broker uses."
+                            : "Check the sample rows below before importing."}
+                  </p>
                 </div>
                 <div>
                   <label className="block font-medium mb-1">
@@ -308,7 +372,7 @@ export function TradeImportModal({
               </Button>
               <Button
                 onClick={handleImport}
-                disabled={loading || !mapping}
+                disabled={loading || !mapping || dateOrder === null}
               >
                 {loading ? "Importing..." : "Import"}
               </Button>

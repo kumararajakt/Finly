@@ -450,6 +450,111 @@ describe('ImportService', () => {
     });
   });
 
+  describe('day/month order', () => {
+    // A day-first statement spanning days 1-31. Per-cell guessing reads the
+    // days 1-12 rows as month-first, scattering them across the year.
+    const dayFirst = [
+      'Date,Description,Amount',
+      '01-07-2026,Coffee,50',
+      '09-07-2026,Books,60',
+      '13-07-2026,Travel,70',
+      '28-07-2026,Rent,80',
+    ].join('\n');
+
+    const datesOf = (valuesCalls: InsertValues[][]) =>
+      valuesCalls.flat().map((value) => value.date);
+
+    it('applies one detected order to the whole file', async () => {
+      const { db, valuesCalls } = makeDb();
+      service = new ImportService(db);
+
+      await service.importCsv(USER_ID, {
+        csv: dayFirst,
+        mapping: { date: 0, merchant: 1, amount: 2 },
+      });
+
+      expect(datesOf(valuesCalls)).toEqual([
+        '2026-07-01',
+        '2026-07-09',
+        '2026-07-13',
+        '2026-07-28',
+      ]);
+    });
+
+    it('reports the detected order from preview', () => {
+      const { db } = makeDb();
+      service = new ImportService(db);
+
+      expect(service.preview({ csv: dayFirst }).dateOrder).toBe('dmy');
+    });
+
+    it('reports auto when no cell is decisive', () => {
+      const { db } = makeDb();
+      service = new ImportService(db);
+      const ambiguous = [
+        'Date,Description,Amount',
+        '01-07-2026,Coffee,50',
+        '02-07-2026,Books,60',
+      ].join('\n');
+
+      expect(service.preview({ csv: ambiguous }).dateOrder).toBe('auto');
+    });
+
+    it('reports ymd for year-first statements', async () => {
+      const { db, valuesCalls } = makeDb();
+      service = new ImportService(db);
+      const iso = [
+        'Date,Description,Amount',
+        '2026-07-01,Coffee,50',
+        '2026-07-13,Books,60',
+      ].join('\n');
+
+      expect(service.preview({ csv: iso }).dateOrder).toBe('ymd');
+
+      // A stray dmy choice must not disturb a year-first file.
+      await service.importCsv(USER_ID, {
+        csv: iso,
+        mapping: { date: 0, merchant: 1, amount: 2 },
+        dateOrder: 'dmy',
+      });
+      expect(datesOf(valuesCalls)).toEqual(['2026-07-01', '2026-07-13']);
+    });
+
+    it('honors an explicit month-first order over detection', async () => {
+      const { db, valuesCalls } = makeDb();
+      service = new ImportService(db);
+
+      const result = await service.importCsv(USER_ID, {
+        csv: dayFirst,
+        mapping: { date: 0, merchant: 1, amount: 2 },
+        dateOrder: 'mdy',
+      });
+
+      // Rows whose first component cannot be a month (13, 28) are dropped
+      // rather than silently mis-dated, so a wrong override is visible.
+      expect(datesOf(valuesCalls)).toEqual(['2026-01-07', '2026-09-07']);
+      expect(result.skipped).toBe(2);
+    });
+
+    it('honors an explicit day-first order for an all-ambiguous file', async () => {
+      const { db, valuesCalls } = makeDb();
+      service = new ImportService(db);
+      const ambiguous = [
+        'Date,Description,Amount',
+        '01-07-2026,Coffee,50',
+        '02-07-2026,Books,60',
+      ].join('\n');
+
+      await service.importCsv(USER_ID, {
+        csv: ambiguous,
+        mapping: { date: 0, merchant: 1, amount: 2 },
+        dateOrder: 'dmy',
+      });
+
+      expect(datesOf(valuesCalls)).toEqual(['2026-07-01', '2026-07-02']);
+    });
+  });
+
   describe('previewRows', () => {
     it('returns every parsed row with an insert status', async () => {
       const { db } = makeDb();

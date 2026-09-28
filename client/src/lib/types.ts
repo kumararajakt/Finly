@@ -295,6 +295,13 @@ export interface Summary {
 
 export type SignConvention = "negative-expense" | "negative-income";
 
+/**
+ * How to read numeric dates. The import flow makes the user pick, because a
+ * day-first file's rows for days 1-12 are indistinguishable from month-first
+ * on their own. `auto` is the fallback when the user declines to choose.
+ */
+export type DateOrder = "auto" | "dmy" | "mdy" | "ymd";
+
 export interface DirectionValues {
   expense: string;
   income: string;
@@ -327,6 +334,7 @@ export interface CsvPreview {
   mapping: CsvColumnMapping;
   ambiguous: string[];
   direction: DirectionDetection | null;
+  dateOrder: DateOrder;
 }
 
 export interface CsvMapping {
@@ -364,6 +372,7 @@ export interface TradeImportPreview {
   hasHeader: boolean;
   mapping: TradeColumnMapping;
   ambiguous: string[];
+  dateOrder: DateOrder;
 }
 
 export interface TradeImportResult {

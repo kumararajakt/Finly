@@ -1,5 +1,6 @@
 import {
   detectColumns,
+  detectDateOrder,
   detectDirection,
   detectHeaderRow,
   guessDirectionValue,
@@ -279,9 +280,98 @@ describe('normalizeDate', () => {
     expect(normalizeDate('31/04/2024')).toBeNull();
   });
 
+  it('honors an explicit day-first order on cells auto cannot decide', () => {
+    expect(normalizeDate('01/07/2026', 'dmy')).toBe('2026-07-01');
+    expect(normalizeDate('12/07/2026', 'dmy')).toBe('2026-07-12');
+  });
+
+  it('reads year-first dates regardless of the requested order', () => {
+    expect(normalizeDate('2026-07-01', 'dmy')).toBe('2026-07-01');
+    expect(normalizeDate('2026-07-01', 'mdy')).toBe('2026-07-01');
+    expect(normalizeDate('2026-07-01', 'ymd')).toBe('2026-07-01');
+  });
+
+  it('reads single-digit year-first dates', () => {
+    expect(normalizeDate('2026-7-1')).toBe('2026-07-01');
+    expect(normalizeDate('2026/7/1', 'mdy')).toBe('2026-07-01');
+    expect(normalizeDate('2026.7.1', 'dmy')).toBe('2026-07-01');
+  });
+
+  it('honors an explicit month-first order', () => {
+    expect(normalizeDate('07/13/2026', 'mdy')).toBe('2026-07-13');
+    expect(normalizeDate('01/07/2026', 'mdy')).toBe('2026-01-07');
+  });
+
+  it('an explicit order still rejects impossible calendar dates', () => {
+    expect(normalizeDate('31/07/2026', 'mdy')).toBeNull();
+    expect(normalizeDate('31/06/2026', 'dmy')).toBeNull();
+  });
+
   it('rejects non-date values', () => {
     expect(normalizeDate('N/A')).toBeNull();
     expect(normalizeDate('')).toBeNull();
+  });
+});
+
+describe('detectDateOrder', () => {
+  it('detects day-first from a single day above 12', () => {
+    expect(detectDateOrder(['01-07-2026', '31-07-2026'])).toBe('dmy');
+  });
+
+  it('detects month-first from a single day above 12 in second position', () => {
+    expect(detectDateOrder(['07/01/2026', '07/31/2026'])).toBe('mdy');
+  });
+
+  it('returns null when every cell is ambiguous', () => {
+    expect(detectDateOrder(['01/02/2026', '03/04/2026'])).toBeNull();
+  });
+
+  it('returns null when cells point both ways', () => {
+    expect(detectDateOrder(['31/01/2026', '01/31/2026'])).toBeNull();
+  });
+
+  it('ignores cells that are not numeric d/m/y', () => {
+    expect(detectDateOrder(['15 Jan 2026', 'N/A'])).toBeNull();
+  });
+
+  it('detects year-first, which needs no day/month decision', () => {
+    expect(detectDateOrder(['2026-07-01', '2026-07-31'])).toBe('ymd');
+  });
+
+  it('returns null when the file mixes year-first and day-first', () => {
+    expect(detectDateOrder(['2026-07-01', '31-07-2026'])).toBeNull();
+  });
+
+  it('returns null for an empty column', () => {
+    expect(detectDateOrder([])).toBeNull();
+  });
+
+  it('lets one decisive cell settle the whole file', () => {
+    // Regression: a July statement in d-m-y. Deciding per cell would read the
+    // days 1-12 rows as month-first and scatter them across the year.
+    const dates = [
+      '01-07-2026',
+      '04-07-2026',
+      '09-07-2026',
+      '10-07-2026',
+      '11-07-2026',
+      '13-07-2026',
+      '28-07-2026',
+      '31-07-2026',
+    ];
+    const order = detectDateOrder(dates) ?? 'auto';
+
+    expect(order).toBe('dmy');
+    expect(dates.map((d) => normalizeDate(d, order))).toEqual([
+      '2026-07-01',
+      '2026-07-04',
+      '2026-07-09',
+      '2026-07-10',
+      '2026-07-11',
+      '2026-07-13',
+      '2026-07-28',
+      '2026-07-31',
+    ]);
   });
 });
 

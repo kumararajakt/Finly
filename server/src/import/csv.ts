@@ -2,6 +2,15 @@ import { parse } from 'csv/sync';
 
 export type SignConvention = 'negative-expense' | 'negative-income';
 
+/**
+ * How to read a numeric date whose day/month order the file does not make
+ * self-evident. `ymd` is unambiguous on its own; `dmy`/`mdy` are only
+ * distinguishable across a whole file, and `auto` (the per-cell guess) is wrong
+ * for every cell in days 1-12 of a day-first file. The importers therefore ask
+ * the user, and only fall back to `detectDateOrder` + `auto` if they decline.
+ */
+export type DateOrder = 'auto' | 'dmy' | 'mdy' | 'ymd';
+
 export interface ColumnMapping {
   date: number;
   merchant: number;
@@ -304,7 +313,16 @@ export function detectDirection(
   return { values, guess: ambiguous ? null : guess, ambiguous };
 }
 
-export function normalizeDate(value: string): string | null {
+/** `d/m/y`, `m/d/y`, or `d-m-y`. No `g` flag, so a shared const is stateful-free. */
+const NUMERIC_DATE = /^(\d{1,2})[./-](\d{1,2})[./-](\d{2,4})$/;
+
+/** `y-m-d` / `y.m.d` / `y/m/d`, allowing single-digit month and day. */
+const YEAR_FIRST_DATE = /^(\d{4})[./-](\d{1,2})[./-](\d{1,2})$/;
+
+export function normalizeDate(
+  value: string,
+  order: DateOrder = 'auto',
+): string | null {
   const raw = value.trim();
   if (raw.length === 0) {
     return null;
@@ -315,7 +333,8 @@ export function normalizeDate(value: string): string | null {
     return validDate(Number(iso[1]), Number(iso[2]), Number(iso[3]));
   }
 
-  const ymd = /^(\d{4})[./](\d{1,2})[./](\d{1,2})$/.exec(raw);
+  // Unambiguous, so this wins over any requested order.
+  const ymd = YEAR_FIRST_DATE.exec(raw);
   if (ymd) {
     return validDate(Number(ymd[1]), Number(ymd[2]), Number(ymd[3]));
   }
@@ -342,17 +361,77 @@ export function normalizeDate(value: string): string | null {
     return validDate(expandYear(Number(nameDay[3])), month, Number(nameDay[2]));
   }
 
-  const numeric = /^(\d{1,2})[./-](\d{1,2})[./-](\d{2,4})$/.exec(raw);
+  const numeric = NUMERIC_DATE.exec(raw);
   if (numeric) {
     const first = Number(numeric[1]);
     const second = Number(numeric[2]);
     const year = expandYear(Number(numeric[3]));
+    if (order === 'dmy') {
+      return validDate(year, second, first);
+    }
+    if (order === 'mdy') {
+      return validDate(year, first, second);
+    }
+    // `auto` (and `ymd`, which cannot reach here since year-first cells are
+    // caught above): guess from this cell alone. Correct for days 13-31 of a
+    // day-first file, but a coin flip for days 1-12.
     if (first > 12) {
       return validDate(year, second, first);
     }
     return validDate(year, first, second);
   }
 
+  return null;
+}
+
+/**
+ * Suggest the day/month order for a whole file by looking at every date cell.
+ *
+ * A single cell is only decisive when one component exceeds 12, so files
+ * covering only days 1-12 give no evidence and return `null`. Year-first cells
+ * are self-evident. Returns `null` when the cells point more than one way,
+ * which means the column is not a single format.
+ *
+ * This only ever produces a suggestion; the importers ask the user first.
+ */
+export function detectDateOrder(
+  values: string[],
+): Exclude<DateOrder, 'auto'> | null {
+  let dayFirst = false;
+  let monthFirst = false;
+  let yearFirst = false;
+  for (const value of values) {
+    const raw = value.trim();
+    if (raw.length === 0) {
+      continue;
+    }
+    if (YEAR_FIRST_DATE.test(raw)) {
+      yearFirst = true;
+      continue;
+    }
+    const numeric = NUMERIC_DATE.exec(raw);
+    if (numeric === null) {
+      continue;
+    }
+    if (Number(numeric[1]) > 12) {
+      dayFirst = true;
+    } else if (Number(numeric[2]) > 12) {
+      monthFirst = true;
+    }
+  }
+  const orders = [dayFirst, monthFirst, yearFirst].filter(Boolean).length;
+  if (orders > 1) {
+    return null;
+  }
+  if (yearFirst) {
+    return 'ymd';
+  }
+  if (dayFirst) {
+    return 'dmy';
+  }
+  if (monthFirst) {
+    return 'mdy';
+  }
   return null;
 }
 

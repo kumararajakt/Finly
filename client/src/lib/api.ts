@@ -11,6 +11,7 @@ import type {
   CsvImportPreview,
   CsvMapping,
   CsvPreview,
+  DateOrder,
   DetectionSuggestion,
   Goal,
   ImportResult,
@@ -22,6 +23,7 @@ import type {
   Recurring,
   Rule,
   Settings,
+  SignConvention,
   Subscription,
   Summary,
   Tag,
@@ -268,28 +270,30 @@ export const api = {
   },
 
   importCsv: {
-    preview: (csv: string, mapping?: CsvMapping) =>
+    preview: (csv: string, mapping?: CsvMapping, dateOrder?: DateOrder) =>
       apiFetch<CsvPreview>("/import/csv/preview", {
         method: "POST",
-        body: { csv, ...(mapping ? { mapping } : {}) },
+        body: { csv, ...(mapping ? { mapping } : {}), ...(dateOrder ? { dateOrder } : {}) },
       }),
     previewRows: (
       csv: string,
       mapping: CsvMapping,
-      signConvention: "negative-expense" | "negative-income"
+      signConvention: SignConvention,
+      dateOrder: DateOrder
     ) =>
       apiFetch<CsvImportPreview>("/import/csv/preview-rows", {
         method: "POST",
-        body: { csv, mapping, signConvention },
+        body: { csv, mapping, signConvention, dateOrder },
       }),
     run: (
       csv: string,
       mapping: CsvMapping,
-      signConvention: "negative-expense" | "negative-income"
+      signConvention: SignConvention,
+      dateOrder: DateOrder
     ) =>
       apiFetch<ImportResult>("/import/csv", {
         method: "POST",
-        body: { csv, mapping, signConvention },
+        body: { csv, mapping, signConvention, dateOrder },
       }),
   },
 
@@ -330,15 +334,27 @@ export const api = {
         method: "PATCH",
         body: { currentPrice },
       }),
-    importTradesPreview: (csv: string) =>
+    importTradesPreview: (
+      csv: string,
+      mapping?: TradeColumnMapping,
+      dateOrder?: DateOrder
+    ) =>
       apiFetch<TradeImportPreview>("/import/csv/trades/preview", {
         method: "POST",
-        body: { csv },
+        body: {
+          csv,
+          ...(mapping ? { mapping } : {}),
+          ...(dateOrder ? { dateOrder } : {}),
+        },
       }),
-    importTrades: (csv: string, mapping: TradeColumnMapping) =>
+    importTrades: (
+      csv: string,
+      mapping: TradeColumnMapping,
+      dateOrder: DateOrder
+    ) =>
       apiFetch<TradeImportResult>("/import/csv/trades", {
         method: "POST",
-        body: { csv, mapping },
+        body: { csv, mapping, dateOrder },
       }),
   },
 };

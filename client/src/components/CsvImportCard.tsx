@@ -19,6 +19,7 @@ import type {
   CsvImportPreview,
   CsvMapping,
   CsvPreview,
+  DateOrder,
   DirectionDetection,
   DirectionValues,
   ImportResult,
@@ -152,6 +153,10 @@ export default function CsvImportCard({ onNavigate, onImported }: CsvImportCardP
   const [hasHeader, setHasHeader] = useState(true);
   const [signConvention, setSignConvention] =
     useState<SignConvention>("negative-expense");
+  const [dateOrder, setDateOrder] = useState<DateOrder | null>(null);
+  const [detectedDateOrder, setDetectedDateOrder] = useState<DateOrder | null>(
+    null
+  );
   const [amountMode, setAmountMode] = useState<
     "amount" | "split" | "direction"
   >("amount");
@@ -179,6 +184,7 @@ export default function CsvImportCard({ onNavigate, onImported }: CsvImportCardP
     );
     setDirectionDetection(detected.direction);
     setDirection(detected.direction?.guess ?? { expense: "", income: "" });
+    setDetectedDateOrder(detected.dateOrder);
   }
 
   async function handleFile(file: File) {
@@ -249,6 +255,7 @@ export default function CsvImportCard({ onNavigate, onImported }: CsvImportCardP
       if (requestId !== directionRefreshRef.current) return;
       setDirectionDetection(refreshed.direction ?? null);
       setDirection(refreshed.direction?.guess ?? { expense: "", income: "" });
+      setDetectedDateOrder(refreshed.dateOrder);
     } catch (err) {
       if (requestId === directionRefreshRef.current) setError(message(err));
     } finally {
@@ -332,6 +339,9 @@ export default function CsvImportCard({ onNavigate, onImported }: CsvImportCardP
         problems.push(ROLE_LABELS.direction);
       }
     }
+    if (dateOrder === null) {
+      problems.push("date format");
+    }
     return problems;
   }
 
@@ -365,7 +375,8 @@ export default function CsvImportCard({ onNavigate, onImported }: CsvImportCardP
       const data = await api.importCsv.previewRows(
         csvText,
         payload,
-        signConvention
+        signConvention,
+        dateOrder ?? "auto"
       );
       setImportPreview(data);
       setStep("preview");
@@ -383,7 +394,12 @@ export default function CsvImportCard({ onNavigate, onImported }: CsvImportCardP
     setBusy(true);
     setError(null);
     try {
-      const outcome = await api.importCsv.run(csvText, payload, signConvention);
+      const outcome = await api.importCsv.run(
+        csvText,
+        payload,
+        signConvention,
+        dateOrder ?? "auto"
+      );
       setResult(outcome);
       setStep("result");
       onImported?.(outcome);
@@ -405,6 +421,8 @@ export default function CsvImportCard({ onNavigate, onImported }: CsvImportCardP
     setResult(null);
     setDirection({ expense: "", income: "" });
     setDirectionDetection(null);
+    setDateOrder(null);
+    setDetectedDateOrder(null);
   }
 
   if (step === "mapping" && preview && mapping) {
@@ -412,6 +430,17 @@ export default function CsvImportCard({ onNavigate, onImported }: CsvImportCardP
     const unmapped = (preview.ambiguous ?? [])
       .map((role) => ROLE_LABELS[role] ?? role)
       .filter(Boolean);
+
+    const dateFormatHint =
+      detectedDateOrder === "dmy"
+        ? "Rows like 31/12/2026 suggest day first — still check the dates in the preview."
+        : detectedDateOrder === "mdy"
+          ? "Rows like 12/31/2026 suggest month first — still check the dates in the preview."
+          : detectedDateOrder === "ymd"
+            ? "These dates look year first, so the order does not affect them."
+            : dateOrder === null
+              ? "Dates like 03/04/2026 are ambiguous, so the app cannot tell. Pick the format your bank uses."
+              : "Check the dates in the preview before importing.";
 
     return (
       <section className="rounded-xl border bg-card p-4 sm:p-5">
@@ -661,6 +690,41 @@ export default function CsvImportCard({ onNavigate, onImported }: CsvImportCardP
               </select>
             </div>
           )}
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-medium">
+              Date format <span className="text-destructive">*</span>
+            </label>
+            <select
+              value={dateOrder ?? ""}
+              onChange={(event) =>
+                setDateOrder(
+                  event.target.value === ""
+                    ? null
+                    : (event.target.value as DateOrder)
+                )
+              }
+              aria-label="Date format"
+              aria-required="true"
+              aria-invalid={dateOrder === null}
+              className={cn(
+                "w-full rounded-lg border bg-background px-2.5 py-1.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50",
+                dateOrder === null
+                  ? "border-destructive"
+                  : "border-input"
+              )}
+            >
+              <option value="" disabled>
+                Select the format your bank uses…
+              </option>
+              <option value="dmy">Day first (31/12/2026)</option>
+              <option value="mdy">Month first (12/31/2026)</option>
+              <option value="ymd">Year first (2026-12-31)</option>
+              <option value="auto">Not sure — decide for me</option>
+            </select>
+            <p className="text-xs text-muted-foreground">
+              {dateFormatHint}
+            </p>
+          </div>
         </div>
 
         {error && (
