@@ -845,8 +845,12 @@ export default function CsvImportCard({ onNavigate, onImported }: CsvImportCardP
             </p>
           )}
 
+        {/* At sm+ all seven columns render, and the max-w-* cells are only
+            maxima, so a narrow container would crush Category/Account into
+            nothing. The floor makes `overflow-auto` scroll instead. Below sm
+            only four columns show and they fit, so no floor is applied. */}
         <div className="mt-4 overflow-auto rounded-lg border">
-          <table className="w-full text-left text-sm">
+          <table className="w-full text-left text-sm sm:min-w-[52rem]">
             <thead className="sticky top-0 bg-muted/50">
               <tr className="text-xs uppercase tracking-wide text-muted-foreground">
                 <th className="px-3 py-2 font-medium">Date</th>

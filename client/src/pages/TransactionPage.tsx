@@ -7,6 +7,7 @@ import EmptyState from "@/components/ui/empty-state";
 import ErrorState from "@/components/ui/error-state";
 import { Input } from "@/components/ui/input";
 import LoadingState from "@/components/ui/loading-state";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { message } from "@/components/transactions/shared";
@@ -979,9 +980,14 @@ export default function TransactionPage() {
         </SheetContent>
       </Sheet>
 
-      <Sheet open={importOpen} onOpenChange={setImportOpen}>
-        <SheetContent side="right" className="sm:max-w-xl">
-          <div className="flex-1 overflow-y-auto px-4 pb-4">
+      <Dialog open={importOpen} onOpenChange={setImportOpen}>
+        {/* Centered and wide: the preview table is 7 columns, which the old
+            36rem right-side drawer crushed instead of scrolling. pt reserves
+            the band DialogContent's absolute close button sits in, so it never
+            overlaps the card's right-aligned header button. */}
+        <DialogContent className="max-w-5xl gap-0 p-0">
+          <DialogTitle className="sr-only">Import transactions</DialogTitle>
+          <div className="max-h-[85vh] overflow-y-auto px-4 pt-10 pb-4 sm:px-5 sm:pt-11 sm:pb-5">
             <Suspense fallback={<LoadingState className="py-8" label="Loading importer…" />}>
               <CsvImportCard
                 onNavigate={() => setImportOpen(false)}
@@ -989,8 +995,8 @@ export default function TransactionPage() {
               />
             </Suspense>
           </div>
-        </SheetContent>
-      </Sheet>
+        </DialogContent>
+      </Dialog>
 
       <FilterSheet
         open={filterSheetOpen}
