@@ -1,23 +1,6 @@
-import { useCallback, useEffect, useRef, useState, type ComponentType } from "react";
-import {
-  AlertTriangle,
-  Check,
-  FolderOpen,
-  LayoutGrid,
-  Pencil,
-  RotateCcw,
-  Tags,
-  Trash2,
-  Wallet,
-  X,
-} from "lucide-react";
-import {
-  Accordion,
-  AccordionItem,
-  AccordionHeader,
-  AccordionTrigger,
-  AccordionPanel,
-} from "@/components/ui/accordion";
+import { useCallback, useEffect, useRef, useState, type ComponentType, type ReactNode } from "react";
+import { useSearchParams } from "react-router";
+import { Check, FolderOpen, Pencil, Tags, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import {
@@ -39,6 +22,11 @@ import { ApiError, api } from "@/lib/api";
 import { formatCurrency } from "@/lib/format";
 import type { Category, CategoryUsage, Density, Tag } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import {
+  resolveSettingsSection,
+  settingsSections,
+  type SettingsSectionValue,
+} from "@/utils/settings-menu";
 
 function message(error: unknown): string {
   if (error instanceof ApiError) return error.message;
@@ -192,14 +180,10 @@ function ManagedList({
 
   return (
     <div className="flex flex-col gap-3 p-1">
-      <div className="flex items-center gap-1.5">
-        <Icon className="size-4 text-muted-foreground" aria-hidden="true" />
-        <span className="text-sm font-medium text-muted-foreground">{title}</span>
-        {query.status === "success" && (
-          <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
-            {(query.data ?? []).length}
-          </span>
-        )}
+      {/* The section name is the page heading now, so this row only carries the count. */}
+      <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+        <Icon className="size-4" aria-hidden="true" />
+        {query.status === "success" && <span>{(query.data ?? []).length} in use</span>}
       </div>
 
       <div className="flex gap-1.5">
@@ -870,122 +854,61 @@ function DeleteAccountSection() {
   );
 }
 
-
-export default function SettingsPage() {
+/** Tags are a plain name list, so the shared `ManagedList` covers the whole section. */
+function TagsSection() {
   return (
-    <div className="space-y-6">
-      <div>
-        <h2 className="text-lg font-semibold">Settings</h2>
-        <p className="text-sm text-muted-foreground">
-          Manage your net worth, categories, and tags.
-        </p>
-      </div>
+    <ManagedList
+      icon={Tags}
+      title="Tags"
+      list={async (): Promise<ManagedItem[]> =>
+        (await api.tags.list()).map((tag: Tag) => ({
+          key: tag.name,
+          label: tag.name,
+          detail: `${tag.count} transaction${tag.count === 1 ? "" : "s"}`,
+        }))
+      }
+      add={async (name) => {
+        await api.tags.create(name);
+      }}
+      remove={async (item) => {
+        await api.tags.remove(item.label);
+      }}
+      addLabel="Add tag"
+      addPlaceholder="New tag name"
+      emptyTitle="No tags yet"
+      emptyDescription="Add a tag by name to attach it to transactions."
+    />
+  );
+}
 
-      <Accordion>
-        <AccordionItem value="net-worth">
-          <AccordionHeader>
-            <AccordionTrigger>
-              <span className="flex items-center gap-2">
-                <Wallet className="size-4 text-muted-foreground" aria-hidden="true" />
-                Net worth
-              </span>
-            </AccordionTrigger>
-          </AccordionHeader>
-          <AccordionPanel>
-            <NetWorthSection />
-          </AccordionPanel>
-        </AccordionItem>
+/**
+ * The settings sections are navigated from the settings sidebar (see
+ * `Sidebar.tsx`), which puts the active one in the `section` search param. Only
+ * that one is rendered — the accordion that used to hold them is gone.
+ */
+export default function SettingsPage() {
+  const [searchParams] = useSearchParams();
+  const active = resolveSettingsSection(searchParams.get("section"));
+  const section = settingsSections.find((item) => item.value === active) ?? settingsSections[0];
 
-        <AccordionItem value="density">
-          <AccordionHeader>
-            <AccordionTrigger>
-              <span className="flex items-center gap-2">
-                <LayoutGrid className="size-4 text-muted-foreground" aria-hidden="true" />
-                Layout density
-              </span>
-            </AccordionTrigger>
-          </AccordionHeader>
-          <AccordionPanel>
-            <DensitySection />
-          </AccordionPanel>
-        </AccordionItem>
+  const panels: Record<SettingsSectionValue, ReactNode> = {
+    "net-worth": <NetWorthSection />,
+    density: <DensitySection />,
+    categories: <CategoriesSection />,
+    tags: <TagsSection />,
+    recovery: <IgnoredSuggestionsSection />,
+    delete: <DeleteAccountSection />,
+  };
 
-        <AccordionItem value="categories">
-          <AccordionHeader>
-            <AccordionTrigger>
-              <span className="flex items-center gap-2">
-                <FolderOpen className="size-4 text-muted-foreground" aria-hidden="true" />
-                Categories
-              </span>
-            </AccordionTrigger>
-          </AccordionHeader>
-          <AccordionPanel>
-            <CategoriesSection />
-          </AccordionPanel>
-        </AccordionItem>
+  return (
+    <div className="flex w-full max-w-3xl flex-col gap-6">
+      <h2
+        className={cn("text-lg font-semibold", section.destructive && "text-destructive")}
+      >
+        {section.label}
+      </h2>
 
-        <AccordionItem value="tags">
-          <AccordionHeader>
-            <AccordionTrigger>
-              <span className="flex items-center gap-2">
-                <Tags className="size-4 text-muted-foreground" aria-hidden="true" />
-                Tags
-              </span>
-            </AccordionTrigger>
-          </AccordionHeader>
-          <AccordionPanel>
-            <ManagedList
-              icon={Tags}
-              title="Tags"
-              list={async (): Promise<ManagedItem[]> =>
-                (await api.tags.list()).map((tag: Tag) => ({
-                  key: tag.name,
-                  label: tag.name,
-                  detail: `${tag.count} transaction${tag.count === 1 ? "" : "s"}`,
-                }))
-              }
-              add={async (name) => {
-                await api.tags.create(name);
-              }}
-              remove={async (item) => {
-                await api.tags.remove(item.label);
-              }}
-              addLabel="Add tag"
-              addPlaceholder="New tag name"
-              emptyTitle="No tags yet"
-              emptyDescription="Add a tag by name to attach it to transactions."
-            />
-          </AccordionPanel>
-        </AccordionItem>
-
-        <AccordionItem value="recovery">
-          <AccordionHeader>
-            <AccordionTrigger>
-              <span className="flex items-center gap-2">
-                <RotateCcw className="size-4 text-muted-foreground" aria-hidden="true" />
-                Recovery
-              </span>
-            </AccordionTrigger>
-          </AccordionHeader>
-          <AccordionPanel>
-            <IgnoredSuggestionsSection />
-          </AccordionPanel>
-        </AccordionItem>
-
-        <AccordionItem value="delete">
-          <AccordionHeader>
-            <AccordionTrigger>
-              <span className="flex items-center gap-2">
-                <AlertTriangle className="size-4 text-destructive" aria-hidden="true" />
-                Delete account
-              </span>
-            </AccordionTrigger>
-          </AccordionHeader>
-          <AccordionPanel>
-            <DeleteAccountSection />
-          </AccordionPanel>
-        </AccordionItem>
-      </Accordion>
+      {panels[active]}
     </div>
   );
 }
