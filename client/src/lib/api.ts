@@ -34,6 +34,7 @@ import type {
   Transaction,
   TransactionFilters,
   TransactionPatch,
+  TransactionPeer,
 } from "./types";
 import { filenameFromDisposition, saveDownload } from "./download";
 
@@ -155,12 +156,19 @@ export const api = {
       apiFetch<Transaction[]>(`/transactions${buildQuery({ ...filters })}`),
     categoriesInUse: (period?: Period) =>
       apiFetch<string[]>(`/transactions/categories${buildQuery({ period })}`),
+    peers: (query: { merchant: string; category: string; excludeId?: string }) =>
+      apiFetch<TransactionPeer[]>(`/transactions/peers${buildQuery({ ...query })}`),
     create: (data: NewTransaction) =>
       apiFetch<Transaction>("/transactions", { method: "POST", body: data }),
     update: (id: string, patch: TransactionPatch) =>
       apiFetch<Transaction>(`/transactions/${encodeURIComponent(id)}`, {
         method: "PATCH",
         body: patch,
+      }),
+    updateCategory: (ids: string[], category: string) =>
+      apiFetch<Transaction[]>("/transactions", {
+        method: "PATCH",
+        body: { ids, category },
       }),
     remove: (id: string) =>
       apiFetch<void>(`/transactions/${encodeURIComponent(id)}`, { method: "DELETE" }),

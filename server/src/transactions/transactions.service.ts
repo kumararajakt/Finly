@@ -14,6 +14,7 @@ import {
   ilike,
   inArray,
   lte,
+  ne,
   or,
   sql,
   type SQL,
@@ -24,17 +25,35 @@ import {
   transactions,
   type NewTransaction,
   type Transaction,
+  type TransactionType,
 } from '../database/schema';
 import { computeFingerprint } from '../common/fingerprint';
 import { periodRange, type DateRange } from '../summary/period';
 import { SettingsService } from '../settings/settings.service';
 import { transactionsToCsv } from './transactions-csv';
 import {
+  BulkUpdateCategoryDto,
   CreateTransactionDto,
   TransactionFacetsQueryDto,
+  TransactionPeersQueryDto,
   TransactionQueryDto,
   UpdateTransactionDto,
 } from './transactions.dto';
+
+/**
+ * What `peers` returns: just enough to list and count a merchant's other
+ * transactions. Deliberately narrower than `Transaction` — the prompt does not
+ * need notes, tags or accounts, and sending them would invite the client to
+ * depend on fields it has no use for.
+ */
+export interface TransactionPeer {
+  id: string;
+  date: string;
+  merchant: string;
+  category: string;
+  amount: number;
+  type: TransactionType;
+}
 
 function round2(value: number): number {
   return Math.round(value * 100) / 100;
@@ -180,6 +199,67 @@ export class TransactionsService {
       .map((row) => row.category)
       .filter((category) => category.trim().length > 0)
       .sort((a, b) => a.localeCompare(b));
+  }
+
+  /**
+   * Other transactions from the same merchant that are not already in
+   * `category`, so the client can offer to bring them along. Matching is on the
+   * exact stored text (not `normalizeMerchant`), which is what "same merchant"
+   * has to mean for this prompt: normalizing here would silently fold
+   * "Whole Foods" and "WHOLE FOODS 1234" together, and the user asked to be
+   * told about exact peers only.
+   *
+   * Deliberately not narrowed by the caller's period or other filters — the
+   * prompt is about the merchant as a whole, and letting a filter hide peers
+   * would make the same edit offer a different set of transactions depending on
+   * what happened to be on screen.
+   */
+  async peers(
+    userId: string,
+    query: TransactionPeersQueryDto,
+  ): Promise<TransactionPeer[]> {
+    const conditions: SQL[] = [
+      eq(transactions.userId, userId),
+      eq(transactions.merchant, query.merchant),
+      ne(transactions.category, query.category),
+    ];
+    if (query.excludeId) {
+      conditions.push(ne(transactions.id, query.excludeId));
+    }
+    return this.db
+      .select({
+        id: transactions.id,
+        date: transactions.date,
+        merchant: transactions.merchant,
+        category: transactions.category,
+        amount: transactions.amount,
+        type: transactions.type,
+      })
+      .from(transactions)
+      .where(and(...conditions))
+      .orderBy(desc(transactions.date));
+  }
+
+  /**
+   * Re-labels a set of transactions in one statement, for when the user
+   * applies one transaction's category to the rest of a merchant. Category is
+   * not part of the dedup fingerprint, so this can never trip the unique index
+   * the way a full `update` could. Ids the user does not own (or that do not
+   * exist) are silently skipped rather than 404 — the response is whatever was
+   * actually changed, so the client merges exactly the rows it can see.
+   */
+  async updateCategory(
+    userId: string,
+    dto: BulkUpdateCategoryDto,
+  ): Promise<Transaction[]> {
+    const category = dto.category.trim() || 'Needs review';
+    return this.db
+      .update(transactions)
+      .set({ category })
+      .where(
+        and(eq(transactions.userId, userId), inArray(transactions.id, dto.ids)),
+      )
+      .returning();
   }
 
   /**

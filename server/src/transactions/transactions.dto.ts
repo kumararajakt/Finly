@@ -192,3 +192,40 @@ export class BulkDeleteTransactionsDto {
   @IsUUID('4', { each: true, message: 'Each id must be a valid UUID.' })
   ids: string[];
 }
+
+/**
+ * Peers for the "apply this category to the rest of this merchant" prompt.
+ * `excludeId` is the transaction the user just re-labelled, so it is never
+ * counted as one of its own peers.
+ */
+export class TransactionPeersQueryDto {
+  @IsString()
+  @IsNotEmpty({ message: 'A merchant is required.' })
+  @MaxLength(500)
+  merchant: string;
+
+  @IsString()
+  @IsNotEmpty({ message: 'A category is required.' })
+  @MaxLength(200)
+  category: string;
+
+  @IsOptional()
+  @IsUUID('4', { message: 'excludeId must be a valid UUID.' })
+  excludeId?: string;
+}
+
+/** Bulk re-categorisation, used when one transaction's category is applied to its merchant peers. */
+export class BulkUpdateCategoryDto {
+  @IsArray({ message: 'ids must be an array.' })
+  @ArrayNotEmpty({ message: 'At least one transaction id is required.' })
+  @ArrayMaxSize(1000, {
+    message: 'Cannot update more than 1000 transactions at once.',
+  })
+  @IsUUID('4', { each: true, message: 'Each id must be a valid UUID.' })
+  ids: string[];
+
+  @IsString()
+  @IsNotEmpty({ message: 'Category is required.' })
+  @MaxLength(200)
+  category: string;
+}

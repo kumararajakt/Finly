@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { message } from "@/components/transactions/shared";
+import type { PeerPrompt } from "@/components/transactions/PeerCategoryDialog";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useSettings } from "@/contexts/SettingsContext";
 import { useQuery } from "@/hooks/use-query";
@@ -23,6 +24,7 @@ import { cn } from "@/lib/utils";
 
 const CsvImportCard = lazy(() => import("@/components/CsvImportCard"));
 const EntryForm = lazy(() => import("@/components/transactions/EntryForm"));
+const PeerCategoryDialog = lazy(() => import("@/components/transactions/PeerCategoryDialog"));
 const TagEditorSheet = lazy(() => import("@/components/transactions/TagEditorSheet"));
 
 interface CategoryCellProps {
@@ -410,6 +412,7 @@ export default function TransactionPage() {
   const [savingCategory, setSavingCategory] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Transaction | null>(null);
+  const [peerPrompt, setPeerPrompt] = useState<PeerPrompt | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [mutationError, setMutationError] = useState<string | null>(null);
@@ -560,9 +563,43 @@ export default function TransactionPage() {
       );
     } catch (error) {
       setMutationError(message(error));
-    } finally {
       setSavingCategory(null);
+      return;
     }
+    setSavingCategory(null);
+
+    // The edit itself is saved; this only offers to extend it to the rest of
+    // the merchant. A merchant whose transactions already agree never prompts.
+    try {
+      const peers = await api.transactions.peers({
+        merchant: tx.merchant,
+        category: name,
+        excludeId: tx.id,
+      });
+      if (peers.length === 0) return;
+      setPeerPrompt({
+        merchant: tx.merchant,
+        category: name,
+        peers,
+        currency,
+        period,
+        custom: { from: settings.customDateFrom, to: settings.customDateTo },
+      });
+    } catch {
+      // A failed lookup must not undo or contradict the change that succeeded,
+      // so it is swallowed rather than surfaced as a mutation error.
+    }
+  }
+
+  /** Re-labels a set of rows and folds the result back into the visible list. */
+  async function handlePeerCategoryChange(ids: string[], category: string) {
+    const updated = await api.transactions.updateCategory(ids, category);
+    transactions.setData((list) => {
+      const byId = new Map(updated.map((item) => [item.id, item]));
+      return (list ?? [])
+        .map((item) => byId.get(item.id) ?? item)
+        .filter((item) => categoryFilter === "all" || item.category === categoryFilter);
+    });
   }
 
   async function handleRemoveTag(tx: Transaction, tag: string) {
@@ -1135,6 +1172,18 @@ export default function TransactionPage() {
           return handleDeleteTransaction(pendingDelete);
         }}
       />
+
+      {peerPrompt && (
+        <Suspense fallback={null}>
+          <PeerCategoryDialog
+            prompt={peerPrompt}
+            onOpenChange={(open) => {
+              if (!open) setPeerPrompt(null);
+            }}
+            onConfirm={handlePeerCategoryChange}
+          />
+        </Suspense>
+      )}
 
       <ConfirmDialog
         open={bulkDeleteOpen}

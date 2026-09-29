@@ -21,11 +21,17 @@ const insertChain = (rows: unknown[]) => ({
   })),
 });
 
-const updateChain = (rows: unknown[]) => ({
-  set: jest.fn(() => ({
-    where: jest.fn(() => ({ returning: jest.fn(() => Promise.resolve(rows)) })),
-  })),
-});
+/**
+ * `set` returns an object holding `where`, so the chain is built eagerly to
+ * hand that mock back. Digging it out of `set.mock.results[0].value` instead
+ * would be untyped `any` and fail the type-aware lint rules.
+ */
+function updateChain(rows: unknown[]) {
+  const where = jest.fn(() => ({
+    returning: jest.fn(() => Promise.resolve(rows)),
+  }));
+  return { set: jest.fn(() => ({ where })), where };
+}
 
 const deleteChain = (rows: unknown[]) => ({
   where: jest.fn(() => ({
@@ -57,6 +63,18 @@ function deleteWhereSql(chain: ReturnType<typeof deleteChain>): {
 } {
   const sqlWhere = chain.where.mock.calls[0][0];
   return new PgDialect().sqlToQuery(sqlWhere);
+}
+
+/** `updateChain` nests `where` inside the object returned by `set`. */
+function updateWhereSql(chain: ReturnType<typeof updateChain>): {
+  sql: string;
+  params: unknown[];
+} {
+  return new PgDialect().sqlToQuery(chain.where.mock.calls[0][0]);
+}
+
+function updateSetValue(chain: ReturnType<typeof updateChain>): unknown {
+  return chain.set.mock.calls[0][0];
 }
 
 describe('TransactionsService', () => {
@@ -331,6 +349,105 @@ describe('TransactionsService', () => {
     await expect(
       service.update(USER_ID, 't1', { amount: 5 }),
     ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  describe('peers', () => {
+    function makeOrderByChain(rows: unknown[]) {
+      const orderBy = jest.fn(() => Promise.resolve(rows));
+      const where = jest.fn(() => ({ orderBy }));
+      return { from: jest.fn(() => ({ where })), where, orderBy };
+    }
+
+    it('matches the merchant exactly and skips rows already in the category', async () => {
+      const rows = [{ id: 't2', category: 'Needs review' }];
+      const chain = makeOrderByChain(rows);
+      db.select.mockReturnValue(chain);
+      await expect(
+        service.peers(USER_ID, {
+          merchant: 'Whole Foods',
+          category: 'Groceries',
+        }),
+      ).resolves.toEqual(rows);
+
+      const sql = whereSql(chain);
+      expect(sql.sql).toContain('"merchant" =');
+      expect(sql.sql).toContain('"category" <>');
+      expect(sql.params).toEqual([USER_ID, 'Whole Foods', 'Groceries']);
+    });
+
+    it('excludes the transaction that was just re-labelled', async () => {
+      const chain = makeOrderByChain([]);
+      db.select.mockReturnValue(chain);
+      await service.peers(USER_ID, {
+        merchant: 'Whole Foods',
+        category: 'Groceries',
+        excludeId: 't1',
+      });
+      const sql = whereSql(chain);
+      expect(sql.sql).toContain('"id" <>');
+      expect(sql.params).toContain('t1');
+    });
+
+    it('ignores the caller period so the prompt does not change with the view', async () => {
+      const chain = makeOrderByChain([]);
+      db.select.mockReturnValue(chain);
+      await service.peers(USER_ID, {
+        merchant: 'Whole Foods',
+        category: 'Groceries',
+      });
+      // No `date` comparison: peers are the merchant's whole history.
+      expect(whereSql(chain).sql).not.toContain('"date"');
+    });
+
+    it('returns the newest peers first', async () => {
+      const chain = makeOrderByChain([]);
+      db.select.mockReturnValue(chain);
+      await service.peers(USER_ID, {
+        merchant: 'Whole Foods',
+        category: 'Groceries',
+      });
+      expect(orderBySql(chain)[0]).toContain('desc');
+    });
+  });
+
+  describe('updateCategory', () => {
+    it('re-labels the given ids scoped to the user', async () => {
+      const rows = [{ id: 't1' }, { id: 't2' }];
+      const chain = updateChain(rows);
+      db.update.mockReturnValue(chain);
+      await expect(
+        service.updateCategory(USER_ID, {
+          ids: ['t1', 't2'],
+          category: 'Groceries',
+        }),
+      ).resolves.toEqual(rows);
+
+      expect(updateSetValue(chain)).toEqual({ category: 'Groceries' });
+      const sql = updateWhereSql(chain);
+      expect(sql.sql).toContain('"user_id" =');
+      expect(sql.sql).toContain('"id" in (');
+      // One placeholder per id, so the scope is the user plus exactly these rows.
+      expect(sql.params).toEqual([USER_ID, 't1', 't2']);
+    });
+
+    it('trims the category and falls back when it is blank', async () => {
+      const chain = updateChain([]);
+      db.update.mockReturnValue(chain);
+      await service.updateCategory(USER_ID, { ids: ['t1'], category: '  ' });
+      expect(updateSetValue(chain)).toEqual({ category: 'Needs review' });
+    });
+
+    // Ids the user does not own are dropped by the WHERE, so the response is
+    // whatever actually changed — the client merges only rows it can see.
+    it('returns just the rows the database changed', async () => {
+      db.update.mockReturnValue(updateChain([{ id: 't1' }]));
+      await expect(
+        service.updateCategory(USER_ID, {
+          ids: ['t1', 'missing'],
+          category: 'Dining',
+        }),
+      ).resolves.toEqual([{ id: 't1' }]);
+    });
   });
 
   it('removes an existing transaction', async () => {

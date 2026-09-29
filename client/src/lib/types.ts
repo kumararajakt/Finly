@@ -70,6 +70,20 @@ export interface Transaction {
   createdAt: string;
 }
 
+/**
+ * Projection from `GET transactions/peers` — the other transactions of a
+ * merchant that are not already in the target category. Narrower than
+ * `Transaction` on purpose; the prompt only lists and counts them.
+ */
+export interface TransactionPeer {
+  id: string;
+  date: string;
+  merchant: string;
+  category: string;
+  amount: number;
+  type: TransactionType;
+}
+
 export interface Category {
   id: string;
   name: string;

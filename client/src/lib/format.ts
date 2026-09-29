@@ -79,8 +79,8 @@ export function formatPercent(value: number): string {
   return `${Math.round(value)}%`;
 }
 
-export function todayISO(): string {
-  const parts = calendarParts(new Date());
+export function todayISO(date: Date = new Date()): string {
+  const parts = calendarParts(date);
   return `${parts.year}-${pad2(parts.month)}-${pad2(parts.day)}`;
 }
 
@@ -170,6 +170,16 @@ export function periodLabel(period: Period): string {
   return PERIOD_LABELS[period];
 }
 
+/**
+ * First day of a period, or null when it has no lower bound (`all-time`,
+ * `custom`). `month` here is 1-based, while the server's `periodRange` counts
+ * from a 0-based `Date.getMonth()`, so the rolling windows subtract 3 and 6 —
+ * `last-3-months` in September is the three *complete* months June–August, not
+ * a window that reaches into September. Keep this in step with
+ * `server/src/summary/period.ts`, which is the authority the API actually
+ * applies; a drift here would make a client-side count disagree with the rows
+ * the server returns.
+ */
 export function periodStartDate(period: Period, now = new Date()): string | null {
   const { year, month } = calendarParts(now);
 
@@ -185,10 +195,10 @@ export function periodStartDate(period: Period, now = new Date()): string | null
       startMonth -= 1;
       break;
     case "last-3-months":
-      startMonth -= 2;
+      startMonth -= 3;
       break;
     case "last-6-months":
-      startMonth -= 5;
+      startMonth -= 6;
       break;
     case "this-year":
       startMonth = 1;

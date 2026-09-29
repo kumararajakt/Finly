@@ -16,10 +16,13 @@ import type { Response } from 'express';
 import { CurrentUser } from '../auth/current-user.decorator';
 import type { Transaction } from '../database/schema';
 import { localDateISO } from '../summary/period';
+import type { TransactionPeer } from './transactions.service';
 import {
   CreateTransactionDto,
   BulkDeleteTransactionsDto,
+  BulkUpdateCategoryDto,
   TransactionFacetsQueryDto,
+  TransactionPeersQueryDto,
   TransactionQueryDto,
   UpdateTransactionDto,
 } from './transactions.dto';
@@ -51,6 +54,19 @@ export class TransactionsController {
   }
 
   /**
+   * Same-merchant transactions that are not already in the given category, for
+   * the "change the rest of this merchant too?" prompt. A narrow projection —
+   * the dialog only needs enough to list and count them.
+   */
+  @Get('peers')
+  peers(
+    @CurrentUser() userId: string,
+    @Query() query: TransactionPeersQueryDto,
+  ): Promise<TransactionPeer[]> {
+    return this.transactionsService.peers(userId, query);
+  }
+
+  /**
    * Declared before any `:id` route so `export` is never read as an id. Returns
    * the file body directly rather than JSON, since it is a download.
    */
@@ -75,6 +91,19 @@ export class TransactionsController {
     @Body() body: CreateTransactionDto,
   ): Promise<Transaction> {
     return this.transactionsService.create(userId, body);
+  }
+
+  /**
+   * Bulk re-categorisation. Declared before `@Patch(':id')` for the same reason
+   * the bulk delete is declared before `@Delete(':id')`, though a bare verb has
+   * no route to collide with.
+   */
+  @Patch()
+  updateCategory(
+    @CurrentUser() userId: string,
+    @Body() body: BulkUpdateCategoryDto,
+  ): Promise<Transaction[]> {
+    return this.transactionsService.updateCategory(userId, body);
   }
 
   @Patch(':id')
