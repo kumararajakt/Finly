@@ -595,7 +595,7 @@ function NetWorthSection() {
         </div>
       )}
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex max-w-xl flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-muted-foreground">
           Adjustment:{" "}
           <span className="font-semibold tabular-nums text-foreground">{preview ?? "—"}</span>
@@ -723,7 +723,7 @@ function IgnoredSuggestionsSection() {
         Patterns you've ignored on the Recurring and Subscriptions pages stay hidden until you
         restore them.
       </p>
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex max-w-xl flex-wrap items-center justify-between gap-3">
         <span className="text-sm">
           {count === 0 ? (
             "No ignored suggestions."
@@ -901,7 +901,7 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="flex w-full max-w-3xl flex-col gap-6">
+    <div className="flex w-full flex-col gap-6">
       <h2
         className={cn("text-lg font-semibold", section.destructive && "text-destructive")}
       >
