@@ -66,6 +66,7 @@ interface ManagedListProps {
   ) => void;
   /** Notified whenever the list loads, so parents can reuse it (e.g. for suggestions). */
   onLoaded?: (items: ManagedItem[]) => void;
+  searchable?: boolean;
   addLabel: string;
   addPlaceholder: string;
   emptyTitle: string;
@@ -81,6 +82,7 @@ function ManagedList({
   rename,
   requestRemove,
   onLoaded,
+  searchable = false,
   addLabel,
   addPlaceholder,
   emptyTitle,
@@ -95,6 +97,13 @@ function ManagedList({
   const [renameDraft, setRenameDraft] = useState("");
   const [renamingBusy, setRenamingBusy] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<ManagedItem | null>(null);
+  const [search, setSearch] = useState("");
+
+  const items = query.data ?? [];
+  const term = search.trim();
+  const visible = searchable && term !== ""
+    ? items.filter((item) => item.label.toLowerCase().includes(term.toLowerCase()))
+    : items;
 
   useEffect(() => {
     if (query.status === "success") {
@@ -183,8 +192,28 @@ function ManagedList({
       {/* The section name is the page heading now, so this row only carries the count. */}
       <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
         <Icon className="size-4" aria-hidden="true" />
-        {query.status === "success" && <span>{(query.data ?? []).length} in use</span>}
+        {query.status === "success" && (
+          <span>
+            {visible.length === items.length
+              ? `${items.length} in use`
+              : `${visible.length} of ${items.length} in use`}
+          </span>
+        )}
       </div>
+
+      {searchable && (
+        <Input
+          type="search"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") setSearch("");
+          }}
+          placeholder={`Search ${title.toLowerCase()}`}
+          className="w-full sm:max-w-sm"
+          aria-label={`Search ${title.toLowerCase()}`}
+        />
+      )}
 
       <div className="flex gap-1.5">
         <Input
@@ -224,11 +253,17 @@ function ManagedList({
         />
       )}
       {query.status === "success" &&
-        ((query.data ?? []).length === 0 ? (
-          <EmptyState icon={Icon} title={emptyTitle} description={emptyDescription} />
+        (visible.length === 0 ? (
+          <EmptyState
+            icon={Icon}
+            title={term === "" ? emptyTitle : `No matching ${title.toLowerCase()}`}
+            description={
+              term === "" ? emptyDescription : `Nothing here matches "${term}".`
+            }
+          />
         ) : (
           <ul className="divide-y divide-border">
-            {(query.data ?? []).map((item) => (
+            {visible.map((item) => (
               <li key={item.key} className="flex items-center justify-between gap-3 py-3">
                 {renamingKey === item.key ? (
                   <div className="flex w-full items-center gap-2">
@@ -432,6 +467,7 @@ function CategoriesSection() {
         }}
         requestRemove={handleRequestRemove}
         onLoaded={handleLoaded}
+        searchable
         addLabel="Add"
         addPlaceholder="New category name"
         emptyTitle="No categories yet"
