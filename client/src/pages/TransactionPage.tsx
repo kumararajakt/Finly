@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useState } from "react";
+import { Suspense, lazy, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
 import { ArrowDown, ArrowUp, ChevronsUpDown, Download, Pencil, Plus, Receipt, Search, SlidersHorizontal, Trash2, Upload, X } from "lucide-react";
 import PeriodSelector from "@/components/PeriodSelector";
@@ -443,6 +443,14 @@ export default function TransactionPage() {
   const categories = useQuery<Category[]>(() => api.categories.list(), []);
   const accounts = useQuery<Account[]>(() => api.accounts.list(), []);
   const tags = useQuery<Tag[]>(() => api.tags.list(), []);
+  // Period-scoped on purpose: filtering these by the active category (or the
+  // search/type filters) would collapse the dropdown into whatever is already
+  // selected, leaving no way to switch to another category without clearing it
+  // first.
+  const usedCategories = useQuery<string[]>(
+    () => api.transactions.categoriesInUse(period),
+    [period, settings.customDateFrom, settings.customDateTo],
+  );
 
   // Prune selections that no longer exist in the loaded rows (filter changes,
   // individual deletes, etc.). Only prunes on success so a refetch's brief
@@ -488,6 +496,21 @@ export default function TransactionPage() {
 
   const categoryNames = (categories.data ?? []).map((category) => category.name);
   const accountNames = (accounts.data ?? []).map((account) => account.name);
+
+  // The filter offers only categories that appear on transactions in this
+  // period, falling back to every category while that request is in flight (or
+  // if it fails) so the dropdown is never empty. `categoryNames` itself stays
+  // the full list: the per-row CategoryCell needs to offer unused ones, since
+  // that is how a transaction gets *assigned* one.
+  const categoryFilterNames = useMemo(() => {
+    const names = usedCategories.data ?? categoryNames;
+    // Keep an active filter selectable even when this period has no rows for
+    // it (a ?category= deep link, or a filter left over from another period).
+    if (categoryFilter !== "all" && !names.includes(categoryFilter)) {
+      return [...names, categoryFilter];
+    }
+    return names;
+  }, [usedCategories.data, categoryNames, categoryFilter]);
 
   function clearFilters() {
     setSearch("");
@@ -683,7 +706,7 @@ export default function TransactionPage() {
           className="h-8 rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
         >
           <option value="all">All categories</option>
-          {categoryNames.map((name) => (
+          {categoryFilterNames.map((name) => (
             <option key={name} value={name}>
               {name}
             </option>

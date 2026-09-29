@@ -36,6 +36,7 @@ const deleteChain = (rows: unknown[]) => ({
 function dbMock() {
   return {
     select: jest.fn(),
+    selectDistinct: jest.fn(),
     insert: jest.fn(),
     update: jest.fn(),
     delete: jest.fn(),
@@ -215,6 +216,71 @@ describe('TransactionsService', () => {
     const [primary] = orderBySql(chain);
     expect(primary).toContain('"merchant"');
     expect(primary).toContain('asc');
+  });
+
+  describe('categoriesInUse', () => {
+    function makeDistinctChain(rows: unknown[]) {
+      const where = jest.fn(() => Promise.resolve(rows));
+      return { from: jest.fn(() => ({ where })), where };
+    }
+
+    it('returns the distinct categories scoped to the user', async () => {
+      const chain = makeDistinctChain([
+        { category: 'Groceries' },
+        { category: 'Dining' },
+      ]);
+      db.selectDistinct.mockReturnValue(chain);
+      await expect(service.categoriesInUse(USER_ID, {})).resolves.toEqual([
+        'Dining',
+        'Groceries',
+      ]);
+      expect(whereSql(chain).params).toEqual([USER_ID]);
+    });
+
+    it('drops blank categories', async () => {
+      const chain = makeDistinctChain([
+        { category: '  ' },
+        { category: 'Groceries' },
+        { category: '' },
+      ]);
+      db.selectDistinct.mockReturnValue(chain);
+      await expect(service.categoriesInUse(USER_ID, {})).resolves.toEqual([
+        'Groceries',
+      ]);
+    });
+
+    // The list filter compares with `=`, so an option must be the stored label
+    // verbatim. Normalizing here would emit a value that selects nothing.
+    it('returns stored labels verbatim, without trimming', async () => {
+      const chain = makeDistinctChain([
+        { category: ' Groceries ' },
+        { category: 'Dining' },
+      ]);
+      db.selectDistinct.mockReturnValue(chain);
+      await expect(service.categoriesInUse(USER_ID, {})).resolves.toEqual([
+        ' Groceries ',
+        'Dining',
+      ]);
+    });
+
+    it('applies period bounds', async () => {
+      const chain = makeDistinctChain([]);
+      db.selectDistinct.mockReturnValue(chain);
+      await service.categoriesInUse(USER_ID, { period: 'last-month' });
+      const sql = whereSql(chain);
+      expect(sql.sql).toContain('"date" >=');
+      expect(sql.sql).toContain('"date" <=');
+      expect(sql.params).toContain(USER_ID);
+    });
+
+    it('applies custom period bounds from settings', async () => {
+      const chain = makeDistinctChain([]);
+      db.selectDistinct.mockReturnValue(chain);
+      await service.categoriesInUse(USER_ID, { period: 'custom' });
+      expect(whereSql(chain).params).toEqual(
+        expect.arrayContaining([USER_ID, '2026-01-01', '2026-01-31']),
+      );
+    });
   });
 
   it('creates a transaction', async () => {

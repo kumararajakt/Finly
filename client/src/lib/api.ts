@@ -153,6 +153,8 @@ export const api = {
   transactions: {
     list: (filters: TransactionFilters = {}) =>
       apiFetch<Transaction[]>(`/transactions${buildQuery({ ...filters })}`),
+    categoriesInUse: (period?: Period) =>
+      apiFetch<string[]>(`/transactions/categories${buildQuery({ period })}`),
     create: (data: NewTransaction) =>
       apiFetch<Transaction>("/transactions", { method: "POST", body: data }),
     update: (id: string, patch: TransactionPatch) =>

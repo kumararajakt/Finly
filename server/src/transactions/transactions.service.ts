@@ -31,6 +31,7 @@ import { SettingsService } from '../settings/settings.service';
 import { transactionsToCsv } from './transactions-csv';
 import {
   CreateTransactionDto,
+  TransactionFacetsQueryDto,
   TransactionQueryDto,
   UpdateTransactionDto,
 } from './transactions.dto';
@@ -141,6 +142,44 @@ export class TransactionsService {
       .from(transactions)
       .where(conditions.length > 0 ? and(...conditions) : undefined)
       .orderBy(order, desc(transactions.createdAt));
+  }
+
+  /**
+   * Distinct categories that at least one transaction in the period carries,
+   * for the client's category filter. Scoped to the period only (never to the
+   * active category/search/type filters) so the list of choices can't collapse
+   * into whatever is already selected.
+   */
+  async categoriesInUse(
+    userId: string,
+    query: TransactionFacetsQueryDto,
+  ): Promise<string[]> {
+    const conditions: SQL[] = [eq(transactions.userId, userId)];
+    if (query.period) {
+      const range =
+        query.period === 'custom'
+          ? await this.customRange(userId)
+          : periodRange(query.period);
+      if (range.start) {
+        conditions.push(gte(transactions.date, range.start));
+      }
+      conditions.push(lte(transactions.date, range.end));
+    }
+
+    const rows = await this.db
+      .selectDistinct({ category: transactions.category })
+      .from(transactions)
+      .where(and(...conditions));
+
+    // Stored values verbatim, not trimmed or case-folded: these become
+    // `category` query params, which the list filter compares with `=`. An
+    // option that had been normalized here would select nothing when the
+    // stored label differs (SQL DISTINCT also runs before any JS mapping, so
+    // trimming here would also emit the same label twice).
+    return rows
+      .map((row) => row.category)
+      .filter((category) => category.trim().length > 0)
+      .sort((a, b) => a.localeCompare(b));
   }
 
   /**

@@ -72,6 +72,17 @@ export class TransactionQueryDto {
   sortOrder?: 'asc' | 'desc';
 }
 
+/**
+ * Scope for the "categories actually in use" facets. Only `period` is
+ * meaningful here: the point is to list the categories the on-screen period
+ * contains, so narrowing by the category being filtered would be circular.
+ */
+export class TransactionFacetsQueryDto {
+  @IsOptional()
+  @IsIn(PERIODS)
+  period?: Period;
+}
+
 export class CreateTransactionDto {
   @IsIsoDate()
   date: string;

@@ -19,6 +19,7 @@ import { localDateISO } from '../summary/period';
 import {
   CreateTransactionDto,
   BulkDeleteTransactionsDto,
+  TransactionFacetsQueryDto,
   TransactionQueryDto,
   UpdateTransactionDto,
 } from './transactions.dto';
@@ -34,6 +35,19 @@ export class TransactionsController {
     @Query() query: TransactionQueryDto,
   ): Promise<Transaction[]> {
     return this.transactionsService.list(userId, query);
+  }
+
+  /**
+   * Facets for the client's category filter, so it only offers categories
+   * that transactions in this period actually use. Also declared before any
+   * `:id` route.
+   */
+  @Get('categories')
+  categoriesInUse(
+    @CurrentUser() userId: string,
+    @Query() query: TransactionFacetsQueryDto,
+  ): Promise<string[]> {
+    return this.transactionsService.categoriesInUse(userId, query);
   }
 
   /**
